@@ -2,14 +2,13 @@ from loguru import logger as log
 from sqlalchemy import and_
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from models.request import LoginRequest
 from models.response import TokenModel
-from models.setting import Setting
+from models import user
 from models.user import User
 from pkg.JWT.jwt import create_access_token, create_refresh_token
 
 
-async def Login(session: AsyncSession, login_request: LoginRequest) -> TokenModel | bool | None:
+async def Login(session: AsyncSession, login_request: user.LoginRequest) -> TokenModel | bool | None:
     """
     根据账号密码进行登录。
 
@@ -32,26 +31,26 @@ async def Login(session: AsyncSession, login_request: LoginRequest) -> TokenMode
     # is_captcha_required = captcha_setting and captcha_setting.value == "1"
 
     # 获取用户信息
-    user = await User.get(session, User.username == login_request.username)
+    current_user = await User.get(session, User.username == login_request.username, fetch_mode="one")
 
     # 验证用户是否存在
-    if not user:
+    if not current_user:
         log.debug(f"Cannot find user with username: {login_request.username}")
         return None
 
     # 验证密码是否正确
-    if not Password.verify(user.password, login_request.password):
+    if not Password.verify(current_user.password, login_request.password):
         log.debug(f"Password verification failed for user: {login_request.username}")
         return None
 
     # 验证用户是否可登录
-    if not user.status:
+    if not current_user.status:
         # 未完成注册 or 账号已被封禁
         return False
 
     # 创建令牌
-    access_token, access_expire = create_access_token(data={'sub': user.username})
-    refresh_token, refresh_expire = create_refresh_token(data={'sub': user.username})
+    access_token, access_expire = create_access_token(data={'sub': current_user.username})
+    refresh_token, refresh_expire = create_refresh_token(data={'sub': current_user.username})
 
     return TokenModel(
         access_token=access_token,

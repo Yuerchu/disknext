@@ -8,16 +8,17 @@ from loguru import logger as log
 async def migration() -> None:
     """
     数据库迁移函数，初始化默认设置和用户组。
-    
+
     :return: None
     """
-    
+
     log.info('开始进行数据库初始化...')
-    
+
     await init_default_settings()
     await init_default_group()
+    await init_default_policy()
     await init_default_user()
-    
+
     log.info('数据库初始化结束')
 
 default_settings: list[Setting] = [
@@ -214,3 +215,30 @@ async def init_default_user() -> None:
 
             log.info(f'初始管理员账号：[bold]admin[/bold]')
             log.info(f'初始管理员密码：[bold]{admin_password}[/bold]')
+
+
+async def init_default_policy() -> None:
+    from .policy import Policy, PolicyType
+    from .database import get_session
+
+    log.info('初始化默认存储策略...')
+
+    async for session in get_session():
+        # 检查默认存储策略是否存在
+        default_policy = await Policy.get(session, Policy.id == 1)
+
+        if not default_policy:
+            local_policy = Policy(
+                name="本地存储",
+                type=PolicyType.LOCAL,
+                server="./data",
+                is_private=True,
+                max_size=0,
+                auto_rename=True,
+                dir_name_rule="{date}/{randomkey16}",
+                file_name_rule="{randomkey16}_{originname}",
+            )
+
+            await local_policy.save(session)
+
+            log.info('已创建默认本地存储策略，存储目录：./data')

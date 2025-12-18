@@ -36,7 +36,7 @@ async def router_user_session(
 
     result = await service.user.Login(
         session,
-        models.request.LoginRequest(username=username, password=password),
+        models.user.LoginRequest(username=username, password=password),
     )
 
     if isinstance(result, models.response.TokenModel):

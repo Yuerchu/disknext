@@ -1,6 +1,7 @@
 from . import response
 
 from .user import User
+from .user_authn import UserAuthn
 
 from .download import Download
 from .file import File

@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from .storage_pack import StoragePack
     from .tag import Tag
     from .task import Task
+    from .user_authn import UserAuthn
     from .webdav import WebDAV
 
 """
@@ -26,6 +27,15 @@ Option 需求
 - 时区
 - 切换到不同存储策略是否提醒
 """
+
+class LoginRequest(BaseModel):
+    """
+    登录请求模型
+    """
+    username: str = Field(..., description="用户名或邮箱")
+    password: str = Field(..., description="用户密码")
+    captcha: str | None = Field(None, description="验证码")
+    twoFaCode: str | None = Field(None, description="两步验证代码")
 
 class WebAuthnInfo(BaseModel):
     """WebAuthn 信息模型"""
@@ -75,8 +85,6 @@ class User(TableBase, table=True):
     options: str | None = Field(default=None)
     """[TODO] 用户个人设置 需要更改，参考上方的需求"""
 
-    authn: str | None = Field(default=None)
-    """[TODO] WebAuthn 凭证，可不存，也可设置一个或多个"""
 
     github_open_id: str | None = Field(default=None, unique=True, index=True)
     """Github OpenID"""
@@ -125,6 +133,7 @@ class User(TableBase, table=True):
     tags: list["Tag"] = Relationship(back_populates="user")
     tasks: list["Task"] = Relationship(back_populates="user")
     webdavs: list["WebDAV"] = Relationship(back_populates="user")
+    authns: list["UserAuthn"] = Relationship(back_populates="user")
 
     def to_public(self) -> "UserPublic":
         """转换为公开 DTO，排除敏感字段"""
