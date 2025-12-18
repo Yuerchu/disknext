@@ -3,11 +3,25 @@ from typing import TYPE_CHECKING
 from sqlalchemy import Column, Text
 from sqlmodel import Field, Relationship
 
-from .base import TableBase
+from .base import TableBase, SQLModelBase
 
 if TYPE_CHECKING:
     from .user import User
 
+
+# ==================== DTO 模型 ====================
+
+class AuthnResponse(SQLModelBase):
+    """WebAuthn 响应 DTO"""
+
+    id: str
+    """凭证ID"""
+
+    fingerprint: str
+    """凭证指纹"""
+
+
+# ==================== 数据库模型 ====================
 
 class UserAuthn(TableBase, table=True):
     """用户 WebAuthn 凭证模型，与 User 为多对一关系"""

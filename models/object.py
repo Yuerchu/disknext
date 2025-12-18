@@ -1,8 +1,11 @@
 
-from typing import TYPE_CHECKING, Optional
+from datetime import datetime
+from typing import TYPE_CHECKING, Literal, Optional
+
 from enum import StrEnum
 from sqlmodel import Field, Relationship, UniqueConstraint, CheckConstraint, Index
-from .base import TableBase
+
+from .base import TableBase, SQLModelBase
 
 if TYPE_CHECKING:
     from .user import User
@@ -17,7 +20,90 @@ class ObjectType(StrEnum):
     FOLDER = "folder"
 
 
-class Object(TableBase, table=True):
+# ==================== Base 模型 ====================
+
+class ObjectBase(SQLModelBase):
+    """对象基础字段，供数据库模型和 DTO 共享"""
+
+    name: str
+    """对象名称（文件名或目录名）"""
+
+    type: ObjectType
+    """对象类型：file 或 folder"""
+
+    size: int = 0
+    """文件大小（字节），目录为 0"""
+
+
+# ==================== DTO 模型 ====================
+
+class DirectoryCreateRequest(SQLModelBase):
+    """创建目录请求 DTO"""
+
+    path: str
+    """目录路径，如 /docs/images"""
+
+    policy_id: int | None = None
+    """存储策略ID，不指定则继承父目录"""
+
+
+class ObjectResponse(ObjectBase):
+    """对象响应 DTO"""
+
+    id: str
+    """对象ID"""
+
+    path: str
+    """对象路径"""
+
+    thumb: bool = False
+    """是否有缩略图"""
+
+    date: datetime
+    """对象修改时间"""
+
+    create_date: datetime
+    """对象创建时间"""
+
+    source_enabled: bool = False
+    """是否启用离线下载源"""
+
+
+class PolicyResponse(SQLModelBase):
+    """存储策略响应 DTO"""
+
+    id: str
+    """策略ID"""
+
+    name: str
+    """策略名称"""
+
+    type: Literal["local", "qiniu", "tencent", "aliyun", "onedrive", "google_drive", "dropbox", "webdav", "remote"]
+    """存储类型"""
+
+    max_size: int = 0
+    """单文件最大限制，单位字节，0表示不限制"""
+
+    file_type: list[str] = []
+    """允许的文件类型列表，空列表表示不限制"""
+
+
+class DirectoryResponse(SQLModelBase):
+    """目录响应 DTO"""
+
+    parent: str | None = None
+    """父目录ID，根目录为None"""
+
+    objects: list[ObjectResponse] = []
+    """目录下的对象列表"""
+
+    policy: PolicyResponse
+    """存储策略"""
+
+
+# ==================== 数据库模型 ====================
+
+class Object(ObjectBase, TableBase, table=True):
     """
     统一对象模型
 

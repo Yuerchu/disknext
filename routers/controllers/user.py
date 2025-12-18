@@ -30,16 +30,16 @@ user_settings_router = APIRouter(
 async def router_user_session(
     session: SessionDep,
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
-) -> models.response.TokenModel:
+) -> models.TokenResponse:
     username = form_data.username
     password = form_data.password
 
     result = await service.user.Login(
         session,
-        models.user.LoginRequest(username=username, password=password),
+        models.LoginRequest(username=username, password=password),
     )
 
-    if isinstance(result, models.response.TokenModel):
+    if isinstance(result, models.TokenResponse):
         return result
     elif result is None:
         raise HTTPException(status_code=401, detail="Invalid username or password")
@@ -203,13 +203,13 @@ async def router_user_me(
     """
     group = await models.Group.get(session, models.Group.id == user.group_id)
 
-    user_group = models.response.GroupModel(
+    user_group = models.GroupResponse(
         id=group.id,
         name=group.name,
-        allowShare=group.share_enabled,
+        allow_share=group.share_enabled,
     )
 
-    users = models.response.UserModel(
+    users = models.UserResponse(
         id=user.id,
         username=user.username,
         nickname=user.nick,
@@ -369,7 +369,7 @@ def router_user_settings() -> models.response.ResponseModel:
     Returns:
         dict: A dictionary containing the current user settings.
     """
-    return models.response.ResponseModel(data=models.response.UserSettingModel().model_dump())
+    return models.response.ResponseModel(data=models.UserSettingResponse().model_dump())
 
 @user_settings_router.post(
     path='/avatar',

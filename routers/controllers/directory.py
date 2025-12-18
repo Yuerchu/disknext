@@ -1,26 +1,24 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
 
 from middleware.auth import AuthRequired
 from middleware.dependencies import SessionDep
-from models import Object, ObjectType, User, response
+from models import (
+    DirectoryCreateRequest,
+    DirectoryResponse,
+    Object,
+    ObjectResponse,
+    ObjectType,
+    PolicyResponse,
+    User,
+    response,
+)
 
 directory_router = APIRouter(
     prefix="/directory",
     tags=["directory"]
 )
-
-
-class DirectoryCreateRequest(BaseModel):
-    """创建目录请求"""
-
-    path: str
-    """目录路径，如 /docs/images"""
-
-    policy_id: int | None = None
-    """存储策略ID，不指定则继承父目录"""
 
 @directory_router.get(
     path="/{path:path}",
@@ -51,7 +49,7 @@ async def router_directory_get(
     policy = await folder.awaitable_attrs.policy
 
     objects = [
-        response.ObjectModel(
+        ObjectResponse(
             id=str(child.id),
             name=child.name,
             path=f"/{child.name}",  # TODO: 完整路径
@@ -66,16 +64,16 @@ async def router_directory_get(
     ]
 
     return response.ResponseModel(
-        data=response.DirectoryModel(
+        data=DirectoryResponse(
             parent=str(folder.parent_id) if folder.parent_id else None,
             objects=objects,
-            policy=response.PolicyModel(
+            policy=PolicyResponse(
                 id=str(policy.id),
                 name=policy.name,
                 type=policy.type.value,
                 max_size=policy.max_size,
                 file_type=[],
-            )
+            ),
         )
     )
 

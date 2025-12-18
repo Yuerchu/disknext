@@ -1,7 +1,7 @@
 
 from .setting import Setting, SettingsType
+from .user import ThemeResponse
 from pkg.conf.appmeta import BackendVersion
-from .response import ThemeModel
 from pkg.password.pwd import Password
 from loguru import logger as log
 
@@ -74,7 +74,7 @@ Neue',Helvetica,Arial,sans-serif; box-sizing: border-box; font-size: 14px; verti
     Setting(name="hot_share_num", value="10", type=SettingsType.SHARE),
     Setting(name="gravatar_server", value="https://www.gravatar.com/", type=SettingsType.AVATAR),
     Setting(name="defaultTheme", value="#3f51b5", type=SettingsType.BASIC),
-    Setting(name="themes", value=ThemeModel().model_dump_json(), type=SettingsType.BASIC),
+    Setting(name="themes", value=ThemeResponse().model_dump_json(), type=SettingsType.BASIC),
     Setting(name="aria2_token", value="", type=SettingsType.ARIA2),
     Setting(name="aria2_rpcurl", value="", type=SettingsType.ARIA2),
     Setting(name="aria2_temp_path", value="", type=SettingsType.ARIA2),

@@ -1,25 +1,22 @@
 from loguru import logger as log
-from sqlalchemy import and_
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from models.response import TokenModel
-from models import user
-from models.user import User
-from pkg.JWT.jwt import create_access_token, create_refresh_token
+from models import LoginRequest, TokenResponse, User
+from pkg.JWT.JWT import create_access_token, create_refresh_token
 
 
-async def Login(session: AsyncSession, login_request: user.LoginRequest) -> TokenModel | bool | None:
+async def Login(session: AsyncSession, login_request: LoginRequest) -> TokenResponse | bool | None:
     """
     根据账号密码进行登录。
 
-    如果登录成功，返回一个 TokenModel 对象，包含访问令牌和刷新令牌以及它们的过期时间。
+    如果登录成功，返回一个 TokenResponse 对象，包含访问令牌和刷新令牌以及它们的过期时间。
     如果登录异常，返回 `False`（未完成注册或账号被封禁）。
     如果登录失败，返回 `None`。
 
     :param session: 数据库会话
     :param login_request: 登录请求
 
-    :return: TokenModel 对象或状态码或 None
+    :return: TokenResponse 对象或状态码或 None
     """
     from pkg.password.pwd import Password
 
@@ -52,7 +49,7 @@ async def Login(session: AsyncSession, login_request: user.LoginRequest) -> Toke
     access_token, access_expire = create_access_token(data={'sub': current_user.username})
     refresh_token, refresh_expire = create_refresh_token(data={'sub': current_user.username})
 
-    return TokenModel(
+    return TokenResponse(
         access_token=access_token,
         access_expires=access_expire,
         refresh_token=refresh_token,

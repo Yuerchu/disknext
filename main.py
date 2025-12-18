@@ -1,10 +1,11 @@
 from fastapi import FastAPI
-from routers import routers
+
 from pkg.conf import appmeta
+from pkg.lifespan import lifespan
 from models.database import init_db
 from models.migration import migration
-from pkg.lifespan import lifespan
-from pkg.JWT import jwt as JWT
+from pkg.JWT import JWT
+from routers import routers
 
 # 添加初始化数据库启动项
 lifespan.add_startup(init_db)
@@ -32,6 +33,6 @@ if __name__ == "__main__":
     import uvicorn
 
     if appmeta.debug:
-        uvicorn.run(app='main:app', host=appmeta.host, port=appmeta.port, reload=True)
+        uvicorn.run(app='main:app', reload=True)
     else:
-        uvicorn.run(app=app, host=appmeta.host, port=appmeta.port)
+        uvicorn.run(app=app)

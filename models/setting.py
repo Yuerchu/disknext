@@ -1,6 +1,45 @@
+from typing import Literal
+
 from sqlmodel import Field, UniqueConstraint
-from .base import TableBase
+
+from .base import TableBase, SQLModelBase
 from enum import StrEnum
+
+
+# ==================== DTO 模型 ====================
+
+class SiteConfigResponse(SQLModelBase):
+    """站点配置响应 DTO"""
+
+    title: str = "DiskNext"
+    """网站标题"""
+
+    themes: dict[str, str] = {}
+    """网站主题配置"""
+
+    default_theme: dict[str, str] = {}
+    """默认主题RGB色号"""
+
+    site_notice: str | None = None
+    """网站公告"""
+
+    user: dict[str, str | int | bool] = {}
+    """用户信息"""
+
+    logo_light: str | None = None
+    """网站Logo URL"""
+
+    logo_dark: str | None = None
+    """网站Logo URL（深色模式）"""
+
+    captcha_type: Literal["none", "default", "gcaptcha", "cloudflare turnstile"] = "none"
+    """验证码类型"""
+
+    captcha_key: str | None = None
+    """验证码密钥"""
+
+
+# ==================== 数据库模型 ====================
 
 class SettingsType(StrEnum):
     """设置类型枚举"""

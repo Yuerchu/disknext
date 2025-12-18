@@ -18,11 +18,6 @@ debug: bool = os.getenv("DEBUG", "false").lower() in ("true", "1", "yes") or Fal
 if debug:
     log.info("Debug mode is enabled. This is not recommended for production use.")
 
-host: str = os.getenv("HOST", "0.0.0.0")
-port: int = int(os.getenv("PORT", 5213))
-
-log.info(f"Starting DiskNext Server {BackendVersion} on {host}:{port}")
-
 database_url: str = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///disknext.db")
 
 tags_meta = [
