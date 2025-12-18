@@ -145,38 +145,48 @@ async def init_default_group() -> None:
     async for session in get_session():
         # 未找到初始管理组时，则创建
         if not await Group.get(session, Group.id == 1):
-            await Group(
+            admin_group = await Group(
                 name="管理员",
                 max_storage=1 * 1024 * 1024 * 1024,  # 1GB
                 share_enabled=True,
                 web_dav_enabled=True,
                 admin=True,
-                options=GroupOptions(
-                    archive_download=True,
-                    archive_task=True,
-                    share_download=True,
-                    aria2=True,
-                ).model_dump(),
+            ).save(session)
+            assert admin_group.id is not None
+            await GroupOptions(
+                group_id=admin_group.id,
+                archive_download=True,
+                archive_task=True,
+                share_download=True,
+                aria2=True,
             ).save(session)
 
         # 未找到初始注册会员时，则创建
         if not await Group.get(session, Group.id == 2):
-            await Group(
+            member_group = await Group(
                 name="注册会员",
                 max_storage=1 * 1024 * 1024 * 1024,  # 1GB
                 share_enabled=True,
                 web_dav_enabled=True,
-                options=GroupOptions(share_download=True).model_dump(),
+            ).save(session)
+            assert member_group.id is not None
+            await GroupOptions(
+                group_id=member_group.id,
+                share_download=True,
             ).save(session)
 
         # 未找到初始游客组时，则创建
         if not await Group.get(session, Group.id == 3):
-            await Group(
+            guest_group = await Group(
                 name="游客",
                 policies="[]",
                 share_enabled=False,
                 web_dav_enabled=False,
-                options=GroupOptions(share_download=True).model_dump(),
+            ).save(session)
+            assert guest_group.id is not None
+            await GroupOptions(
+                group_id=guest_group.id,
+                share_download=True,
             ).save(session)
 
 async def init_default_user() -> None:

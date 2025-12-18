@@ -227,20 +227,31 @@ async def router_user_me(
     description='Get user storage information.',
     dependencies=[Depends(AuthRequired)],
 )
-def router_user_storage(
+async def router_user_storage(
+    session: SessionDep,
     user: Annotated[models.user.User, Depends(AuthRequired)],
 ) -> models.response.ResponseModel:
     """
-    Get user storage information.
-    
-    Returns:
-        dict: A dictionary containing user storage information.
+    获取用户存储空间信息。
+
+    返回值：
+        - used: 已使用空间（字节）
+        - free: 剩余空间（字节）
+        - total: 总容量（字节）= 用户组容量
     """
+    # 获取用户组的基础存储容量
+    group = await models.Group.get(session, models.Group.id == user.group_id)
+    if not group:
+        raise HTTPException(status_code=500, detail="用户组不存在")
+    total: int = group.max_storage
+    used: int = user.storage
+    free: int = max(0, total - used)
+
     return models.response.ResponseModel(
         data={
-            "used": 0,
-            "free": 0,
-            "total": 0,
+            "used": used,
+            "free": free,
+            "total": total,
         }
     )
 
