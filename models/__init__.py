@@ -4,8 +4,7 @@ from .user import User
 from .user_authn import UserAuthn
 
 from .download import Download
-from .file import File
-from .folder import Folder
+from .object import Object, ObjectType
 from .group import Group
 from .node import Node
 from .order import Order

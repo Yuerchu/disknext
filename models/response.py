@@ -132,6 +132,9 @@ class DirectoryModel(BaseModel):
     '''
     目录模型
     '''
-    parent: str = Field(default=..., description="父目录ID")
+
+    parent: str | None
+    """父目录ID，根目录为None"""
+
     objects: list[ObjectModel] = Field(default_factory=list, description="目录下的对象列表")
     policy: PolicyModel = Field(default_factory=PolicyModel, description="存储策略")

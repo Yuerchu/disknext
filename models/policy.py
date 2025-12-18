@@ -1,12 +1,11 @@
 
-from typing import Optional, List, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 from sqlmodel import Field, Relationship, text
 from .base import TableBase
 from enum import StrEnum
 
 if TYPE_CHECKING:
-    from .file import File
-    from .folder import Folder
+    from .object import Object
 
 class PolicyType(StrEnum):
     LOCAL = "local"
@@ -58,8 +57,8 @@ class Policy(TableBase, table=True):
     # options 示例: {"token":"","file_type":null,"mimetype":"","od_redirect":"http://127.0.0.1:8000/...","chunk_size":52428800,"s3_path_style":false}
     
     # 关系
-    files: List["File"] = Relationship(back_populates="policy")
-    folders: List["Folder"] = Relationship(back_populates="policy")
+    objects: list["Object"] = Relationship(back_populates="policy")
+    """策略下的所有对象"""
     
     @staticmethod
     async def create(

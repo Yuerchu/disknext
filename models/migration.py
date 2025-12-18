@@ -192,6 +192,7 @@ async def init_default_group() -> None:
 async def init_default_user() -> None:
     from .user import User
     from .group import Group
+    from .object import Object, ObjectType
     from .database import get_session
 
     log.info('初始化管理员用户...')
@@ -210,12 +211,21 @@ async def init_default_user() -> None:
             admin_password = Password.generate(8)
             hashed_admin_password = Password.hash(admin_password)
 
-            await User(
+            admin_user = await User(
                 username="admin",
                 nick="admin",
                 status=True,
                 group_id=admin_group.id,
                 password=hashed_admin_password,
+            ).save(session)
+
+            # 为管理员创建根目录（使用默认存储策略）
+            await Object(
+                name="~",
+                type=ObjectType.FOLDER,
+                owner_id=admin_user.id,
+                parent_id=None,
+                policy_id=1,  # 默认本地存储策略
             ).save(session)
 
             log.info(f'初始管理员账号: admin')

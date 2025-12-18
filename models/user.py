@@ -9,8 +9,7 @@ from .base import TableBase, SQLModelBase
 if TYPE_CHECKING:
     from .group import Group
     from .download import Download
-    from .file import File
-    from .folder import Folder
+    from .object import Object
     from .order import Order
     from .share import Share
     from .storage_pack import StoragePack
@@ -125,8 +124,8 @@ class User(TableBase, table=True):
     )
     
     downloads: list["Download"] = Relationship(back_populates="user")
-    files: list["File"] = Relationship(back_populates="user")
-    folders: list["Folder"] = Relationship(back_populates="owner")
+    objects: list["Object"] = Relationship(back_populates="owner")
+    """用户的所有对象（文件和目录）"""
     orders: list["Order"] = Relationship(back_populates="user")
     shares: list["Share"] = Relationship(back_populates="user")
     storage_packs: list["StoragePack"] = Relationship(back_populates="user")
