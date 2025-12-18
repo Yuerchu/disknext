@@ -12,8 +12,6 @@ if TYPE_CHECKING:
 class UserAuthn(TableBase, table=True):
     """用户 WebAuthn 凭证模型，与 User 为多对一关系"""
 
-    __tablename__ = "user_authn"
-
     credential_id: str = Field(max_length=255, unique=True, index=True)
     """凭证 ID，Base64 编码"""
 
