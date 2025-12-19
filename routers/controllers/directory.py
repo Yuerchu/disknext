@@ -37,7 +37,7 @@ async def router_directory_get(
     :param path: 目录路径
     :return: 目录内容
     """
-    folder = await Object.get_by_path(session, user.id, path or "/")
+    folder = await Object.get_by_path(session, user.id, path or "/", user.username)
 
     if not folder:
         raise HTTPException(status_code=404, detail="目录不存在")
@@ -50,7 +50,7 @@ async def router_directory_get(
 
     objects = [
         ObjectResponse(
-            id=str(child.id),
+            id=child.id,
             name=child.name,
             path=f"/{child.name}",  # TODO: 完整路径
             thumb=False,
@@ -63,7 +63,7 @@ async def router_directory_get(
         for child in children
     ]
 
-    policy=PolicyResponse(
+    policy_response = PolicyResponse(
         id=str(policy.id),
         name=policy.name,
         type=policy.type.value,
@@ -71,9 +71,10 @@ async def router_directory_get(
     )
 
     return DirectoryResponse(
-        parent=str(folder.parent_id) if folder.parent_id else None,
+        id=folder.id,
+        parent=folder.parent_id,
         objects=objects,
-        policy=policy,
+        policy=policy_response,
     )
 
 
@@ -91,26 +92,20 @@ async def router_directory_create(
 
     :param session: 数据库会话
     :param user: 当前登录用户
-    :param request: 创建请求
+    :param request: 创建请求（包含 parent_id UUID 和 name）
     :return: 创建结果
     """
-    path = request.path.strip()
-    if not path or path == "/":
-        raise HTTPException(status_code=400, detail="路径不能为空或根目录")
+    # 验证目录名称
+    name = request.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="目录名称不能为空")
 
-    # 解析路径
-    if path.startswith("/"):
-        path = path[1:]
-    parts = [p for p in path.split("/") if p]
+    if "/" in name or "\\" in name:
+        raise HTTPException(status_code=400, detail="目录名称不能包含斜杠")
 
-    if not parts:
-        raise HTTPException(status_code=400, detail="无效的目录路径")
-
-    new_folder_name = parts[-1]
-    parent_path = "/" + "/".join(parts[:-1]) if len(parts) > 1 else "/"
-
-    parent = await Object.get_by_path(session, user.id, parent_path)
-    if not parent:
+    # 通过 UUID 获取父目录
+    parent = await Object.get(session, Object.id == request.parent_id)
+    if not parent or parent.owner_id != user.id:
         raise HTTPException(status_code=404, detail="父目录不存在")
 
     if not parent.is_folder:
@@ -121,25 +116,29 @@ async def router_directory_create(
         session,
         (Object.owner_id == user.id) &
         (Object.parent_id == parent.id) &
-        (Object.name == new_folder_name)
+        (Object.name == name)
     )
     if existing:
         raise HTTPException(status_code=409, detail="同名文件或目录已存在")
 
     policy_id = request.policy_id if request.policy_id else parent.policy_id
+    parent_id = parent.id  # 在 save 前保存
 
-    new_folder = await Object(
-        name=new_folder_name,
+    new_folder = Object(
+        name=name,
         type=ObjectType.FOLDER,
         owner_id=user.id,
-        parent_id=parent.id,
+        parent_id=parent_id,
         policy_id=policy_id,
-    ).save(session)
+    )
+    new_folder_id = new_folder.id  # 在 save 前保存 UUID
+    new_folder_name = new_folder.name
+    await new_folder.save(session)
 
     return response.ResponseModel(
         data={
-            "id": new_folder.id,
-            "name": new_folder.name,
-            "path": f"{parent_path.rstrip('/')}/{new_folder_name}",
+            "id": new_folder_id,
+            "name": new_folder_name,
+            "parent_id": parent_id,
         }
     )

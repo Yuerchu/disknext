@@ -1,8 +1,11 @@
 
 from typing import Optional, TYPE_CHECKING
-from sqlmodel import Field, Relationship, UniqueConstraint, Column, func, DateTime
-from .base import TableBase
+from uuid import UUID
 from datetime import datetime
+
+from sqlmodel import Field, Relationship, UniqueConstraint, Column, func, DateTime
+
+from .base import TableBase
 
 if TYPE_CHECKING:
     from .user import User
@@ -19,7 +22,7 @@ class Tag(TableBase, table=True):
     expression: str | None = Field(default=None, description="自动标签的匹配表达式")
     
     # 外键
-    user_id: int = Field(foreign_key="user.id", index=True, description="所属用户ID")
+    user_id: UUID = Field(foreign_key="user.id", index=True, description="所属用户UUID")
     
     # 关系
     user: "User" = Relationship(back_populates="tags")

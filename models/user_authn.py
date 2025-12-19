@@ -1,4 +1,5 @@
 from typing import TYPE_CHECKING
+from uuid import UUID
 
 from sqlalchemy import Column, Text
 from sqlmodel import Field, Relationship
@@ -48,8 +49,8 @@ class UserAuthn(TableBase, table=True):
     """用户自定义的凭证名称，便于识别"""
 
     # 外键
-    user_id: int = Field(foreign_key="user.id", index=True)
-    """所属用户ID"""
+    user_id: UUID = Field(foreign_key="user.id", index=True)
+    """所属用户UUID"""
 
     # 关系
     user: "User" = Relationship(back_populates="authns")

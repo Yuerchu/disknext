@@ -1,9 +1,11 @@
 
 from typing import Optional, TYPE_CHECKING
 from datetime import datetime
+from uuid import UUID
+
 from sqlmodel import Field, Relationship, Column, func, DateTime
+
 from .base import TableBase
-from datetime import datetime
 
 if TYPE_CHECKING:
     from .user import User
@@ -17,7 +19,7 @@ class StoragePack(TableBase, table=True):
     size: int = Field(description="容量包大小（字节）")
     
     # 外键
-    user_id: int = Field(foreign_key="user.id", index=True, description="所属用户ID")
+    user_id: UUID = Field(foreign_key="user.id", index=True, description="所属用户UUID")
     
     # 关系
     user: "User" = Relationship(back_populates="storage_packs")

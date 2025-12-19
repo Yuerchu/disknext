@@ -1,5 +1,8 @@
 from typing import Optional, TYPE_CHECKING
+from uuid import UUID
+
 from sqlmodel import Field, Relationship, UniqueConstraint
+
 from .base import SQLModelBase, UUIDTableBase
 
 if TYPE_CHECKING:
@@ -31,7 +34,7 @@ class Download(DownloadBase, UUIDTableBase, table=True):
     dst: str = Field(description="目标存储路径")
     
     # 外键
-    user_id: int = Field(foreign_key="user.id", index=True, description="所属用户ID")
+    user_id: UUID = Field(foreign_key="user.id", index=True, description="所属用户UUID")
     task_id: int | None = Field(default=None, foreign_key="task.id", index=True, description="关联的任务ID")
     node_id: int = Field(foreign_key="node.id", index=True, description="执行下载的节点ID")
     

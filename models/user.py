@@ -1,10 +1,11 @@
 from datetime import datetime
 from enum import StrEnum
 from typing import Literal, Optional, TYPE_CHECKING
+from uuid import UUID
 
 from sqlmodel import Field, Relationship
 
-from .base import TableBase, SQLModelBase
+from .base import SQLModelBase, UUIDTableBase
 
 if TYPE_CHECKING:
     from .group import Group
@@ -75,6 +76,19 @@ class LoginRequest(SQLModelBase):
     """两步验证代码"""
 
 
+class RegisterRequest(SQLModelBase):
+    """注册请求 DTO"""
+
+    username: str
+    """用户名，唯一，一经注册不可更改"""
+
+    password: str
+    """用户密码"""
+
+    captcha: str | None = None
+    """验证码"""
+
+
 class WebAuthnInfo(SQLModelBase):
     """WebAuthn 信息 DTO"""
 
@@ -116,8 +130,8 @@ class TokenResponse(SQLModelBase):
 class UserResponse(UserBase):
     """用户响应 DTO"""
 
-    id: int
-    """用户ID"""
+    id: UUID
+    """用户UUID"""
 
     nickname: str | None = None
     """用户昵称"""
@@ -141,8 +155,8 @@ class UserResponse(UserBase):
 class UserPublic(UserBase):
     """用户公开信息 DTO，用于 API 响应"""
 
-    id: int | None = None
-    """用户ID"""
+    id: UUID | None = None
+    """用户UUID"""
 
     nick: str | None = None
     """昵称"""
@@ -156,8 +170,8 @@ class UserPublic(UserBase):
     group_expires: datetime | None = None
     """用户组过期时间"""
 
-    group_id: int | None = None
-    """所属用户组ID"""
+    group_id: UUID | None = None
+    """所属用户组UUID"""
 
     created_at: datetime | None = None
     """创建时间"""
@@ -187,8 +201,8 @@ class UserSettingResponse(SQLModelBase):
     two_factor: bool = False
     """是否启用两步验证"""
 
-    uid: int = 0
-    """用户UID"""
+    uid: UUID | None = None
+    """用户UUID"""
 
 
 # 前向引用导入
@@ -202,7 +216,7 @@ UserSettingResponse.model_rebuild()
 
 # ==================== 数据库模型 ====================
 
-class User(UserBase, TableBase, table=True):
+class User(UserBase, UUIDTableBase, table=True):
     """用户模型"""
 
     username: str = Field(max_length=50, unique=True, index=True)
@@ -243,11 +257,11 @@ class User(UserBase, TableBase, table=True):
     """时区，UTC 偏移小时数"""
 
     # 外键
-    group_id: int = Field(foreign_key="group.id", index=True)
-    """所属用户组ID"""
+    group_id: UUID = Field(foreign_key="group.id", index=True)
+    """所属用户组UUID"""
 
-    previous_group_id: int | None = Field(default=None, foreign_key="group.id")
-    """之前的用户组ID（用于过期后恢复）"""
+    previous_group_id: UUID | None = Field(default=None, foreign_key="group.id")
+    """之前的用户组UUID（用于过期后恢复）"""
 
 
     # 关系

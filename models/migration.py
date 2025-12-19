@@ -25,7 +25,7 @@ default_settings: list[Setting] = [
     Setting(name="siteURL", value="http://localhost", type=SettingsType.BASIC),
     Setting(name="siteName", value="DiskNext", type=SettingsType.BASIC),
     Setting(name="register_enabled", value="1", type=SettingsType.REGISTER),
-    Setting(name="default_group", value="2", type=SettingsType.REGISTER),
+    Setting(name="default_group", value="", type=SettingsType.REGISTER),  # UUID 在组创建后更新
     Setting(name="siteKeywords", value="网盘，网盘", type=SettingsType.BASIC),
     Setting(name="siteDes", value="DiskNext", type=SettingsType.BASIC),
     Setting(name="siteTitle", value="云星启智", type=SettingsType.BASIC),
@@ -138,24 +138,27 @@ async def init_default_settings() -> None:
 
 async def init_default_group() -> None:
     from .group import Group, GroupOptions
+    from .setting import Setting
     from .database import get_session
 
     log.info('初始化用户组...')
 
     async for session in get_session():
         # 未找到初始管理组时，则创建
-        if not await Group.get(session, Group.id == 1):
-            admin_group = await Group(
+        if not await Group.get(session, Group.name == "管理员"):
+            admin_group = Group(
                 name="管理员",
                 policies="1",
                 max_storage=1 * 1024 * 1024 * 1024,  # 1GB
                 share_enabled=True,
                 web_dav_enabled=True,
                 admin=True,
-            ).save(session)
-            assert admin_group.id is not None
+            )
+            admin_group_id = admin_group.id  # 在 save 前保存 UUID
+            await admin_group.save(session)
+
             await GroupOptions(
-                group_id=admin_group.id,
+                group_id=admin_group_id,
                 archive_download=True,
                 archive_task=True,
                 share_download=True,
@@ -166,30 +169,40 @@ async def init_default_group() -> None:
             ).save(session)
 
         # 未找到初始注册会员时，则创建
-        if not await Group.get(session, Group.id == 2):
-            member_group = await Group(
+        if not await Group.get(session, Group.name == "注册会员"):
+            member_group = Group(
                 name="注册会员",
                 max_storage=1 * 1024 * 1024 * 1024,  # 1GB
                 share_enabled=True,
                 web_dav_enabled=True,
-            ).save(session)
-            assert member_group.id is not None
+            )
+            member_group_id = member_group.id  # 在 save 前保存 UUID
+            await member_group.save(session)
+
             await GroupOptions(
-                group_id=member_group.id,
+                group_id=member_group_id,
                 share_download=True,
             ).save(session)
 
+            # 更新 default_group 设置为注册会员组的 UUID
+            default_group_setting = await Setting.get(session, Setting.name == "default_group")
+            if default_group_setting:
+                default_group_setting.value = str(member_group_id)
+                await default_group_setting.save(session)
+
         # 未找到初始游客组时，则创建
-        if not await Group.get(session, Group.id == 3):
-            guest_group = await Group(
+        if not await Group.get(session, Group.name == "游客"):
+            guest_group = Group(
                 name="游客",
                 policies="[]",
                 share_enabled=False,
                 web_dav_enabled=False,
-            ).save(session)
-            assert guest_group.id is not None
+            )
+            guest_group_id = guest_group.id  # 在 save 前保存 UUID
+            await guest_group.save(session)
+
             await GroupOptions(
-                group_id=guest_group.id,
+                group_id=guest_group_id,
                 share_download=True,
             ).save(session)
 
@@ -203,11 +216,11 @@ async def init_default_user() -> None:
 
     async for session in get_session():
         # 检查管理员用户是否存在
-        admin_user = await User.get(session, User.id == 1)
+        admin_user = await User.get(session, User.username == "admin")
 
         if not admin_user:
             # 获取管理员组
-            admin_group = await Group.get(session, Group.id == 1)
+            admin_group = await Group.get(session, Group.name == "管理员")
             if not admin_group:
                 raise RuntimeError("管理员用户组不存在，无法创建管理员用户")
 
@@ -215,19 +228,22 @@ async def init_default_user() -> None:
             admin_password = Password.generate(8)
             hashed_admin_password = Password.hash(admin_password)
 
-            admin_user = await User(
+            admin_user = User(
                 username="admin",
-                nick="admin",
+                nickname="admin",
                 status=True,
                 group_id=admin_group.id,
                 password=hashed_admin_password,
-            ).save(session)
+            )
+            admin_user_id = admin_user.id  # 在 save 前保存 UUID
+            admin_username = admin_user.username
+            await admin_user.save(session)
 
-            # 为管理员创建根目录（使用默认存储策略）
+            # 为管理员创建根目录（使用用户名作为目录名）
             await Object(
-                name="my",
+                name=admin_username,
                 type=ObjectType.FOLDER,
-                owner_id=admin_user.id,
+                owner_id=admin_user_id,
                 parent_id=None,
                 policy_id=1,  # 默认本地存储策略
             ).save(session)
@@ -244,7 +260,7 @@ async def init_default_policy() -> None:
 
     async for session in get_session():
         # 检查默认存储策略是否存在
-        default_policy = await Policy.get(session, Policy.id == 1)
+        default_policy = await Policy.get(session, Policy.name == "本地存储")
 
         if not default_policy:
             local_policy = Policy(

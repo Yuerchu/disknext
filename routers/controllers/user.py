@@ -1,11 +1,11 @@
 from typing import Annotated, Literal
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import and_
 from webauthn import generate_registration_options
 from webauthn.helpers import options_to_json_dict
-import pyotp
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 import models
@@ -93,14 +93,77 @@ async def router_user_session(
     summary='用户注册',
     description='User registration endpoint.',
 )
-def router_user_register() -> models.response.ResponseModel:
+async def router_user_register(
+    session: SessionDep,
+    request: models.RegisterRequest,
+) -> models.response.ResponseModel:
     """
-    User registration endpoint.
-    
-    Returns:
-        dict: A dictionary containing user registration information.
+    用户注册端点
+
+    流程：
+    1. 验证用户名唯一性
+    2. 获取默认用户组
+    3. 创建用户记录
+    4. 创建以用户名命名的根目录
+
+    :param session: 数据库会话
+    :param request: 注册请求
+    :return: 注册结果
+    :raises HTTPException 400: 用户名已存在
+    :raises HTTPException 500: 默认用户组或存储策略不存在
     """
-    pass
+    # 1. 验证用户名唯一性
+    existing_user = await models.User.get(
+        session,
+        models.User.username == request.username
+    )
+    if existing_user:
+        raise HTTPException(status_code=400, detail="用户名已存在")
+
+    # 2. 获取默认用户组（从设置中读取 UUID）
+    default_group_setting: models.Setting | None = await models.Setting.get(
+        session,
+        and_(models.Setting.type == models.SettingsType.REGISTER, models.Setting.name == "default_group")
+    )
+    if default_group_setting is None or not default_group_setting.value:
+        raise HTTPException(status_code=500, detail="默认用户组设置不存在")
+
+    default_group_id = UUID(default_group_setting.value)
+    default_group = await models.Group.get(session, models.Group.id == default_group_id)
+    if not default_group:
+        raise HTTPException(status_code=500, detail="默认用户组不存在")
+
+    # 3. 创建用户
+    hashed_password = Password.hash(request.password)
+    new_user = models.User(
+        username=request.username,
+        password=hashed_password,
+        group_id=default_group.id,
+    )
+    new_user_id = new_user.id  # 在 save 前保存 UUID
+    new_user_username = new_user.username
+    await new_user.save(session)
+
+    # 4. 创建以用户名命名的根目录
+    default_policy = await models.Policy.get(session, models.Policy.name == "本地存储")
+    if not default_policy:
+        raise HTTPException(status_code=500, detail="默认存储策略不存在")
+
+    await models.Object(
+        name=new_user_username,
+        type=models.ObjectType.FOLDER,
+        owner_id=new_user_id,
+        parent_id=None,
+        policy_id=default_policy.id,
+    ).save(session)
+
+    return models.response.ResponseModel(
+        data={
+            "user_id": new_user_id,
+            "username": new_user_username,
+        },
+        msg="注册成功",
+    )
 
 @user_router.post(
     path='/code',

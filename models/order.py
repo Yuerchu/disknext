@@ -1,6 +1,9 @@
 
 from typing import TYPE_CHECKING
+from uuid import UUID
+
 from sqlmodel import Field, Relationship
+
 from .base import TableBase
 
 if TYPE_CHECKING:
@@ -19,7 +22,7 @@ class Order(TableBase, table=True):
     status: int = Field(default=0, sa_column_kwargs={"server_default": "0"}, description="订单状态: 0=待支付, 1=已完成, 2=已取消")
     
     # 外键
-    user_id: int = Field(foreign_key="user.id", index=True, description="所属用户ID")
+    user_id: UUID = Field(foreign_key="user.id", index=True, description="所属用户UUID")
     
     # 关系
     user: "User" = Relationship(back_populates="orders")

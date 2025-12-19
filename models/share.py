@@ -1,7 +1,10 @@
 
 from typing import TYPE_CHECKING
 from datetime import datetime
+from uuid import UUID
+
 from sqlmodel import Field, Relationship, text, UniqueConstraint, Index
+
 from .base import TableBase
 
 if TYPE_CHECKING:
@@ -26,8 +29,8 @@ class Share(TableBase, table=True):
     password: str | None = Field(default=None, max_length=255)
     """分享密码（加密后）"""
 
-    object_id: int = Field(foreign_key="object.id", index=True)
-    """关联的对象ID"""
+    object_id: UUID = Field(foreign_key="object.id", index=True)
+    """关联的对象UUID"""
 
     views: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
     """浏览次数"""
@@ -51,8 +54,8 @@ class Share(TableBase, table=True):
     """兑换此分享所需的积分"""
 
     # 外键
-    user_id: int = Field(foreign_key="user.id", index=True)
-    """创建分享的用户ID"""
+    user_id: UUID = Field(foreign_key="user.id", index=True)
+    """创建分享的用户UUID"""
 
     # 关系
     user: "User" = Relationship(back_populates="shares")

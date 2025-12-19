@@ -1,6 +1,9 @@
 
 from typing import TYPE_CHECKING
+from uuid import UUID
+
 from sqlmodel import Field, Relationship, Index
+
 from .base import TableBase
 
 if TYPE_CHECKING:
@@ -21,8 +24,8 @@ class SourceLink(TableBase, table=True):
     """通过此链接的下载次数"""
 
     # 外键
-    object_id: int = Field(foreign_key="object.id", index=True)
-    """关联的对象ID（必须是文件类型）"""
+    object_id: UUID = Field(foreign_key="object.id", index=True)
+    """关联的对象UUID（必须是文件类型）"""
 
     # 关系
     object: "Object" = Relationship(back_populates="source_links")

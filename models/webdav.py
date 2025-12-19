@@ -1,6 +1,9 @@
 
 from typing import TYPE_CHECKING
+from uuid import UUID
+
 from sqlmodel import Field, Relationship, UniqueConstraint, text, Column, func, DateTime
+
 from .base import TableBase
 
 if TYPE_CHECKING:
@@ -18,7 +21,7 @@ class WebDAV(TableBase, table=True):
     use_proxy: bool = Field(default=False, description="是否使用代理下载")
     
     # 外键
-    user_id: int = Field(foreign_key="user.id", index=True, description="所属用户ID")
+    user_id: UUID = Field(foreign_key="user.id", index=True, description="所属用户UUID")
     
     # 关系
     user: "User" = Relationship(back_populates="webdavs")

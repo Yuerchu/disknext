@@ -1,9 +1,10 @@
 
 from typing import TYPE_CHECKING
+from uuid import UUID
 
 from sqlmodel import Field, Relationship, text
 
-from .base import TableBase, SQLModelBase
+from .base import TableBase, SQLModelBase, UUIDTableBase
 
 if TYPE_CHECKING:
     from .user import User
@@ -45,8 +46,8 @@ class GroupOptionsBase(SQLModelBase):
 class GroupResponse(GroupBase, GroupOptionsBase):
     """用户组响应 DTO"""
 
-    id: int
-    """用户组ID"""
+    id: UUID
+    """用户组UUID"""
 
     allow_share: bool = False
     """是否允许分享"""
@@ -72,8 +73,8 @@ class GroupResponse(GroupBase, GroupOptionsBase):
 class GroupOptions(GroupOptionsBase, TableBase, table=True):
     """用户组选项模型"""
 
-    group_id: int = Field(foreign_key="group.id", unique=True)
-    """关联的用户组ID"""
+    group_id: UUID = Field(foreign_key="group.id", unique=True)
+    """关联的用户组UUID"""
 
     archive_download: bool = False
     """是否允许打包下载"""
@@ -97,7 +98,7 @@ class GroupOptions(GroupOptionsBase, TableBase, table=True):
     group: "Group" = Relationship(back_populates="options")
 
 
-class Group(GroupBase, TableBase, table=True):
+class Group(GroupBase, UUIDTableBase, table=True):
     """用户组模型"""
 
     name: str = Field(max_length=255, unique=True)

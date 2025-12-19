@@ -2,6 +2,7 @@ from . import response
 
 from .user import (
     LoginRequest,
+    RegisterRequest,
     TokenResponse,
     User,
     UserBase,
@@ -21,6 +22,8 @@ from .object import (
     DirectoryResponse,
     Object,
     ObjectBase,
+    ObjectDeleteRequest,
+    ObjectMoveRequest,
     ObjectResponse,
     ObjectType,
     PolicyResponse,

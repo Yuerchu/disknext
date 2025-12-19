@@ -1,11 +1,12 @@
 
 from datetime import datetime
 from typing import TYPE_CHECKING, Literal, Optional
+from uuid import UUID
 
 from enum import StrEnum
 from sqlmodel import Field, Relationship, UniqueConstraint, CheckConstraint, Index
 
-from .base import TableBase, SQLModelBase
+from .base import SQLModelBase, UUIDTableBase
 
 if TYPE_CHECKING:
     from .user import User
@@ -40,18 +41,38 @@ class ObjectBase(SQLModelBase):
 class DirectoryCreateRequest(SQLModelBase):
     """创建目录请求 DTO"""
 
-    path: str
-    """目录路径，如 /docs/images"""
+    parent_id: UUID
+    """父目录UUID"""
+
+    name: str
+    """目录名称"""
 
     policy_id: int | None = None
     """存储策略ID，不指定则继承父目录"""
 
 
+class ObjectMoveRequest(SQLModelBase):
+    """移动对象请求 DTO"""
+
+    src_ids: list[UUID]
+    """源对象UUID列表"""
+
+    dst_id: UUID
+    """目标文件夹UUID"""
+
+
+class ObjectDeleteRequest(SQLModelBase):
+    """删除对象请求 DTO"""
+
+    ids: list[UUID]
+    """待删除对象UUID列表"""
+
+
 class ObjectResponse(ObjectBase):
     """对象响应 DTO"""
 
-    id: str
-    """对象ID"""
+    id: UUID
+    """对象UUID"""
 
     path: str
     """对象路径"""
@@ -91,8 +112,11 @@ class PolicyResponse(SQLModelBase):
 class DirectoryResponse(SQLModelBase):
     """目录响应 DTO"""
 
-    parent: str | None = None
-    """父目录ID，根目录为None"""
+    id: UUID
+    """当前目录UUID"""
+
+    parent: UUID | None = None
+    """父目录UUID，根目录为None"""
 
     objects: list[ObjectResponse] = []
     """目录下的对象列表"""
@@ -103,16 +127,17 @@ class DirectoryResponse(SQLModelBase):
 
 # ==================== 数据库模型 ====================
 
-class Object(ObjectBase, TableBase, table=True):
+class Object(ObjectBase, UUIDTableBase, table=True):
     """
     统一对象模型
 
     合并了原有的 File 和 Folder 模型，通过 type 字段区分文件和目录。
 
     根目录规则：
-    - 每个用户有一个显式根目录对象（name="my", parent_id=NULL）
+    - 每个用户有一个显式根目录对象（name=用户的username, parent_id=NULL）
     - 用户创建的文件/文件夹的 parent_id 指向根目录或其他文件夹的 id
     - 根目录的 policy_id 指定用户默认存储策略
+    - 路径格式：/username/path/to/file（如 /admin/docs/readme.md）
     """
 
     __table_args__ = (
@@ -158,11 +183,11 @@ class Object(ObjectBase, TableBase, table=True):
 
     # ==================== 外键 ====================
 
-    parent_id: int | None = Field(default=None, foreign_key="object.id", index=True)
-    """父目录ID，NULL 表示这是用户的根目录"""
+    parent_id: UUID | None = Field(default=None, foreign_key="object.id", index=True)
+    """父目录UUID，NULL 表示这是用户的根目录"""
 
-    owner_id: int = Field(foreign_key="user.id", index=True)
-    """所有者用户ID"""
+    owner_id: UUID = Field(foreign_key="user.id", index=True)
+    """所有者用户UUID"""
 
     policy_id: int = Field(foreign_key="policy.id", index=True)
     """存储策略ID（文件直接使用，目录作为子文件的默认策略）"""
@@ -207,12 +232,12 @@ class Object(ObjectBase, TableBase, table=True):
     # ==================== 业务方法 ====================
 
     @classmethod
-    async def get_root(cls, session, user_id: int) -> "Object | None":
+    async def get_root(cls, session, user_id: UUID) -> "Object | None":
         """
         获取用户的根目录
 
         :param session: 数据库会话
-        :param user_id: 用户ID
+        :param user_id: 用户UUID
         :return: 根目录对象，不存在则返回 None
         """
         return await cls.get(
@@ -221,33 +246,51 @@ class Object(ObjectBase, TableBase, table=True):
         )
 
     @classmethod
-    async def get_by_path(cls, session, user_id: int, path: str) -> "Object | None":
+    async def get_by_path(
+        cls,
+        session,
+        user_id: UUID,
+        path: str,
+        username: str,
+    ) -> "Object | None":
         """
         根据路径获取对象
 
         :param session: 数据库会话
-        :param user_id: 用户ID
-        :param path: 路径，如 "/" 或 "/docs/images"
+        :param user_id: 用户UUID
+        :param path: 路径，如 "/username" 或 "/username/docs/images"
+        :param username: 用户名，用于识别根目录
         :return: Object 或 None
         """
         path = path.strip()
         if not path:
             raise ValueError("路径不能为空")
 
-        if path in ["/my"]:
-            return await cls.get_root(session, user_id)
+        # 获取用户根目录
+        root = await cls.get_root(session, user_id)
+        if not root:
+            return None
 
         # 移除开头的斜杠并分割路径
         if path.startswith("/"):
             path = path[1:]
         parts = [p for p in path.split("/") if p]
 
+        # 空路径 -> 返回根目录
         if not parts:
-            return await cls.get_root(session, user_id)
+            return root
 
-        # 从根目录开始遍历
-        current = await cls.get_root(session, user_id)
+        # 检查第一部分是否是用户名（根目录名）
+        if parts[0] == username:
+            # 路径以用户名开头，如 /admin/docs
+            if len(parts) == 1:
+                # 只有用户名，返回根目录
+                return root
+            # 去掉用户名部分，从第二个部分开始遍历
+            parts = parts[1:]
 
+        # 从根目录开始遍历剩余路径
+        current = root
         for part in parts:
             if not current:
                 return None
@@ -262,13 +305,13 @@ class Object(ObjectBase, TableBase, table=True):
         return current
 
     @classmethod
-    async def get_children(cls, session, user_id: int, parent_id: int) -> list["Object"]:
+    async def get_children(cls, session, user_id: UUID, parent_id: UUID) -> list["Object"]:
         """
         获取目录下的所有子对象
 
         :param session: 数据库会话
-        :param user_id: 用户ID
-        :param parent_id: 父目录ID
+        :param user_id: 用户UUID
+        :param parent_id: 父目录UUID
         :return: 子对象列表
         """
         return await cls.get(
