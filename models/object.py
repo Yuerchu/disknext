@@ -47,8 +47,8 @@ class DirectoryCreateRequest(SQLModelBase):
     name: str
     """目录名称"""
 
-    policy_id: int | None = None
-    """存储策略ID，不指定则继承父目录"""
+    policy_id: UUID | None = None
+    """存储策略UUID，不指定则继承父目录"""
 
 
 class ObjectMoveRequest(SQLModelBase):
@@ -93,8 +93,8 @@ class ObjectResponse(ObjectBase):
 class PolicyResponse(SQLModelBase):
     """存储策略响应 DTO"""
 
-    id: str
-    """策略ID"""
+    id: UUID
+    """策略UUID"""
 
     name: str
     """策略名称"""
@@ -189,8 +189,8 @@ class Object(ObjectBase, UUIDTableBase, table=True):
     owner_id: UUID = Field(foreign_key="user.id", index=True)
     """所有者用户UUID"""
 
-    policy_id: int = Field(foreign_key="policy.id", index=True)
-    """存储策略ID（文件直接使用，目录作为子文件的默认策略）"""
+    policy_id: UUID = Field(foreign_key="policy.id", index=True)
+    """存储策略UUID（文件直接使用，目录作为子文件的默认策略）"""
 
     # ==================== 关系 ====================
 

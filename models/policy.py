@@ -1,8 +1,9 @@
+from typing import TYPE_CHECKING
 
-from typing import Optional, TYPE_CHECKING
-from sqlmodel import Field, Relationship, text
-from .base import TableBase
 from enum import StrEnum
+from sqlmodel import Field, Relationship, text
+
+from .base import UUIDTableBase
 
 if TYPE_CHECKING:
     from .object import Object
@@ -11,7 +12,7 @@ class PolicyType(StrEnum):
     LOCAL = "local"
     S3 = "s3"
 
-class Policy(TableBase, table=True):
+class Policy(UUIDTableBase, table=True):
     """存储策略模型"""
 
     name: str = Field(max_length=255, unique=True)
@@ -62,7 +63,7 @@ class Policy(TableBase, table=True):
     
     @staticmethod
     async def create(
-        policy: Optional["Policy"] = None,
+        policy: 'Policy | None' = None,
         **kwargs
     ):
         pass

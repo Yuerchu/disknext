@@ -75,7 +75,7 @@ async def router_directory_get(
     ]
 
     policy_response = PolicyResponse(
-        id=str(policy.id),
+        id=policy.id,
         name=policy.name,
         type=policy.type.value,
         max_size=policy.max_size,

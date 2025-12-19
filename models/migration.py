@@ -148,7 +148,6 @@ async def init_default_group() -> None:
         if not await Group.get(session, Group.name == "管理员"):
             admin_group = Group(
                 name="管理员",
-                policies="1",
                 max_storage=1 * 1024 * 1024 * 1024,  # 1GB
                 share_enabled=True,
                 web_dav_enabled=True,
@@ -194,7 +193,6 @@ async def init_default_group() -> None:
         if not await Group.get(session, Group.name == "游客"):
             guest_group = Group(
                 name="游客",
-                policies="[]",
                 share_enabled=False,
                 web_dav_enabled=False,
             )
@@ -210,6 +208,7 @@ async def init_default_user() -> None:
     from .user import User
     from .group import Group
     from .object import Object, ObjectType
+    from .policy import Policy
     from .database import get_session
 
     log.info('初始化管理员用户...')
@@ -223,6 +222,12 @@ async def init_default_user() -> None:
             admin_group = await Group.get(session, Group.name == "管理员")
             if not admin_group:
                 raise RuntimeError("管理员用户组不存在，无法创建管理员用户")
+
+            # 获取默认存储策略
+            default_policy = await Policy.get(session, Policy.name == "本地存储")
+            if not default_policy:
+                raise RuntimeError("默认存储策略不存在，无法创建管理员用户")
+            default_policy_id = default_policy.id  # 在后续 save 前保存 UUID
 
             # 生成管理员密码
             admin_password = Password.generate(8)
@@ -245,7 +250,7 @@ async def init_default_user() -> None:
                 type=ObjectType.FOLDER,
                 owner_id=admin_user_id,
                 parent_id=None,
-                policy_id=1,  # 默认本地存储策略
+                policy_id=default_policy_id,
             ).save(session)
 
             log.info(f'初始管理员账号: admin')
