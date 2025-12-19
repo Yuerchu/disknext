@@ -96,9 +96,6 @@ class GroupOptions(GroupOptionsBase, TableBase, table=True):
     redirected_source: bool = False
     """是否使用重定向源"""
 
-    available_nodes: str = "[]"
-    """可用节点ID列表（JSON数组）"""
-
     # 反向关系
     group: "Group" = Relationship(back_populates="options")
 

@@ -4,7 +4,7 @@ from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 from enum import StrEnum
 import pyotp
-from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+from itsdangerous import URLSafeTimedSerializer
 from pydantic import BaseModel, Field
 
 from utils.JWT.JWT import SECRET_KEY
