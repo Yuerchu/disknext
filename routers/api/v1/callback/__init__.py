@@ -38,7 +38,7 @@ def router_callback_qq() -> ResponseBase:
     Handle QQ OAuth callback and return user information.
     
     Returns:
-        ResponseModel: A model containing the response data for the QQ OAuth callback.
+        ResponseBase: A model containing the response data for the QQ OAuth callback.
     """
     pass
 
@@ -84,7 +84,7 @@ def router_callback_alipay() -> ResponseBase:
     Handle Alipay payment callback and return payment status.
     
     Returns:
-        ResponseModel: A model containing the response data for the Alipay payment callback.
+        ResponseBase: A model containing the response data for the Alipay payment callback.
     """
     pass
 
@@ -98,7 +98,7 @@ def router_callback_wechat() -> ResponseBase:
     Handle WeChat Pay payment callback and return payment status.
     
     Returns:
-        ResponseModel: A model containing the response data for the WeChat Pay payment callback.
+        ResponseBase: A model containing the response data for the WeChat Pay payment callback.
     """
     pass
 
@@ -112,7 +112,7 @@ def router_callback_stripe() -> ResponseBase:
     Handle Stripe payment callback and return payment status.
     
     Returns:
-        ResponseModel: A model containing the response data for the Stripe payment callback.
+        ResponseBase: A model containing the response data for the Stripe payment callback.
     """
     pass
 
@@ -145,7 +145,7 @@ def router_callback_custom(order_no: str, id: str) -> ResponseBase:
         id (str): The ID associated with the payment.
     
     Returns:
-        ResponseModel: A model containing the response data for the custom payment callback.
+        ResponseBase: A model containing the response data for the custom payment callback.
     """
     pass
 
@@ -163,7 +163,7 @@ def router_callback_remote(session_id: str, key: str) -> ResponseBase:
         key (str): The key for the uploaded file.
     
     Returns:
-        ResponseModel: A model containing the response data for the remote upload callback.
+        ResponseBase: A model containing the response data for the remote upload callback.
     """
     pass
 
@@ -180,7 +180,7 @@ def router_callback_qiniu(session_id: str) -> ResponseBase:
         session_id (str): The session ID for the upload.
     
     Returns:
-        ResponseModel: A model containing the response data for the Qiniu Cloud upload callback.
+        ResponseBase: A model containing the response data for the Qiniu Cloud upload callback.
     """
     pass
     
@@ -197,7 +197,7 @@ def router_callback_tencent(session_id: str) -> ResponseBase:
         session_id (str): The session ID for the upload.
     
     Returns:
-        ResponseModel: A model containing the response data for the Tencent Cloud upload callback.
+        ResponseBase: A model containing the response data for the Tencent Cloud upload callback.
     """
     pass
 
@@ -214,7 +214,7 @@ def router_callback_aliyun(session_id: str) -> ResponseBase:
         session_id (str): The session ID for the upload.
     
     Returns:
-        ResponseModel: A model containing the response data for the Aliyun upload callback.
+        ResponseBase: A model containing the response data for the Aliyun upload callback.
     """
     pass
 
@@ -231,7 +231,7 @@ def router_callback_upyun(session_id: str) -> ResponseBase:
         session_id (str): The session ID for the upload.
     
     Returns:
-        ResponseModel: A model containing the response data for the Upyun upload callback.
+        ResponseBase: A model containing the response data for the Upyun upload callback.
     """
     pass
 
@@ -248,7 +248,7 @@ def router_callback_aws(session_id: str) -> ResponseBase:
         session_id (str): The session ID for the upload.
     
     Returns:
-        ResponseModel: A model containing the response data for the AWS S3 upload callback.
+        ResponseBase: A model containing the response data for the AWS S3 upload callback.
     """
     pass
 
@@ -265,7 +265,7 @@ def router_callback_onedrive_finish(session_id: str) -> ResponseBase:
         session_id (str): The session ID for the upload.
     
     Returns:
-        ResponseModel: A model containing the response data for the OneDrive upload completion callback.
+        ResponseBase: A model containing the response data for the OneDrive upload completion callback.
     """
     pass
 
@@ -279,7 +279,7 @@ def router_callback_onedrive_auth() -> ResponseBase:
     Handle OneDrive authorization callback and return authorization status.
     
     Returns:
-        ResponseModel: A model containing the response data for the OneDrive authorization callback.
+        ResponseBase: A model containing the response data for the OneDrive authorization callback.
     """
     pass
 
@@ -293,6 +293,6 @@ def router_callback_google_auth() -> ResponseBase:
     Handle Google OAuth completion callback and return authorization status.
     
     Returns:
-        ResponseModel: A model containing the response data for the Google OAuth completion callback.
+        ResponseBase: A model containing the response data for the Google OAuth completion callback.
     """
     pass

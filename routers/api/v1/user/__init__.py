@@ -274,8 +274,8 @@ async def router_user_me(
     """
     获取用户信息.
 
-    :return: response.ResponseModel containing user information.
-    :rtype: response.ResponseModel
+    :return: response.ResponseBase containing user information.
+    :rtype: response.ResponseBase
     """
     # 加载 group 及其 options 关系
     group = await models.Group.get(

@@ -2,10 +2,17 @@ from fastapi import APIRouter, Depends
 from middleware.auth import SignRequired
 from models.response import ResponseBase
 
+download_router = APIRouter(
+    prefix="/download",
+    tags=["download"]
+)
+
 aria2_router = APIRouter(
     prefix="/aria2",
     tags=["aria2"]
 )
+
+download_router.include_router(aria2_router)
 
 @aria2_router.post(
     path='/url',
@@ -18,7 +25,7 @@ def router_aria2_url() -> ResponseBase:
     Create a URL download task endpoint.
     
     Returns:
-        ResponseModel: A model containing the response data for the URL download task.
+        ResponseBase: A model containing the response data for the URL download task.
     """
     pass
 
@@ -36,7 +43,7 @@ def router_aria2_torrent(id: str) -> ResponseBase:
         id (str): The ID of the torrent to download.
     
     Returns:
-        ResponseModel: A model containing the response data for the torrent download task.
+        ResponseBase: A model containing the response data for the torrent download task.
     """
     pass
 
@@ -54,7 +61,7 @@ def router_aria2_select(gid: str) -> ResponseBase:
         gid (str): The GID of the download task.
     
     Returns:
-        ResponseModel: A model containing the response data for the re-selection of files.
+        ResponseBase: A model containing the response data for the re-selection of files.
     """
     pass
 
@@ -72,7 +79,7 @@ def router_aria2_delete(gid: str) -> ResponseBase:
         gid (str): The GID of the download task to delete.
     
     Returns:
-        ResponseModel: A model containing the response data for the deletion of the download task.
+        ResponseBase: A model containing the response data for the deletion of the download task.
     """
     pass
 
@@ -87,7 +94,7 @@ def router_aria2_downloading() -> ResponseBase:
     Get currently downloading tasks endpoint.
     
     Returns:
-        ResponseModel: A model containing the response data for currently downloading tasks.
+        ResponseBase: A model containing the response data for currently downloading tasks.
     """
     pass
 
@@ -102,6 +109,6 @@ def router_aria2_finished() -> ResponseBase:
     Get finished tasks endpoint.
     
     Returns:
-        ResponseModel: A model containing the response data for finished tasks.
+        ResponseBase: A model containing the response data for finished tasks.
     """
     pass

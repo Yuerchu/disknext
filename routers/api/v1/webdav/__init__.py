@@ -19,7 +19,7 @@ def router_webdav_accounts() -> ResponseBase:
     Get account information for WebDAV.
     
     Returns:
-        ResponseModel: A model containing the response data for the account information.
+        ResponseBase: A model containing the response data for the account information.
     """
     pass
 
@@ -34,7 +34,7 @@ def router_webdav_create_account() -> ResponseBase:
     Create a new WebDAV account.
     
     Returns:
-        ResponseModel: A model containing the response data for the created account.
+        ResponseBase: A model containing the response data for the created account.
     """
     pass
 
@@ -52,7 +52,7 @@ def router_webdav_delete_account(id: str) -> ResponseBase:
         id (str): The ID of the account to be deleted.
     
     Returns:
-        ResponseModel: A model containing the response data for the deletion operation.
+        ResponseBase: A model containing the response data for the deletion operation.
     """
     pass
 
@@ -67,7 +67,7 @@ def router_webdav_create_mount() -> ResponseBase:
     Create a new WebDAV mount point.
     
     Returns:
-        ResponseModel: A model containing the response data for the created mount point.
+        ResponseBase: A model containing the response data for the created mount point.
     """
     pass
 
@@ -85,7 +85,7 @@ def router_webdav_delete_mount(id: str) -> ResponseBase:
         id (str): The ID of the mount point to be deleted.
     
     Returns:
-        ResponseModel: A model containing the response data for the deletion operation.
+        ResponseBase: A model containing the response data for the deletion operation.
     """
     pass
 
@@ -103,6 +103,6 @@ def router_webdav_update_account(id: str) -> ResponseBase:
         id (str): The ID of the account to be updated.
     
     Returns:
-        ResponseModel: A model containing the response data for the updated account.
+        ResponseBase: A model containing the response data for the updated account.
     """
     pass

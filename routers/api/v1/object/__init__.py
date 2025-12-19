@@ -118,7 +118,7 @@ def router_object_copy() -> ResponseBase:
     Copy an object endpoint.
     
     Returns:
-        ResponseModel: A model containing the response data for the object copy.
+        ResponseBase: A model containing the response data for the object copy.
     """
     pass
 
@@ -133,7 +133,7 @@ def router_object_rename() -> ResponseBase:
     Rename an object endpoint.
     
     Returns:
-        ResponseModel: A model containing the response data for the object rename.
+        ResponseBase: A model containing the response data for the object rename.
     """
     pass
 
@@ -151,6 +151,6 @@ def router_object_property(id: str) -> ResponseBase:
         id (str): The ID of the object to retrieve properties for.
     
     Returns:
-        ResponseModel: A model containing the response data for the object properties.
+        ResponseBase: A model containing the response data for the object properties.
     """
     pass

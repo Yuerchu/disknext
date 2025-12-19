@@ -18,7 +18,7 @@ def router_tag_create_filter() -> ResponseBase:
     Create a file classification tag.
     
     Returns:
-        ResponseModel: A model containing the response data for the created tag.
+        ResponseBase: A model containing the response data for the created tag.
     """
     pass
 
@@ -33,7 +33,7 @@ def router_tag_create_link() -> ResponseBase:
     Create a directory shortcut tag.
     
     Returns:
-        ResponseModel: A model containing the response data for the created tag.
+        ResponseBase: A model containing the response data for the created tag.
     """
     pass
 
@@ -51,6 +51,6 @@ def router_tag_delete(id: str) -> ResponseBase:
         id (str): The ID of the tag to be deleted.
     
     Returns:
-        ResponseModel: A model containing the response data for the deletion operation.
+        ResponseBase: A model containing the response data for the deletion operation.
     """
     pass

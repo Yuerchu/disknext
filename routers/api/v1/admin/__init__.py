@@ -73,7 +73,7 @@ def router_admin_get_summary() -> ResponseBase:
     获取站点概况信息，包括用户数、分享数、文件数等。
     
     Returns:
-        ResponseModel: 包含站点概况信息的响应模型。
+        ResponseBase: 包含站点概况信息的响应模型。
     """
     pass
 
@@ -88,7 +88,7 @@ def router_admin_get_news() -> ResponseBase:
     获取社区新闻信息，包括最新的动态和公告。
     
     Returns:
-        ResponseModel: 包含社区新闻信息的响应模型。
+        ResponseBase: 包含社区新闻信息的响应模型。
     """
     pass
 
@@ -103,7 +103,7 @@ def router_admin_update_settings() -> ResponseBase:
     更新站点设置，包括站点名称、描述等。
     
     Returns:
-        ResponseModel: 包含更新结果的响应模型。
+        ResponseBase: 包含更新结果的响应模型。
     """
     pass
 
@@ -118,7 +118,7 @@ def router_admin_get_settings() -> ResponseBase:
     获取站点设置，包括站点名称、描述等。
     
     Returns:
-        ResponseModel: 包含站点设置的响应模型。
+        ResponseBase: 包含站点设置的响应模型。
     """
     pass
 
@@ -133,7 +133,7 @@ def router_admin_get_groups() -> ResponseBase:
     获取用户组列表，包括每个用户组的名称和权限信息。
     
     Returns:
-        ResponseModel: 包含用户组列表的响应模型。
+        ResponseBase: 包含用户组列表的响应模型。
     """
     pass
 
@@ -151,7 +151,7 @@ def router_admin_get_group(group_id: int) -> ResponseBase:
         group_id (int): 用户组ID。
     
     Returns:
-        ResponseModel: 包含用户组信息的响应模型。
+        ResponseBase: 包含用户组信息的响应模型。
     """
     pass
 
@@ -175,7 +175,7 @@ def router_admin_get_group_members(
         page_size (int, optional): 每页显示的成员数量，默认为20。
     
     Returns:
-        ResponseModel: 包含用户组成员列表的响应模型。
+        ResponseBase: 包含用户组成员列表的响应模型。
     """
     pass
 
@@ -190,7 +190,7 @@ def router_admin_create_group() -> ResponseBase:
     创建一个新的用户组，设置名称和权限等信息。
     
     Returns:
-        ResponseModel: 包含创建结果的响应模型。
+        ResponseBase: 包含创建结果的响应模型。
     """
     pass
 
@@ -208,7 +208,7 @@ def router_admin_update_group(group_id: int) -> ResponseBase:
         group_id (int): 用户组ID。
     
     Returns:
-        ResponseModel: 包含更新结果的响应模型。
+        ResponseBase: 包含更新结果的响应模型。
     """
     pass
 
@@ -226,7 +226,7 @@ def router_admin_delete_group(group_id: int) -> ResponseBase:
         group_id (int): 用户组ID。
     
     Returns:
-        ResponseModel: 包含删除结果的响应模型。
+        ResponseBase: 包含删除结果的响应模型。
     """
     pass
 
@@ -245,7 +245,7 @@ async def router_admin_get_user(session: SessionDep, user_id: int) -> ResponseBa
         user_id (int): 用户ID。
 
     Returns:
-        ResponseModel: 包含用户信息的响应模型。
+        ResponseBase: 包含用户信息的响应模型。
     """
     user = await User.get_exist_one(session, user_id)
     return ResponseBase(data=user.to_public().model_dump())
@@ -270,7 +270,7 @@ async def router_admin_get_users(
         page_size (int): 每页显示的用户数量，默认为20。
 
     Returns:
-        ResponseModel: 包含用户列表的响应模型。
+        ResponseBase: 包含用户列表的响应模型。
     """
     offset = (page - 1) * page_size
     users: list[User] = await User.get(
@@ -298,7 +298,7 @@ async def router_admin_create_user(
     创建一个新的用户，设置用户名、密码等信息。
 
     Returns:
-        ResponseModel: 包含创建结果的响应模型。
+        ResponseBase: 包含创建结果的响应模型。
     """
     existing_user = await User.get(session, User.username == user.username)
     if existing_user:
@@ -323,7 +323,7 @@ def router_admin_update_user(user_id: int) -> ResponseBase:
         user_id (int): 用户ID。
     
     Returns:
-        ResponseModel: 包含更新结果的响应模型。
+        ResponseBase: 包含更新结果的响应模型。
     """
     pass
 
@@ -341,7 +341,7 @@ def router_admin_delete_user(user_id: int) -> ResponseBase:
         user_id (int): 用户ID。
     
     Returns:
-        ResponseModel: 包含删除结果的响应模型。
+        ResponseBase: 包含删除结果的响应模型。
     """
     pass
 
@@ -365,7 +365,7 @@ def router_admin_get_file_list() -> ResponseBase:
     获取文件列表，包括文件名称、大小、上传时间等。
     
     Returns:
-        ResponseModel: 包含文件列表的响应模型。
+        ResponseBase: 包含文件列表的响应模型。
     """
     pass
 
@@ -383,7 +383,7 @@ def router_admin_preview_file(file_id: int) -> ResponseBase:
         file_id (int): 文件ID。
     
     Returns:
-        ResponseModel: 包含文件预览内容的响应模型。
+        ResponseBase: 包含文件预览内容的响应模型。
     """
     pass
 
@@ -403,7 +403,7 @@ def router_admin_ban_file(file_id: int) -> ResponseBase:
         file_id (int): 文件ID。
     
     Returns:
-        ResponseModel: 包含删除结果的响应模型。
+        ResponseBase: 包含删除结果的响应模型。
     """
     pass
 
@@ -421,7 +421,7 @@ def router_admin_delete_file(file_id: int) -> ResponseBase:
         file_id (int): 文件ID。
     
     Returns:
-        ResponseModel: 包含删除结果的响应模型。
+        ResponseBase: 包含删除结果的响应模型。
     """
     pass
 

@@ -1,16 +1,64 @@
+# Python
 __pycache__/
-.pytest_cache/
-.venv/
-.env/
-.vscode/
-.VSCodeCounter/
-node_modules/
-
 *.py[cod]
 *.pyo
 *.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+.eggs/
 
+# 虚拟环境
+.venv/
+.env/
+venv/
+env/
+
+# 测试和覆盖率
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+
+# IDE
+.vscode/
+.idea/
 *.code-workspace
+.VSCodeCounter/
+*.swp
+*.swo
+*~
 
+# 数据库
 *.db
+*.sqlite
+*.sqlite3
+
+# 环境变量
 .env
+.env.local
+.env.*.local
+
+# 日志
+*.log
+logs/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+nul
+
+# Node (如果有前端)
+node_modules/
+
+# 其他
+*.bak
+*.tmp
+*.temp

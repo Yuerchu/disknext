@@ -45,7 +45,7 @@ def router_file_source(id: str, name: str) -> ResponseBase:
         name (str): The name of the file.
     
     Returns:
-        ResponseModel: A model containing the response data for the file with a redirect.
+        ResponseBase: A model containing the response data for the file with a redirect.
     """
     pass
 
@@ -62,7 +62,7 @@ def router_file_download(id: str) -> ResponseBase:
         id (str): The ID of the file to download.
     
     Returns:
-        ResponseModel: A model containing the response data for the file download.
+        ResponseBase: A model containing the response data for the file download.
     """
     pass
 
@@ -79,7 +79,7 @@ def router_file_archive_download(sessionID: str) -> ResponseBase:
         sessionID (str): The session ID for the archive.
     
     Returns:
-        ResponseModel: A model containing the response data for the archived files download.
+        ResponseBase: A model containing the response data for the archived files download.
     """
     pass
 
@@ -97,7 +97,7 @@ def router_file_upload(sessionID: str, index: int, file: UploadFile) -> Response
         index (int): The index of the file being uploaded.
     
     Returns:
-        ResponseModel: A model containing the response data.
+        ResponseBase: A model containing the response data.
     """
     pass
 
@@ -112,7 +112,7 @@ def router_file_upload_session() -> ResponseBase:
     Create an upload session endpoint.
     
     Returns:
-        ResponseModel: A model containing the response data for the upload session.
+        ResponseBase: A model containing the response data for the upload session.
     """
     pass
 
@@ -130,7 +130,7 @@ def router_file_upload_session_delete(sessionID: str) -> ResponseBase:
         sessionID (str): The session ID to delete.
     
     Returns:
-        ResponseModel: A model containing the response data for the deletion.
+        ResponseBase: A model containing the response data for the deletion.
     """
     pass
 
@@ -145,7 +145,7 @@ def router_file_upload_session_clear() -> ResponseBase:
     Clear all upload sessions endpoint.
     
     Returns:
-        ResponseModel: A model containing the response data for clearing all sessions.
+        ResponseBase: A model containing the response data for clearing all sessions.
     """
     pass
 
@@ -163,7 +163,7 @@ def router_file_update(id: str) -> ResponseBase:
         id (str): The ID of the file to update.
     
     Returns:
-        ResponseModel: A model containing the response data for the file update.
+        ResponseBase: A model containing the response data for the file update.
     """
     pass
 
@@ -178,7 +178,7 @@ def router_file_create() -> ResponseBase:
     Create a blank file endpoint.
     
     Returns:
-        ResponseModel: A model containing the response data for the file creation.
+        ResponseBase: A model containing the response data for the file creation.
     """
     pass
 
@@ -196,7 +196,7 @@ def router_file_download(id: str) -> ResponseBase:
         id (str): The ID of the file to download.
     
     Returns:
-        ResponseModel: A model containing the response data for the file download session.
+        ResponseBase: A model containing the response data for the file download session.
     """
     pass
 
@@ -214,7 +214,7 @@ def router_file_preview(id: str) -> ResponseBase:
         id (str): The ID of the file to preview.
     
     Returns:
-        ResponseModel: A model containing the response data for the file preview.
+        ResponseBase: A model containing the response data for the file preview.
     """
     pass
 
@@ -232,7 +232,7 @@ def router_file_content(id: str) -> ResponseBase:
         id (str): The ID of the text file.
     
     Returns:
-        ResponseModel: A model containing the response data for the text file content.
+        ResponseBase: A model containing the response data for the text file content.
     """
     pass
 
@@ -250,7 +250,7 @@ def router_file_doc(id: str) -> ResponseBase:
         id (str): The ID of the Office document.
     
     Returns:
-        ResponseModel: A model containing the response data for the Office document preview URL.
+        ResponseBase: A model containing the response data for the Office document preview URL.
     """
     pass
 
@@ -268,7 +268,7 @@ def router_file_thumb(id: str) -> ResponseBase:
         id (str): The ID of the file to get the thumbnail for.
     
     Returns:
-        ResponseModel: A model containing the response data for the file thumbnail.
+        ResponseBase: A model containing the response data for the file thumbnail.
     """
     pass
 
@@ -286,7 +286,7 @@ def router_file_source(id: str) -> ResponseBase:
         id (str): The ID of the file to get the external link for.
     
     Returns:
-        ResponseModel: A model containing the response data for the file external link.
+        ResponseBase: A model containing the response data for the file external link.
     """
     pass
 
@@ -304,7 +304,7 @@ def router_file_archive(id: str) -> ResponseBase:
         id (str): The ID of the file to archive.
     
     Returns:
-        ResponseModel: A model containing the response data for the archived files.
+        ResponseBase: A model containing the response data for the archived files.
     """
     pass
 
@@ -322,7 +322,7 @@ def router_file_compress(id: str) -> ResponseBase:
         id (str): The ID of the file to compress.
     
     Returns:
-        ResponseModel: A model containing the response data for the file compression task.
+        ResponseBase: A model containing the response data for the file compression task.
     """
     pass
 
@@ -340,7 +340,7 @@ def router_file_decompress(id: str) -> ResponseBase:
         id (str): The ID of the file to decompress.
     
     Returns:
-        ResponseModel: A model containing the response data for the file extraction task.
+        ResponseBase: A model containing the response data for the file extraction task.
     """
     pass
 
@@ -358,7 +358,7 @@ def router_file_relocate(id: str) -> ResponseBase:
         id (str): The ID of the file to relocate.
     
     Returns:
-        ResponseModel: A model containing the response data for the file relocation task.
+        ResponseBase: A model containing the response data for the file relocation task.
     """
     pass
 
@@ -377,6 +377,6 @@ def router_file_search(type: str, keyword: str) -> ResponseBase:
         keyword (str): The keyword to search for.
     
     Returns:
-        ResponseModel: A model containing the response data for the file search.
+        ResponseBase: A model containing the response data for the file search.
     """
     pass

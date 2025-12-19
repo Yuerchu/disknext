@@ -15,7 +15,7 @@ from .user_authn import AuthnResponse, UserAuthn
 from .color import ThemeResponse
 
 from .download import Download
-from .group import Group, GroupBase, GroupOptionsBase, GroupResponse
+from .group import Group, GroupBase, GroupOptions, GroupOptionsBase, GroupResponse
 from .node import Node
 from .object import (
     DirectoryCreateRequest,
@@ -29,7 +29,7 @@ from .object import (
     PolicyResponse,
 )
 from .order import Order
-from .policy import Policy
+from .policy import Policy, PolicyType
 from .redeem import Redeem
 from .report import Report
 from .setting import Setting, SettingsType, SiteConfigResponse

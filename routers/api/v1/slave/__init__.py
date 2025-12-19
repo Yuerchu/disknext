@@ -23,7 +23,7 @@ def router_slave_ping() -> ResponseBase:
     Test route for checking connectivity.
     
     Returns:
-        ResponseModel: A response model indicating success.
+        ResponseBase: A response model indicating success.
     """
     from utils.conf.appmeta import BackendVersion
     return ResponseBase(data=BackendVersion)
@@ -42,7 +42,7 @@ def router_slave_post(data: str) -> ResponseBase:
         data (str): The data to be uploaded.
     
     Returns:
-        ResponseModel: A response model indicating success.
+        ResponseBase: A response model indicating success.
     """
     pass
 
@@ -60,7 +60,7 @@ def router_slave_download(speed: int, path: str, name: str) -> ResponseBase:
         name (str): The name of the file to be downloaded.
     
     Returns:
-        ResponseModel: A response model containing download information.
+        ResponseBase: A response model containing download information.
     """
     pass
 
@@ -98,7 +98,7 @@ def router_slave_source(speed: int, path: str, name: str) -> ResponseBase:
         name (str): The name of the file to be linked.
     
     Returns:
-        ResponseModel: A response model containing the external link for the file.
+        ResponseBase: A response model containing the external link for the file.
     """
     pass
 
@@ -134,7 +134,7 @@ def router_slave_thumb(id: str) -> ResponseBase:
         id (str): The ID of the thumbnail image.
     
     Returns:
-        ResponseModel: A response model containing the Base64 encoded thumbnail image.
+        ResponseBase: A response model containing the Base64 encoded thumbnail image.
     """
     pass
 
@@ -152,7 +152,7 @@ def router_slave_delete(path: str) -> ResponseBase:
         path (str): The path of the file to be deleted.
     
     Returns:
-        ResponseModel: A response model indicating success or failure of the deletion.
+        ResponseBase: A response model indicating success or failure of the deletion.
     """
     pass
 
@@ -182,7 +182,7 @@ def router_slave_aria2_get(gid: str = None) -> ResponseBase:
         gid (str): The GID of the Aria2 task.
     
     Returns:
-        ResponseModel: A response model containing the task information.
+        ResponseBase: A response model containing the task information.
     """
     pass
 
@@ -202,7 +202,7 @@ def router_slave_aria2_add(gid: str, url: str, options: dict = None) -> Response
         options (dict, optional): Additional options for the task.
     
     Returns:
-        ResponseModel: A response model indicating success or failure of the task addition.
+        ResponseBase: A response model indicating success or failure of the task addition.
     """
     pass
 
@@ -220,6 +220,6 @@ def router_slave_aria2_remove(gid: str) -> ResponseBase:
         gid (str): The GID of the Aria2 task to be removed.
     
     Returns:
-        ResponseModel: A response model indicating success or failure of the task removal.
+        ResponseBase: A response model indicating success or failure of the task removal.
     """
     pass

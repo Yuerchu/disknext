@@ -5,7 +5,7 @@ from utils.lifespan import lifespan
 from models.database import init_db
 from models.migration import migration
 from utils.JWT import JWT
-from routers import routers
+from routers import router
 
 # 添加初始化数据库启动项
 lifespan.add_startup(init_db)
@@ -25,14 +25,10 @@ app = FastAPI(
 )
 
 # 挂载路由
-for router in routers.Router:
-    app.include_router(router, prefix='/api')
+app.include_router(router, prefix='/api')
 
-# 启动时打印欢迎信息
+# 防止直接运行 main.py
 if __name__ == "__main__":
-    import uvicorn
-
-    if appmeta.debug:
-        uvicorn.run(app='main:app', reload=True)
-    else:
-        uvicorn.run(app=app)
+    from loguru import logger
+    logger.error("请用 fastapi ['dev', 'main'] 命令启动服务")
+    exit(1)

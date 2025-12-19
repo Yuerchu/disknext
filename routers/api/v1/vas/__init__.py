@@ -18,7 +18,7 @@ def router_vas_pack() -> ResponseBase:
     Get information about storage packs and quotas.
     
     Returns:
-        ResponseModel: A model containing the response data for storage packs and quotas.
+        ResponseBase: A model containing the response data for storage packs and quotas.
     """
     pass
 
@@ -33,7 +33,7 @@ def router_vas_product() -> ResponseBase:
     Get product information along with payment details.
     
     Returns:
-        ResponseModel: A model containing the response data for products and payment information.
+        ResponseBase: A model containing the response data for products and payment information.
     """
     pass
 
@@ -48,7 +48,7 @@ def router_vas_order() -> ResponseBase:
     Create an order for a product.
     
     Returns:
-        ResponseModel: A model containing the response data for the created order.
+        ResponseBase: A model containing the response data for the created order.
     """
     pass
 
@@ -66,7 +66,7 @@ def router_vas_order_get(id: str) -> ResponseBase:
         id (str): The ID of the order to retrieve information for.
     
     Returns:
-        ResponseModel: A model containing the response data for the specified order.
+        ResponseBase: A model containing the response data for the specified order.
     """
     pass
 
@@ -84,7 +84,7 @@ def router_vas_redeem(code: str) -> ResponseBase:
         code (str): The redemption code to retrieve information for.
     
     Returns:
-        ResponseModel: A model containing the response data for the specified redemption code.
+        ResponseBase: A model containing the response data for the specified redemption code.
     """
     pass
 
@@ -99,6 +99,6 @@ def router_vas_redeem_post() -> ResponseBase:
     Redeem a redemption code for a product or service.
     
     Returns:
-        ResponseModel: A model containing the response data for the redeemed code.
+        ResponseBase: A model containing the response data for the redeemed code.
     """
     pass

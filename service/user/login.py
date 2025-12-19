@@ -5,6 +5,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from models import LoginRequest, TokenResponse, User
 from utils.JWT.JWT import create_access_token, create_refresh_token
+from utils.password.pwd import Password, PasswordStatus
 
 
 async def Login(
@@ -25,8 +26,6 @@ async def Login(
 
     :return: TokenResponse 对象或状态码或 None
     """
-    from utils.password.pwd import Password
-
     # TODO: 验证码校验
     # captcha_setting = await Setting.get(
     #     session,
@@ -35,7 +34,7 @@ async def Login(
     # is_captcha_required = captcha_setting and captcha_setting.value == "1"
 
     # 获取用户信息
-    current_user = await User.get(session, User.username == login_request.username, fetch_mode="one")
+    current_user = await User.get(session, User.username == login_request.username, fetch_mode="first")
 
     # 验证用户是否存在
     if not current_user:
@@ -43,7 +42,7 @@ async def Login(
         return None
 
     # 验证密码是否正确
-    if not Password.verify(current_user.password, login_request.password):
+    if Password.verify(current_user.password, login_request.password) != PasswordStatus.VALID:
         log.debug(f"Password verification failed for user: {login_request.username}")
         return None
 
@@ -60,7 +59,7 @@ async def Login(
             return "2fa_required"
 
         # 验证 OTP 码
-        if not Password.verify_totp(current_user.two_factor, login_request.two_fa_code):
+        if Password.verify_totp(current_user.two_factor, login_request.two_fa_code) != PasswordStatus.VALID:
             log.debug(f"Invalid 2FA code for user: {login_request.username}")
             return "2fa_invalid"
 
