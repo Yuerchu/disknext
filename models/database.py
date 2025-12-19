@@ -1,7 +1,7 @@
 from sqlmodel import SQLModel
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlmodel.ext.asyncio.session import AsyncSession
-from pkg.conf import appmeta
+from utils.conf import appmeta
 from sqlalchemy.orm import sessionmaker
 from typing import AsyncGenerator
 

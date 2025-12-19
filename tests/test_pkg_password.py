@@ -1,5 +1,5 @@
 import pytest
-from pkg.password.pwd import Password
+from utils.password.pwd import Password
 
 def test_password():
     for i in range(10):

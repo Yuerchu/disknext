@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from middleware.auth import SignRequired
-from models.response import ResponseModel
+from models.response import ResponseBase
 
 aria2_router = APIRouter(
     prefix="/aria2",
@@ -13,7 +13,7 @@ aria2_router = APIRouter(
     description='Create a URL download task endpoint.',
     dependencies=[Depends(SignRequired)]
 )
-def router_aria2_url() -> ResponseModel:
+def router_aria2_url() -> ResponseBase:
     """
     Create a URL download task endpoint.
     
@@ -28,7 +28,7 @@ def router_aria2_url() -> ResponseModel:
     description='Create a torrent download task endpoint.',
     dependencies=[Depends(SignRequired)]
 )
-def router_aria2_torrent(id: str) -> ResponseModel:
+def router_aria2_torrent(id: str) -> ResponseBase:
     """
     Create a torrent download task endpoint.
     
@@ -46,7 +46,7 @@ def router_aria2_torrent(id: str) -> ResponseModel:
     description='Re-select files to download endpoint.',
     dependencies=[Depends(SignRequired)]
 )
-def router_aria2_select(gid: str) -> ResponseModel:
+def router_aria2_select(gid: str) -> ResponseBase:
     """
     Re-select files to download endpoint.
     
@@ -64,7 +64,7 @@ def router_aria2_select(gid: str) -> ResponseModel:
     description='Delete a download task endpoint.',
     dependencies=[Depends(SignRequired)]
 )
-def router_aria2_delete(gid: str) -> ResponseModel:
+def router_aria2_delete(gid: str) -> ResponseBase:
     """
     Delete a download task endpoint.
     
@@ -82,7 +82,7 @@ def router_aria2_delete(gid: str) -> ResponseModel:
     description='Get currently downloading tasks endpoint.',
     dependencies=[Depends(SignRequired)]
 )
-def router_aria2_downloading() -> ResponseModel:
+def router_aria2_downloading() -> ResponseBase:
     """
     Get currently downloading tasks endpoint.
     
@@ -97,7 +97,7 @@ def router_aria2_downloading() -> ResponseModel:
     description='Get finished tasks endpoint.',
     dependencies=[Depends(SignRequired)]
 )
-def router_aria2_finished() -> ResponseModel:
+def router_aria2_finished() -> ResponseBase:
     """
     Get finished tasks endpoint.
     

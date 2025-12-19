@@ -5,7 +5,7 @@ from middleware.auth import AdminRequired
 from middleware.dependencies import SessionDep
 from models import User
 from models.user import UserPublic
-from models.response import ResponseModel
+from models.response import ResponseBase
 
 # 管理员根目录 /api/admin
 admin_router = APIRouter(
@@ -68,7 +68,7 @@ admin_vas_router = APIRouter(
     description='Get site summary information',
     dependencies=[Depends(AdminRequired)],
 )
-def router_admin_get_summary() -> ResponseModel:
+def router_admin_get_summary() -> ResponseBase:
     """
     获取站点概况信息，包括用户数、分享数、文件数等。
     
@@ -83,7 +83,7 @@ def router_admin_get_summary() -> ResponseModel:
     description='Get community news',
     dependencies=[Depends(AdminRequired)],
 )
-def router_admin_get_news() -> ResponseModel:
+def router_admin_get_news() -> ResponseBase:
     """
     获取社区新闻信息，包括最新的动态和公告。
     
@@ -98,7 +98,7 @@ def router_admin_get_news() -> ResponseModel:
     description='Update settings',
     dependencies=[Depends(AdminRequired)],
 )
-def router_admin_update_settings() -> ResponseModel:
+def router_admin_update_settings() -> ResponseBase:
     """
     更新站点设置，包括站点名称、描述等。
     
@@ -113,7 +113,7 @@ def router_admin_update_settings() -> ResponseModel:
     description='Get settings',
     dependencies=[Depends(AdminRequired)],
 )
-def router_admin_get_settings() -> ResponseModel:
+def router_admin_get_settings() -> ResponseBase:
     """
     获取站点设置，包括站点名称、描述等。
     
@@ -128,7 +128,7 @@ def router_admin_get_settings() -> ResponseModel:
     description='Get user group list',
     dependencies=[Depends(AdminRequired)],
 )
-def router_admin_get_groups() -> ResponseModel:
+def router_admin_get_groups() -> ResponseBase:
     """
     获取用户组列表，包括每个用户组的名称和权限信息。
     
@@ -143,7 +143,7 @@ def router_admin_get_groups() -> ResponseModel:
     description='Get user group information by ID',
     dependencies=[Depends(AdminRequired)],
 )
-def router_admin_get_group(group_id: int) -> ResponseModel:
+def router_admin_get_group(group_id: int) -> ResponseBase:
     """
     根据用户组ID获取用户组信息，包括名称、权限等。
     
@@ -165,7 +165,7 @@ def router_admin_get_group_members(
     group_id: int,
     page: int = 1,
     page_size: int = 20
-) -> ResponseModel:
+) -> ResponseBase:
     """
     根据用户组ID获取用户组成员列表。
     
@@ -185,7 +185,7 @@ def router_admin_get_group_members(
     description='Create a new user group',
     dependencies=[Depends(AdminRequired)],
 )
-def router_admin_create_group() -> ResponseModel:
+def router_admin_create_group() -> ResponseBase:
     """
     创建一个新的用户组，设置名称和权限等信息。
     
@@ -200,7 +200,7 @@ def router_admin_create_group() -> ResponseModel:
     description='Update user group information by ID',
     dependencies=[Depends(AdminRequired)],
 )
-def router_admin_update_group(group_id: int) -> ResponseModel:
+def router_admin_update_group(group_id: int) -> ResponseBase:
     """
     根据用户组ID更新用户组信息，包括名称、权限等。
     
@@ -218,7 +218,7 @@ def router_admin_update_group(group_id: int) -> ResponseModel:
     description='Delete user group by ID',
     dependencies=[Depends(AdminRequired)],
 )
-def router_admin_delete_group(group_id: int) -> ResponseModel:
+def router_admin_delete_group(group_id: int) -> ResponseBase:
     """
     根据用户组ID删除用户组。
     
@@ -236,7 +236,7 @@ def router_admin_delete_group(group_id: int) -> ResponseModel:
     description='Get user information by ID',
     dependencies=[Depends(AdminRequired)],
 )
-async def router_admin_get_user(session: SessionDep, user_id: int) -> ResponseModel:
+async def router_admin_get_user(session: SessionDep, user_id: int) -> ResponseBase:
     """
     根据用户ID获取用户信息，包括用户名、邮箱、注册时间等。
     
@@ -248,7 +248,7 @@ async def router_admin_get_user(session: SessionDep, user_id: int) -> ResponseMo
         ResponseModel: 包含用户信息的响应模型。
     """
     user = await User.get_exist_one(session, user_id)
-    return ResponseModel(data=user.to_public().model_dump())
+    return ResponseBase(data=user.to_public().model_dump())
 
 @admin_user_router.get(
     path='/list',
@@ -260,7 +260,7 @@ async def router_admin_get_users(
     session: SessionDep,
     page: int = 1,
     page_size: int = 20
-) -> ResponseModel:
+) -> ResponseBase:
     """
     获取用户列表，支持分页。
 
@@ -280,7 +280,7 @@ async def router_admin_get_users(
         offset=offset,
         limit=page_size
     )
-    return ResponseModel(
+    return ResponseBase(
         data=[user.to_public().model_dump() for user in users]
     )
 
@@ -293,7 +293,7 @@ async def router_admin_get_users(
 async def router_admin_create_user(
     session: SessionDep,
     user: User,
-) -> ResponseModel:
+) -> ResponseBase:
     """
     创建一个新的用户，设置用户名、密码等信息。
 
@@ -302,12 +302,12 @@ async def router_admin_create_user(
     """
     existing_user = await User.get(session, User.username == user.username)
     if existing_user:
-        return ResponseModel(
+        return ResponseBase(
             code=400,
             msg="User with this username already exists."
         )
     user = await user.save(session)
-    return ResponseModel(data=user.to_public().model_dump())
+    return ResponseBase(data=user.to_public().model_dump())
 
 @admin_user_router.patch(
     path='/{user_id}',
@@ -315,7 +315,7 @@ async def router_admin_create_user(
     description='Update user information by ID',
     dependencies=[Depends(AdminRequired)],
 )
-def router_admin_update_user(user_id: int) -> ResponseModel:
+def router_admin_update_user(user_id: int) -> ResponseBase:
     """
     根据用户ID更新用户信息，包括用户名、邮箱等。
     
@@ -333,7 +333,7 @@ def router_admin_update_user(user_id: int) -> ResponseModel:
     description='Delete user by ID',
     dependencies=[Depends(AdminRequired)],
 )
-def router_admin_delete_user(user_id: int) -> ResponseModel:
+def router_admin_delete_user(user_id: int) -> ResponseBase:
     """
     根据用户ID删除用户。
     
@@ -360,7 +360,7 @@ def router_admin_calibrate_storage():
     description='Get file list',
     dependencies=[Depends(AdminRequired)],
 )
-def router_admin_get_file_list() -> ResponseModel:
+def router_admin_get_file_list() -> ResponseBase:
     """
     获取文件列表，包括文件名称、大小、上传时间等。
     
@@ -375,7 +375,7 @@ def router_admin_get_file_list() -> ResponseModel:
     description='Preview file by ID',
     dependencies=[Depends(AdminRequired)],
 )
-def router_admin_preview_file(file_id: int) -> ResponseModel:
+def router_admin_preview_file(file_id: int) -> ResponseBase:
     """
     根据文件ID预览文件内容。
     
@@ -393,7 +393,7 @@ def router_admin_preview_file(file_id: int) -> ResponseModel:
     description='Ban the file, user can\'t open, copy, move, download or share this file if administrator ban.',
     dependencies=[Depends(AdminRequired)],
 )
-def router_admin_ban_file(file_id: int) -> ResponseModel:
+def router_admin_ban_file(file_id: int) -> ResponseBase:
     """
     根据文件ID封禁文件。
     
@@ -413,7 +413,7 @@ def router_admin_ban_file(file_id: int) -> ResponseModel:
     description='Delete file by ID',
     dependencies=[Depends(AdminRequired)],
 )
-def router_admin_delete_file(file_id: int) -> ResponseModel:
+def router_admin_delete_file(file_id: int) -> ResponseBase:
     """
     根据文件ID删除文件。
     
@@ -431,7 +431,7 @@ def router_admin_delete_file(file_id: int) -> ResponseModel:
     description='',
     dependencies=[Depends(AdminRequired)]
 )
-def router_admin_aira2_test() -> ResponseModel:
+def router_admin_aira2_test() -> ResponseBase:
     pass
 
 @admin_policy_router.get(
@@ -440,7 +440,7 @@ def router_admin_aira2_test() -> ResponseModel:
     description='',
     dependencies=[Depends(AdminRequired)]
 )
-def router_policy_list() -> ResponseModel:
+def router_policy_list() -> ResponseBase:
     pass
 
 @admin_policy_router.post(
@@ -449,7 +449,7 @@ def router_policy_list() -> ResponseModel:
     description='',
     dependencies=[Depends(AdminRequired)]
 )
-def router_policy_test_path() -> ResponseModel:
+def router_policy_test_path() -> ResponseBase:
     pass
 
 @admin_policy_router.post(
@@ -458,7 +458,7 @@ def router_policy_test_path() -> ResponseModel:
     description='',
     dependencies=[Depends(AdminRequired)]
 )
-def router_policy_test_slave() -> ResponseModel:
+def router_policy_test_slave() -> ResponseBase:
     pass
 
 @admin_policy_router.post(
@@ -467,7 +467,7 @@ def router_policy_test_slave() -> ResponseModel:
     description='',
     dependencies=[Depends(AdminRequired)]
 )
-def router_policy_add_policy() -> ResponseModel:
+def router_policy_add_policy() -> ResponseBase:
     pass
 
 @admin_policy_router.post(
@@ -476,7 +476,7 @@ def router_policy_add_policy() -> ResponseModel:
     description='',
     dependencies=[Depends(AdminRequired)]
 )
-def router_policy_add_cors() -> ResponseModel:
+def router_policy_add_cors() -> ResponseBase:
     pass
 
 @admin_policy_router.post(
@@ -485,7 +485,7 @@ def router_policy_add_cors() -> ResponseModel:
     description='',
     dependencies=[Depends(AdminRequired)]
 )
-def router_policy_add_scf() -> ResponseModel:
+def router_policy_add_scf() -> ResponseBase:
     pass
     
 @admin_policy_router.get(
@@ -494,7 +494,7 @@ def router_policy_add_scf() -> ResponseModel:
     description='',
     dependencies=[Depends(AdminRequired)]
 )
-def router_policy_onddrive_oauth() -> ResponseModel:
+def router_policy_onddrive_oauth() -> ResponseBase:
     pass
 
 @admin_policy_router.get(
@@ -503,7 +503,7 @@ def router_policy_onddrive_oauth() -> ResponseModel:
     description='',
     dependencies=[Depends(AdminRequired)]
 )
-def router_policy_get_policy() -> ResponseModel:
+def router_policy_get_policy() -> ResponseBase:
     pass
 
 @admin_policy_router.delete(
@@ -512,5 +512,5 @@ def router_policy_get_policy() -> ResponseModel:
     description='',
     dependencies=[Depends(AdminRequired)]
 )
-def router_policy_delete_policy() -> ResponseModel:
+def router_policy_delete_policy() -> ResponseBase:
     pass

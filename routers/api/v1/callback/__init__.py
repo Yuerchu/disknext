@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import PlainTextResponse, RedirectResponse
 from middleware.auth import SignRequired
-from models.response import ResponseModel
+from models.response import ResponseBase
 import service.oauth
 
 callback_router = APIRouter(
@@ -33,7 +33,7 @@ callback_router.include_router(upload_router)
     summary='QQ互联回调',
     description='Handle QQ OAuth callback and return user information.',
 )
-def router_callback_qq() -> ResponseModel:
+def router_callback_qq() -> ResponseBase:
     """
     Handle QQ OAuth callback and return user information.
     
@@ -79,7 +79,7 @@ async def router_callback_github(
     summary='支付宝支付回调',
     description='Handle Alipay payment callback and return payment status.',
 )
-def router_callback_alipay() -> ResponseModel:
+def router_callback_alipay() -> ResponseBase:
     """
     Handle Alipay payment callback and return payment status.
     
@@ -93,7 +93,7 @@ def router_callback_alipay() -> ResponseModel:
     summary='微信支付回调',
     description='Handle WeChat Pay payment callback and return payment status.',
 )
-def router_callback_wechat() -> ResponseModel:
+def router_callback_wechat() -> ResponseBase:
     """
     Handle WeChat Pay payment callback and return payment status.
     
@@ -107,7 +107,7 @@ def router_callback_wechat() -> ResponseModel:
     summary='Stripe支付回调',
     description='Handle Stripe payment callback and return payment status.',
 )
-def router_callback_stripe() -> ResponseModel:
+def router_callback_stripe() -> ResponseBase:
     """
     Handle Stripe payment callback and return payment status.
     
@@ -136,7 +136,7 @@ def router_callback_easypay() -> PlainTextResponse:
     summary='自定义支付回调',
     description='Handle custom payment callback and return payment status.',
 )
-def router_callback_custom(order_no: str, id: str) -> ResponseModel:
+def router_callback_custom(order_no: str, id: str) -> ResponseBase:
     """
     Handle custom payment callback and return payment status.
     
@@ -154,7 +154,7 @@ def router_callback_custom(order_no: str, id: str) -> ResponseModel:
     summary='远程上传回调',
     description='Handle remote upload callback and return upload status.',
 )
-def router_callback_remote(session_id: str, key: str) -> ResponseModel:
+def router_callback_remote(session_id: str, key: str) -> ResponseBase:
     """
     Handle remote upload callback and return upload status.
     
@@ -172,7 +172,7 @@ def router_callback_remote(session_id: str, key: str) -> ResponseModel:
     summary='七牛云上传回调',
     description='Handle Qiniu Cloud upload callback and return upload status.',
 )
-def router_callback_qiniu(session_id: str) -> ResponseModel:
+def router_callback_qiniu(session_id: str) -> ResponseBase:
     """
     Handle Qiniu Cloud upload callback and return upload status.
     
@@ -189,7 +189,7 @@ def router_callback_qiniu(session_id: str) -> ResponseModel:
     summary='腾讯云上传回调',
     description='Handle Tencent Cloud upload callback and return upload status.',
 )
-def router_callback_tencent(session_id: str) -> ResponseModel:
+def router_callback_tencent(session_id: str) -> ResponseBase:
     """
     Handle Tencent Cloud upload callback and return upload status.
     
@@ -206,7 +206,7 @@ def router_callback_tencent(session_id: str) -> ResponseModel:
     summary='阿里云上传回调',
     description='Handle Aliyun upload callback and return upload status.',
 )
-def router_callback_aliyun(session_id: str) -> ResponseModel:
+def router_callback_aliyun(session_id: str) -> ResponseBase:
     """
     Handle Aliyun upload callback and return upload status.
     
@@ -223,7 +223,7 @@ def router_callback_aliyun(session_id: str) -> ResponseModel:
     summary='又拍云上传回调',
     description='Handle Upyun upload callback and return upload status.',
 )
-def router_callback_upyun(session_id: str) -> ResponseModel:
+def router_callback_upyun(session_id: str) -> ResponseBase:
     """
     Handle Upyun upload callback and return upload status.
     
@@ -240,7 +240,7 @@ def router_callback_upyun(session_id: str) -> ResponseModel:
     summary='AWS S3上传回调',
     description='Handle AWS S3 upload callback and return upload status.',
 )
-def router_callback_aws(session_id: str) -> ResponseModel:
+def router_callback_aws(session_id: str) -> ResponseBase:
     """
     Handle AWS S3 upload callback and return upload status.
     
@@ -257,7 +257,7 @@ def router_callback_aws(session_id: str) -> ResponseModel:
     summary='OneDrive上传完成回调',
     description='Handle OneDrive upload completion callback and return upload status.',
 )
-def router_callback_onedrive_finish(session_id: str) -> ResponseModel:
+def router_callback_onedrive_finish(session_id: str) -> ResponseBase:
     """
     Handle OneDrive upload completion callback and return upload status.
     
@@ -274,7 +274,7 @@ def router_callback_onedrive_finish(session_id: str) -> ResponseModel:
     summary='OneDrive授权回调',
     description='Handle OneDrive authorization callback and return authorization status.',
 )
-def router_callback_onedrive_auth() -> ResponseModel:
+def router_callback_onedrive_auth() -> ResponseBase:
     """
     Handle OneDrive authorization callback and return authorization status.
     
@@ -288,7 +288,7 @@ def router_callback_onedrive_auth() -> ResponseModel:
     summary='Google OAuth 完成',
     description='Handle Google OAuth completion callback and return authorization status.',
 )
-def router_callback_google_auth() -> ResponseModel:
+def router_callback_google_auth() -> ResponseBase:
     """
     Handle Google OAuth completion callback and return authorization status.
     

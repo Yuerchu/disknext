@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Request
 from middleware.auth import SignRequired
-from models.response import ResponseModel
+from models.response import ResponseBase
 
 # WebDAV 管理路由
 webdav_router = APIRouter(
@@ -14,7 +14,7 @@ webdav_router = APIRouter(
     description='Get account information for WebDAV.',
     dependencies=[Depends(SignRequired)],
 )
-def router_webdav_accounts() -> ResponseModel:
+def router_webdav_accounts() -> ResponseBase:
     """
     Get account information for WebDAV.
     
@@ -29,7 +29,7 @@ def router_webdav_accounts() -> ResponseModel:
     description='Create a new WebDAV account.',
     dependencies=[Depends(SignRequired)],
 )
-def router_webdav_create_account() -> ResponseModel:
+def router_webdav_create_account() -> ResponseBase:
     """
     Create a new WebDAV account.
     
@@ -44,7 +44,7 @@ def router_webdav_create_account() -> ResponseModel:
     description='Delete a WebDAV account by its ID.',
     dependencies=[Depends(SignRequired)],
 )
-def router_webdav_delete_account(id: str) -> ResponseModel:
+def router_webdav_delete_account(id: str) -> ResponseBase:
     """
     Delete a WebDAV account by its ID.
     
@@ -62,7 +62,7 @@ def router_webdav_delete_account(id: str) -> ResponseModel:
     description='Create a new WebDAV mount point.',
     dependencies=[Depends(SignRequired)],
 )
-def router_webdav_create_mount() -> ResponseModel:
+def router_webdav_create_mount() -> ResponseBase:
     """
     Create a new WebDAV mount point.
     
@@ -77,7 +77,7 @@ def router_webdav_create_mount() -> ResponseModel:
     description='Delete a WebDAV mount point by its ID.',
     dependencies=[Depends(SignRequired)],
 )
-def router_webdav_delete_mount(id: str) -> ResponseModel:
+def router_webdav_delete_mount(id: str) -> ResponseBase:
     """
     Delete a WebDAV mount point by its ID.
     
@@ -95,7 +95,7 @@ def router_webdav_delete_mount(id: str) -> ResponseModel:
     description='Update WebDAV account information by ID.',
     dependencies=[Depends(SignRequired)],
 )
-def router_webdav_update_account(id: str) -> ResponseModel:
+def router_webdav_update_account(id: str) -> ResponseBase:
     """
     Update WebDAV account information by ID.
     

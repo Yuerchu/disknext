@@ -5,7 +5,7 @@ from jwt import InvalidTokenError
 import jwt
 
 from models.user import User
-from pkg.JWT import JWT
+from utils.JWT import JWT
 from .dependencies import SessionDep
 
 credentials_exception = HTTPException(

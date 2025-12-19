@@ -1,8 +1,8 @@
 
 from .setting import Setting, SettingsType
 from .color import ThemeResponse
-from pkg.conf.appmeta import BackendVersion
-from pkg.password.pwd import Password
+from utils.conf.appmeta import BackendVersion
+from utils.password.pwd import Password
 from loguru import logger as log
 
 async def migration() -> None:
@@ -138,12 +138,17 @@ async def init_default_settings() -> None:
 
 async def init_default_group() -> None:
     from .group import Group, GroupOptions
+    from .policy import Policy, GroupPolicyLink
     from .setting import Setting
     from .database import get_session
 
     log.info('初始化用户组...')
 
     async for session in get_session():
+        # 获取默认存储策略
+        default_policy = await Policy.get(session, Policy.name == "本地存储")
+        default_policy_id = default_policy.id if default_policy else None
+
         # 未找到初始管理组时，则创建
         if not await Group.get(session, Group.name == "管理员"):
             admin_group = Group(
@@ -167,6 +172,14 @@ async def init_default_group() -> None:
                 advance_delete=True,
             ).save(session)
 
+            # 关联默认存储策略
+            if default_policy_id:
+                session.add(GroupPolicyLink(
+                    group_id=admin_group_id,
+                    policy_id=default_policy_id,
+                ))
+                await session.commit()
+
         # 未找到初始注册会员时，则创建
         if not await Group.get(session, Group.name == "注册会员"):
             member_group = Group(
@@ -182,6 +195,14 @@ async def init_default_group() -> None:
                 group_id=member_group_id,
                 share_download=True,
             ).save(session)
+
+            # 关联默认存储策略
+            if default_policy_id:
+                session.add(GroupPolicyLink(
+                    group_id=member_group_id,
+                    policy_id=default_policy_id,
+                ))
+                await session.commit()
 
             # 更新 default_group 设置为注册会员组的 UUID
             default_group_setting = await Setting.get(session, Setting.name == "default_group")
@@ -203,6 +224,8 @@ async def init_default_group() -> None:
                 group_id=guest_group_id,
                 share_download=True,
             ).save(session)
+
+            # 游客组不关联存储策略（无法上传）
 
 async def init_default_user() -> None:
     from .user import User

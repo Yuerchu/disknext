@@ -1,12 +1,24 @@
 from typing import TYPE_CHECKING
+from uuid import UUID
 
 from enum import StrEnum
 from sqlmodel import Field, Relationship, text
 
-from .base import UUIDTableBase
+from .base import SQLModelBase, UUIDTableBase
 
 if TYPE_CHECKING:
     from .object import Object
+    from .group import Group
+
+
+class GroupPolicyLink(SQLModelBase, table=True):
+    """用户组与存储策略的多对多关联表"""
+
+    group_id: UUID = Field(foreign_key="group.id", primary_key=True)
+    """用户组UUID"""
+
+    policy_id: UUID = Field(foreign_key="policy.id", primary_key=True)
+    """存储策略UUID"""
 
 class PolicyType(StrEnum):
     LOCAL = "local"
@@ -60,6 +72,12 @@ class Policy(UUIDTableBase, table=True):
     # 关系
     objects: list["Object"] = Relationship(back_populates="policy")
     """策略下的所有对象"""
+
+    # 多对多关系：策略可以被多个用户组使用
+    groups: list["Group"] = Relationship(
+        back_populates="policies",
+        link_model=GroupPolicyLink,
+    )
     
     @staticmethod
     async def create(

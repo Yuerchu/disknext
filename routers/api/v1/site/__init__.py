@@ -3,7 +3,7 @@ from sqlalchemy import and_
 import json
 
 from middleware.dependencies import SessionDep
-from models.response import ResponseModel
+from models.response import ResponseBase
 from models.setting import Setting
 
 site_router = APIRouter(
@@ -33,7 +33,7 @@ async def _get_setting_json(session: SessionDep, type_: str, name: str) -> dict 
     path="/ping",
     summary="测试用路由",
     description="A simple endpoint to check if the site is up and running.",
-    response_model=ResponseModel,
+    response_model=ResponseBase,
 )
 def router_site_ping():
     """
@@ -42,15 +42,15 @@ def router_site_ping():
     Returns:
         str: A message indicating the site is running.
     """
-    from pkg.conf.appmeta import BackendVersion
-    return ResponseModel(data=BackendVersion)
+    from utils.conf.appmeta import BackendVersion
+    return ResponseBase(data=BackendVersion)
 
 
 @site_router.get(
     path='/captcha',
     summary='验证码',
     description='Get a Base64 captcha image.',
-    response_model=ResponseModel,
+    response_model=ResponseBase,
 )
 def router_site_captcha():
     """
@@ -66,7 +66,7 @@ def router_site_captcha():
     path='/config',
     summary='站点全局配置',
     description='Get the configuration file.',
-    response_model=ResponseModel,
+    response_model=ResponseBase,
 )
 async def router_site_config(session: SessionDep):
     """
@@ -75,7 +75,7 @@ async def router_site_config(session: SessionDep):
     Returns:
         dict: The site configuration.
     """
-    return ResponseModel(
+    return ResponseBase(
         data={
             "title": await _get_setting(session, "basic", "siteName"),
             "loginCaptcha": await _get_setting_bool(session, "login", "login_captcha"),

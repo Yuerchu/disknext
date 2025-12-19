@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from middleware.auth import SignRequired
-from models.response import ResponseModel
+from models.response import ResponseBase
 
 vas_router = APIRouter(
     prefix="/vas",
@@ -13,7 +13,7 @@ vas_router = APIRouter(
     description='Get information about storage packs and quotas.',
     dependencies=[Depends(SignRequired)]
 )
-def router_vas_pack() -> ResponseModel:
+def router_vas_pack() -> ResponseBase:
     """
     Get information about storage packs and quotas.
     
@@ -28,7 +28,7 @@ def router_vas_pack() -> ResponseModel:
     description='Get product information along with payment details.',
     dependencies=[Depends(SignRequired)]
 )
-def router_vas_product() -> ResponseModel:
+def router_vas_product() -> ResponseBase:
     """
     Get product information along with payment details.
     
@@ -43,7 +43,7 @@ def router_vas_product() -> ResponseModel:
     description='Create an order for a product.',
     dependencies=[Depends(SignRequired)]
 )
-def router_vas_order() -> ResponseModel:
+def router_vas_order() -> ResponseBase:
     """
     Create an order for a product.
     
@@ -58,7 +58,7 @@ def router_vas_order() -> ResponseModel:
     description='Get information about a specific payment order by ID.',
     dependencies=[Depends(SignRequired)]
 )
-def router_vas_order_get(id: str) -> ResponseModel:
+def router_vas_order_get(id: str) -> ResponseBase:
     """
     Get information about a specific payment order by ID.
     
@@ -76,7 +76,7 @@ def router_vas_order_get(id: str) -> ResponseModel:
     description='Get information about a specific redemption code.',
     dependencies=[Depends(SignRequired)]
 )
-def router_vas_redeem(code: str) -> ResponseModel:
+def router_vas_redeem(code: str) -> ResponseBase:
     """
     Get information about a specific redemption code.
     
@@ -94,7 +94,7 @@ def router_vas_redeem(code: str) -> ResponseModel:
     description='Redeem a redemption code for a product or service.',
     dependencies=[Depends(SignRequired)]
 )
-def router_vas_redeem_post() -> ResponseModel:
+def router_vas_redeem_post() -> ResponseBase:
     """
     Redeem a redemption code for a product or service.
     

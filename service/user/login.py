@@ -4,7 +4,7 @@ from loguru import logger as log
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from models import LoginRequest, TokenResponse, User
-from pkg.JWT.JWT import create_access_token, create_refresh_token
+from utils.JWT.JWT import create_access_token, create_refresh_token
 
 
 async def Login(
@@ -25,7 +25,7 @@ async def Login(
 
     :return: TokenResponse 对象或状态码或 None
     """
-    from pkg.password.pwd import Password
+    from utils.password.pwd import Password
 
     # TODO: 验证码校验
     # captcha_setting = await Setting.get(

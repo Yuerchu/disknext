@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from fastapi.responses import FileResponse
 from middleware.auth import SignRequired
-from models.response import ResponseModel
+from models.response import ResponseBase
 
 slave_router = APIRouter(
     prefix="/slave",
@@ -18,15 +18,15 @@ slave_aria2_router = APIRouter(
     summary='测试用路由',
     description='Test route for checking connectivity.',
 )
-def router_slave_ping() -> ResponseModel:
+def router_slave_ping() -> ResponseBase:
     """
     Test route for checking connectivity.
     
     Returns:
         ResponseModel: A response model indicating success.
     """
-    from pkg.conf.appmeta import BackendVersion
-    return ResponseModel(data=BackendVersion)
+    from utils.conf.appmeta import BackendVersion
+    return ResponseBase(data=BackendVersion)
 
 @slave_router.post(
     path='/post',
@@ -34,7 +34,7 @@ def router_slave_ping() -> ResponseModel:
     description='Upload data to the server.',
     dependencies=[Depends(SignRequired)],
 )
-def router_slave_post(data: str) -> ResponseModel:
+def router_slave_post(data: str) -> ResponseBase:
     """
     Upload data to the server.
     
@@ -50,7 +50,7 @@ def router_slave_post(data: str) -> ResponseModel:
     path='/get/{speed}/{path}/{name}',
     summary='获取下载',
 )
-def router_slave_download(speed: int, path: str, name: str) -> ResponseModel:
+def router_slave_download(speed: int, path: str, name: str) -> ResponseBase:
     """
     Get download information.
     
@@ -88,7 +88,7 @@ def router_slave_download_by_sign(sign: str) -> FileResponse:
     description='Get the external link for a file based on its signature.',
     dependencies=[Depends(SignRequired)],
 )
-def router_slave_source(speed: int, path: str, name: str) -> ResponseModel:
+def router_slave_source(speed: int, path: str, name: str) -> ResponseBase:
     """
     Get the external link for a file based on its signature.
     
@@ -126,7 +126,7 @@ def router_slave_source_by_sign(sign: str) -> FileResponse:
     description='Get a thumbnail image based on its ID.',
     dependencies=[Depends(SignRequired)],
 )
-def router_slave_thumb(id: str) -> ResponseModel:
+def router_slave_thumb(id: str) -> ResponseBase:
     """
     Get a thumbnail image based on its ID.
     
@@ -144,7 +144,7 @@ def router_slave_thumb(id: str) -> ResponseModel:
     description='Delete a file from the server.',
     dependencies=[Depends(SignRequired)],
 )
-def router_slave_delete(path: str) -> ResponseModel:
+def router_slave_delete(path: str) -> ResponseBase:
     """
     Delete a file from the server.
     
@@ -162,7 +162,7 @@ def router_slave_delete(path: str) -> ResponseModel:
     description='Test the connection to the Aria2 service from the slave.',
     dependencies=[Depends(SignRequired)],
 )
-def router_slave_aria2_test() -> ResponseModel:
+def router_slave_aria2_test() -> ResponseBase:
     """
     Test the connection to the Aria2 service from the slave.
     """
@@ -174,7 +174,7 @@ def router_slave_aria2_test() -> ResponseModel:
     description='Get information about an Aria2 task by its GID.',
     dependencies=[Depends(SignRequired)],
 )
-def router_slave_aria2_get(gid: str = None) -> ResponseModel:
+def router_slave_aria2_get(gid: str = None) -> ResponseBase:
     """
     Get information about an Aria2 task by its GID.
     
@@ -192,7 +192,7 @@ def router_slave_aria2_get(gid: str = None) -> ResponseModel:
     description='Add a new Aria2 task.',
     dependencies=[Depends(SignRequired)],
 )
-def router_slave_aria2_add(gid: str, url: str, options: dict = None) -> ResponseModel:
+def router_slave_aria2_add(gid: str, url: str, options: dict = None) -> ResponseBase:
     """
     Add a new Aria2 task.
     
@@ -212,7 +212,7 @@ def router_slave_aria2_add(gid: str, url: str, options: dict = None) -> Response
     description='Remove an Aria2 task by its GID.',
     dependencies=[Depends(SignRequired)],
 )
-def router_slave_aria2_remove(gid: str) -> ResponseModel:
+def router_slave_aria2_remove(gid: str) -> ResponseBase:
     """
     Remove an Aria2 task by its GID.
     

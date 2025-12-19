@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from middleware.auth import AuthRequired
 from middleware.dependencies import SessionDep
 from models import Object, ObjectDeleteRequest, ObjectMoveRequest, User
-from models.response import ResponseModel
+from models.response import ResponseBase
 
 object_router = APIRouter(
     prefix="/object",
@@ -22,7 +22,7 @@ async def router_object_delete(
     session: SessionDep,
     user: Annotated[User, Depends(AuthRequired)],
     request: ObjectDeleteRequest,
-) -> ResponseModel:
+) -> ResponseBase:
     """
     删除对象端点
 
@@ -41,7 +41,7 @@ async def router_object_delete(
             await obj.delete(session)
             deleted_count += 1
 
-    return ResponseModel(
+    return ResponseBase(
         data={
             "deleted": deleted_count,
             "total": len(request.ids),
@@ -58,7 +58,7 @@ async def router_object_move(
     session: SessionDep,
     user: Annotated[User, Depends(AuthRequired)],
     request: ObjectMoveRequest,
-) -> ResponseModel:
+) -> ResponseBase:
     """
     移动对象端点
 
@@ -100,7 +100,7 @@ async def router_object_move(
         await src.save(session)
         moved_count += 1
 
-    return ResponseModel(
+    return ResponseBase(
         data={
             "moved": moved_count,
             "total": len(request.src_ids),
@@ -113,7 +113,7 @@ async def router_object_move(
     description='Copy an object endpoint.',
     dependencies=[Depends(AuthRequired)]
 )
-def router_object_copy() -> ResponseModel:
+def router_object_copy() -> ResponseBase:
     """
     Copy an object endpoint.
     
@@ -128,7 +128,7 @@ def router_object_copy() -> ResponseModel:
     description='Rename an object endpoint.',
     dependencies=[Depends(AuthRequired)]
 )
-def router_object_rename() -> ResponseModel:
+def router_object_rename() -> ResponseBase:
     """
     Rename an object endpoint.
     
@@ -143,7 +143,7 @@ def router_object_rename() -> ResponseModel:
     description='Get object properties endpoint.',
     dependencies=[Depends(AuthRequired)]
 )
-def router_object_property(id: str) -> ResponseModel:
+def router_object_property(id: str) -> ResponseBase:
     """
     Get object properties endpoint.
     

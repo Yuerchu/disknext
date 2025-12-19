@@ -15,7 +15,7 @@ def is_valid_instance_id(instance_id):
         assert False, f"instance_id is not a valid UUID4: {instance_id}"
 
 def test_read_main():
-    from pkg.conf.appmeta import BackendVersion
+    from utils.conf.appmeta import BackendVersion
     
     response = client.get("/api/site/ping")
     json_response = response.json()

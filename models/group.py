@@ -8,6 +8,7 @@ from .base import TableBase, SQLModelBase, UUIDTableBase
 
 if TYPE_CHECKING:
     from .user import User
+    from .policy import Policy
 
 
 # ==================== Base 模型 ====================
@@ -70,6 +71,10 @@ class GroupResponse(GroupBase, GroupOptionsBase):
 
 # ==================== 数据库模型 ====================
 
+# GroupPolicyLink 定义在 policy.py 中以避免循环导入
+from .policy import GroupPolicyLink
+
+
 class GroupOptions(GroupOptionsBase, TableBase, table=True):
     """用户组选项模型"""
 
@@ -104,9 +109,6 @@ class Group(GroupBase, UUIDTableBase, table=True):
     name: str = Field(max_length=255, unique=True)
     """用户组名"""
 
-    policies: str | None = Field(default=None, max_length=255)
-    """允许的策略ID列表，逗号分隔"""
-
     max_storage: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
     """最大存储空间（字节）"""
 
@@ -126,6 +128,12 @@ class Group(GroupBase, UUIDTableBase, table=True):
     options: GroupOptions | None = Relationship(
         back_populates="group",
         sa_relationship_kwargs={"uselist": False}
+    )
+
+    # 多对多关系：用户组可以关联多个存储策略
+    policies: list["Policy"] = Relationship(
+        back_populates="groups",
+        link_model=GroupPolicyLink,
     )
 
     # 关系：一个组可以有多个用户

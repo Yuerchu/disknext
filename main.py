@@ -1,10 +1,10 @@
 from fastapi import FastAPI
 
-from pkg.conf import appmeta
-from pkg.lifespan import lifespan
+from utils.conf import appmeta
+from utils.lifespan import lifespan
 from models.database import init_db
 from models.migration import migration
-from pkg.JWT import JWT
+from utils.JWT import JWT
 from routers import routers
 
 # 添加初始化数据库启动项

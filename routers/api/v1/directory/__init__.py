@@ -97,7 +97,7 @@ async def router_directory_create(
         session: SessionDep,
         user: Annotated[User, Depends(AuthRequired)],
         request: DirectoryCreateRequest
-) -> response.ResponseModel:
+) -> response.ResponseBase:
     """
     创建目录
 
@@ -146,7 +146,7 @@ async def router_directory_create(
     new_folder_name = new_folder.name
     await new_folder.save(session)
 
-    return response.ResponseModel(
+    return response.ResponseBase(
         data={
             "id": new_folder_id,
             "name": new_folder_name,

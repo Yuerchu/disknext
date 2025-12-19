@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from middleware.auth import SignRequired
-from models.response import ResponseModel
+from models.response import ResponseBase
 
 tag_router = APIRouter(
     prefix='/tag',
@@ -13,7 +13,7 @@ tag_router = APIRouter(
     description='Create a file classification tag.',
     dependencies=[Depends(SignRequired)],
 )
-def router_tag_create_filter() -> ResponseModel:
+def router_tag_create_filter() -> ResponseBase:
     """
     Create a file classification tag.
     
@@ -28,7 +28,7 @@ def router_tag_create_filter() -> ResponseModel:
     description='Create a directory shortcut tag.',
     dependencies=[Depends(SignRequired)],
 )
-def router_tag_create_link() -> ResponseModel:
+def router_tag_create_link() -> ResponseBase:
     """
     Create a directory shortcut tag.
     
@@ -43,7 +43,7 @@ def router_tag_create_link() -> ResponseModel:
     description='Delete a tag by its ID.',
     dependencies=[Depends(SignRequired)],
 )
-def router_tag_delete(id: str) -> ResponseModel:
+def router_tag_delete(id: str) -> ResponseBase:
     """
     Delete a tag by its ID.
     

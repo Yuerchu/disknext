@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, UploadFile
 from fastapi.responses import FileResponse
 from middleware.auth import SignRequired
-from models.response import ResponseModel
+from models.response import ResponseBase
 
 file_router = APIRouter(
     prefix="/file",
@@ -36,7 +36,7 @@ def router_file_get(id: str, name: str) -> FileResponse:
     summary='文件外链(301跳转)',
     description='Get file external link with 301 redirect endpoint.',
 )
-def router_file_source(id: str, name: str) -> ResponseModel:
+def router_file_source(id: str, name: str) -> ResponseBase:
     """
     Get file external link with 301 redirect endpoint.
     
@@ -54,7 +54,7 @@ def router_file_source(id: str, name: str) -> ResponseModel:
     summary='下载文件',
     description='Download file endpoint.',
 )
-def router_file_download(id: str) -> ResponseModel:
+def router_file_download(id: str) -> ResponseBase:
     """
     Download file endpoint.
     
@@ -71,7 +71,7 @@ def router_file_download(id: str) -> ResponseModel:
     summary='打包并下载文件',
     description='Archive and download files endpoint.',
 )
-def router_file_archive_download(sessionID: str) -> ResponseModel:
+def router_file_archive_download(sessionID: str) -> ResponseBase:
     """
     Archive and download files endpoint.
     
@@ -88,7 +88,7 @@ def router_file_archive_download(sessionID: str) -> ResponseModel:
     summary='文件上传',
     description='File upload endpoint.',
 )
-def router_file_upload(sessionID: str, index: int, file: UploadFile) -> ResponseModel:
+def router_file_upload(sessionID: str, index: int, file: UploadFile) -> ResponseBase:
     """
     File upload endpoint.
     
@@ -107,7 +107,7 @@ def router_file_upload(sessionID: str, index: int, file: UploadFile) -> Response
     description='Create an upload session endpoint.',
     dependencies=[Depends(SignRequired)],
 )
-def router_file_upload_session() -> ResponseModel:
+def router_file_upload_session() -> ResponseBase:
     """
     Create an upload session endpoint.
     
@@ -122,7 +122,7 @@ def router_file_upload_session() -> ResponseModel:
     description='Delete an upload session endpoint.',
     dependencies=[Depends(SignRequired)]
 )
-def router_file_upload_session_delete(sessionID: str) -> ResponseModel:
+def router_file_upload_session_delete(sessionID: str) -> ResponseBase:
     """
     Delete an upload session endpoint.
     
@@ -140,7 +140,7 @@ def router_file_upload_session_delete(sessionID: str) -> ResponseModel:
     description='Clear all upload sessions endpoint.',
     dependencies=[Depends(SignRequired)]
 )
-def router_file_upload_session_clear() -> ResponseModel:
+def router_file_upload_session_clear() -> ResponseBase:
     """
     Clear all upload sessions endpoint.
     
@@ -155,7 +155,7 @@ def router_file_upload_session_clear() -> ResponseModel:
     description='Update file information endpoint.',
     dependencies=[Depends(SignRequired)]
 )
-def router_file_update(id: str) -> ResponseModel:
+def router_file_update(id: str) -> ResponseBase:
     """
     Update file information endpoint.
     
@@ -173,7 +173,7 @@ def router_file_update(id: str) -> ResponseModel:
     description='Create a blank file endpoint.',
     dependencies=[Depends(SignRequired)]
 )
-def router_file_create() -> ResponseModel:
+def router_file_create() -> ResponseBase:
     """
     Create a blank file endpoint.
     
@@ -188,7 +188,7 @@ def router_file_create() -> ResponseModel:
     description='Create a file download session endpoint.',
     dependencies=[Depends(SignRequired)]
 )
-def router_file_download(id: str) -> ResponseModel:
+def router_file_download(id: str) -> ResponseBase:
     """
     Create a file download session endpoint.
     
@@ -206,7 +206,7 @@ def router_file_download(id: str) -> ResponseModel:
     description='Preview file endpoint.',
     dependencies=[Depends(SignRequired)]
 )
-def router_file_preview(id: str) -> ResponseModel:
+def router_file_preview(id: str) -> ResponseBase:
     """
     Preview file endpoint.
     
@@ -224,7 +224,7 @@ def router_file_preview(id: str) -> ResponseModel:
     description='Get text file content endpoint.',
     dependencies=[Depends(SignRequired)]
 )
-def router_file_content(id: str) -> ResponseModel:
+def router_file_content(id: str) -> ResponseBase:
     """
     Get text file content endpoint.
     
@@ -242,7 +242,7 @@ def router_file_content(id: str) -> ResponseModel:
     description='Get Office document preview URL endpoint.',
     dependencies=[Depends(SignRequired)]
 )
-def router_file_doc(id: str) -> ResponseModel:
+def router_file_doc(id: str) -> ResponseBase:
     """
     Get Office document preview URL endpoint.
     
@@ -260,7 +260,7 @@ def router_file_doc(id: str) -> ResponseModel:
     description='Get file thumbnail endpoint.',
     dependencies=[Depends(SignRequired)]
 )
-def router_file_thumb(id: str) -> ResponseModel:
+def router_file_thumb(id: str) -> ResponseBase:
     """
     Get file thumbnail endpoint.
     
@@ -278,7 +278,7 @@ def router_file_thumb(id: str) -> ResponseModel:
     description='Get file external link endpoint.',
     dependencies=[Depends(SignRequired)]
 )
-def router_file_source(id: str) -> ResponseModel:
+def router_file_source(id: str) -> ResponseBase:
     """
     Get file external link endpoint.
     
@@ -296,7 +296,7 @@ def router_file_source(id: str) -> ResponseModel:
     description='Archive files for download endpoint.',
     dependencies=[Depends(SignRequired)]
 )
-def router_file_archive(id: str) -> ResponseModel:
+def router_file_archive(id: str) -> ResponseBase:
     """
     Archive files for download endpoint.
     
@@ -314,7 +314,7 @@ def router_file_archive(id: str) -> ResponseModel:
     description='Create file compression task endpoint.',
     dependencies=[Depends(SignRequired)]
 )
-def router_file_compress(id: str) -> ResponseModel:
+def router_file_compress(id: str) -> ResponseBase:
     """
     Create file compression task endpoint.
     
@@ -332,7 +332,7 @@ def router_file_compress(id: str) -> ResponseModel:
     description='Create file extraction task endpoint.',
     dependencies=[Depends(SignRequired)]
 )
-def router_file_decompress(id: str) -> ResponseModel:
+def router_file_decompress(id: str) -> ResponseBase:
     """
     Create file extraction task endpoint.
     
@@ -350,7 +350,7 @@ def router_file_decompress(id: str) -> ResponseModel:
     description='Create file relocation task endpoint.',
     dependencies=[Depends(SignRequired)]
 )
-def router_file_relocate(id: str) -> ResponseModel:
+def router_file_relocate(id: str) -> ResponseBase:
     """
     Create file relocation task endpoint.
     
@@ -368,7 +368,7 @@ def router_file_relocate(id: str) -> ResponseModel:
     description='Search files by keyword endpoint.',
     dependencies=[Depends(SignRequired)]
 )
-def router_file_search(type: str, keyword: str) -> ResponseModel:
+def router_file_search(type: str, keyword: str) -> ResponseBase:
     """
     Search files by keyword endpoint.
     
