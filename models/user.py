@@ -34,6 +34,13 @@ class AvatarType(StrEnum):
     GRAVATAR = "gravatar"
     FILE = "file"
 
+class ThemeType(StrEnum):
+    """主题类型枚举"""
+    
+    LIGHT = "light"
+    DARK = "dark"
+    SYSTEM = "system"
+
 
 # ==================== Base 模型 ====================
 
@@ -90,37 +97,6 @@ class WebAuthnInfo(SQLModelBase):
     """支持的传输方式"""
 
 
-class ThemeResponse(SQLModelBase):
-    """主题响应 DTO"""
-
-    primary: str = "#3f51b5"
-    """主色调"""
-
-    secondary: str = "#f50057"
-    """次要色"""
-
-    accent: str = "#9c27b0"
-    """强调色"""
-
-    dark: str = "#1d1d1d"
-    """深色"""
-
-    dark_page: str = "#121212"
-    """深色页面背景"""
-
-    positive: str = "#21ba45"
-    """正面/成功色"""
-
-    negative: str = "#c10015"
-    """负面/错误色"""
-
-    info: str = "#31ccec"
-    """信息色"""
-
-    warning: str = "#f2c037"
-    """警告色"""
-
-
 class TokenResponse(SQLModelBase):
     """访问令牌响应 DTO"""
 
@@ -151,9 +127,6 @@ class UserResponse(UserBase):
 
     created_at: datetime
     """用户创建时间"""
-
-    preferred_theme: ThemeResponse | None = None
-    """用户首选主题"""
 
     anonymous: bool = False
     """是否为匿名用户"""
@@ -253,23 +226,21 @@ class User(UserBase, TableBase, table=True):
     avatar: str = Field(default="default", max_length=255)
     """头像地址"""
 
-    options: str | None = None
-    """[TODO] 用户个人设置 需要更改，参考上方的需求"""
-
-    github_open_id: str | None = Field(default=None, unique=True, index=True)
-    """Github OpenID"""
-
-    qq_open_id: str | None = Field(default=None, unique=True, index=True)
-    """QQ OpenID"""
-
     score: int = Field(default=0, sa_column_kwargs={"server_default": "0"}, ge=0)
     """用户积分"""
 
     group_expires: datetime | None = None
     """当前用户组过期时间"""
 
-    phone: str | None = Field(default=None, max_length=32, unique=True, index=True)
-    """手机号"""
+    # Option 相关字段
+    theme: ThemeType = Field(default=ThemeType.SYSTEM, sa_column_kwargs={"server_default": "system"})
+    """主题类型: light/dark/system"""
+
+    language: str = Field(default="zh-CN", max_length=5, sa_column_kwargs={"server_default": "zh-CN"})
+    """语言偏好"""
+
+    timezone: int = Field(default=8, ge=-12, le=12, sa_column_kwargs={"server_default": "8"})
+    """时区，UTC 偏移小时数"""
 
     # 外键
     group_id: int = Field(foreign_key="group.id", index=True)
@@ -278,7 +249,6 @@ class User(UserBase, TableBase, table=True):
     previous_group_id: int | None = Field(default=None, foreign_key="group.id")
     """之前的用户组ID（用于过期后恢复）"""
 
-    # [TODO] 待考虑：根目录 Object ID
 
     # 关系
     group: "Group" = Relationship(

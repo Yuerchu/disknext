@@ -110,7 +110,7 @@ class Object(ObjectBase, TableBase, table=True):
     合并了原有的 File 和 Folder 模型，通过 type 字段区分文件和目录。
 
     根目录规则：
-    - 每个用户有一个显式根目录对象（name="~", parent_id=NULL）
+    - 每个用户有一个显式根目录对象（name="my", parent_id=NULL）
     - 用户创建的文件/文件夹的 parent_id 指向根目录或其他文件夹的 id
     - 根目录的 policy_id 指定用户默认存储策略
     """
@@ -138,6 +138,9 @@ class Object(ObjectBase, TableBase, table=True):
     type: ObjectType
     """对象类型：file 或 folder"""
 
+    password: str | None = Field(default=None, max_length=255)
+    """对象独立密码（仅当用户为对象单独设置密码时有效）"""
+
     # ==================== 文件专属字段 ====================
 
     source_name: str | None = None
@@ -149,6 +152,7 @@ class Object(ObjectBase, TableBase, table=True):
     upload_session_id: str | None = Field(default=None, max_length=255, unique=True, index=True)
     """分块上传会话ID（仅文件有效）"""
 
+    # [TODO] 拆分
     file_metadata: str | None = None
     """文件元数据 (JSON格式)，仅文件有效"""
 
@@ -227,7 +231,10 @@ class Object(ObjectBase, TableBase, table=True):
         :return: Object 或 None
         """
         path = path.strip()
-        if not path or path == "/" or path == "~":
+        if not path:
+            raise ValueError("路径不能为空")
+
+        if path in ["/my"]:
             return await cls.get_root(session, user_id)
 
         # 移除开头的斜杠并分割路径

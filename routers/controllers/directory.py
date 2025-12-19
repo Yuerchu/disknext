@@ -34,7 +34,7 @@ async def router_directory_get(
 
     :param session: 数据库会话
     :param user: 当前登录用户
-    :param path: 目录路径， "~" 表示根目录
+    :param path: 目录路径
     :return: 目录内容
     """
     folder = await Object.get_by_path(session, user.id, path or "/")
@@ -44,9 +44,6 @@ async def router_directory_get(
 
     if not folder.is_folder:
         raise HTTPException(status_code=400, detail="指定路径不是目录")
-    
-    if path != "~":
-        path = path.lstrip("~")
 
     children = await Object.get_children(session, user.id, folder.id)
     policy = await folder.awaitable_attrs.policy

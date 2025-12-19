@@ -2,7 +2,6 @@ from . import response
 
 from .user import (
     LoginRequest,
-    ThemeResponse,
     TokenResponse,
     User,
     UserBase,
@@ -12,6 +11,7 @@ from .user import (
     WebAuthnInfo,
 )
 from .user_authn import AuthnResponse, UserAuthn
+from .color import ThemeResponse
 
 from .download import Download
 from .group import Group, GroupBase, GroupOptionsBase, GroupResponse

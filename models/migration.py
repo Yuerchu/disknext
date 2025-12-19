@@ -1,6 +1,6 @@
 
 from .setting import Setting, SettingsType
-from .user import ThemeResponse
+from .color import ThemeResponse
 from pkg.conf.appmeta import BackendVersion
 from pkg.password.pwd import Password
 from loguru import logger as log
@@ -225,7 +225,7 @@ async def init_default_user() -> None:
 
             # 为管理员创建根目录（使用默认存储策略）
             await Object(
-                name="~",
+                name="my",
                 type=ObjectType.FOLDER,
                 owner_id=admin_user.id,
                 parent_id=None,
