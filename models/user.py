@@ -308,4 +308,3 @@ class User(UserBase, TableBase, table=True):
     def to_public(self) -> "UserPublic":
         """转换为公开 DTO，排除敏感字段"""
         return UserPublic.model_validate(self)
-    

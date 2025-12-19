@@ -13,6 +13,7 @@ import service
 from middleware.auth import AuthRequired
 from middleware.dependencies import SessionDep
 from pkg.JWT.JWT import SECRET_KEY
+from pkg import Password
 
 user_router = APIRouter(
     prefix="/user",
@@ -445,7 +446,6 @@ def router_user_settings_patch(option: str) -> models.response.ResponseModel:
     dependencies=[Depends(AuthRequired)],
 )
 async def router_user_settings_2fa(
-    session: SessionDep,
     user: Annotated[models.user.User, Depends(AuthRequired)],
 ) -> models.response.ResponseModel:
     """
@@ -455,27 +455,8 @@ async def router_user_settings_2fa(
         dict: A dictionary containing two-factor authentication setup information.
     """
 
-    serializer = URLSafeTimedSerializer(SECRET_KEY)
-
-    secret = pyotp.random_base32()
-
-    setup_token = serializer.dumps(
-        secret,
-        salt="2fa-setup-salt"
-    )
-
-    site_Name = await models.Setting.get(session, (models.Setting.type == models.SettingsType.BASIC) & (models.Setting.name == "siteName"))
-
-    otp_uri = pyotp.totp.TOTP(secret).provisioning_uri(
-        name=user.username,
-        issuer_name=site_Name.value
-    )
-
     return models.response.ResponseModel(
-        data={
-            "setup_token": setup_token,
-            "otp_uri": otp_uri,
-        }
+        data=await Password.generate_totp(user.username)
     )
 
 @user_settings_router.post(
@@ -508,7 +489,7 @@ async def router_user_settings_2fa_enable(
         raise HTTPException(status_code=400, detail="Invalid token")
 
     # 2. 验证用户输入的 6 位验证码
-    if not service.user.verify_totp(secret, code):
+    if not Password.verify_totp(secret, code):
         raise HTTPException(status_code=400, detail="Invalid OTP code")
 
     # 3. 将 secret 存储到用户的数据库记录中，启用 2FA

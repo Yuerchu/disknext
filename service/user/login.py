@@ -5,7 +5,6 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from models import LoginRequest, TokenResponse, User
 from pkg.JWT.JWT import create_access_token, create_refresh_token
-from .totp import verify_totp
 
 
 async def Login(
@@ -61,7 +60,7 @@ async def Login(
             return "2fa_required"
 
         # 验证 OTP 码
-        if not verify_totp(current_user.two_factor, login_request.two_fa_code):
+        if not Password.verify_totp(current_user.two_factor, login_request.two_fa_code):
             log.debug(f"Invalid 2FA code for user: {login_request.username}")
             return "2fa_invalid"
 

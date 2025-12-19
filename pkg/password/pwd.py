@@ -3,6 +3,12 @@ from loguru import logger
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 from enum import StrEnum
+import pyotp
+from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+from pydantic import BaseModel, Field
+
+from pkg.JWT.JWT import SECRET_KEY
+from pkg.conf import appmeta
 
 _ph = PasswordHasher()
 
@@ -17,6 +23,24 @@ class PasswordStatus(StrEnum):
 
     EXPIRED = "expired"
     """密码哈希已过时，建议重新哈希"""
+
+class TwoFactorBase(BaseModel):
+    """两步验证请求 DTO"""
+
+    setup_token: str
+    """用于验证的令牌"""
+
+class TwoFactorResponse(TwoFactorBase):
+    """两步验证-请求启用时的响应 DTO"""
+
+    uri: str
+    """用于生成二维码的 URI"""
+
+class TwoFactorVerifyRequest(TwoFactorBase):
+    """两步验证-验证请求 DTO"""
+
+    code: int = Field(..., ge=100000, le=999999)
+    """6 位验证码"""
 
 class Password:
     """密码处理工具类，包含密码生成、哈希和验证功能"""
@@ -77,3 +101,50 @@ class Password:
             # 这是预期的异常，当密码不匹配时触发。
             return PasswordStatus.INVALID
         # 其他异常（如哈希格式错误）应该传播，让调用方感知系统问题
+    
+    @staticmethod
+    async def generate_totp(
+        username: str
+    ) -> TwoFactorResponse:
+        """
+        生成 TOTP 密钥和对应的 URI，用于两步验证。
+
+        :return: 包含 TOTP 密钥和 URI 的元组
+        """
+
+        serializer = URLSafeTimedSerializer(SECRET_KEY)
+
+        secret = pyotp.random_base32()
+
+        setup_token = serializer.dumps(
+            secret,
+            salt="2fa-setup-salt"
+        )
+
+        otp_uri = pyotp.totp.TOTP(secret).provisioning_uri(
+            name=username,
+            issuer_name=appmeta.APP_NAME
+        )
+
+        return TwoFactorResponse(
+            uri=otp_uri,
+            setup_token=setup_token
+        )
+    
+    @staticmethod
+    def verify_totp(
+            secret: str,
+            code: str
+    ) -> PasswordStatus:
+        """
+        验证 TOTP 验证码。
+
+        :param secret: TOTP 密钥（Base32 编码）
+        :param code: 用户输入的 6 位验证码
+        :return: 验证是否成功
+        """
+        totp = pyotp.TOTP(secret)
+        if totp.verify(code):
+            return PasswordStatus.VALID
+        else:
+            return PasswordStatus.INVALID
