@@ -27,17 +27,28 @@ directory_router = APIRouter(
 async def router_directory_get(
         session: SessionDep,
         user: Annotated[User, Depends(AuthRequired)],
-        path: str = ""
+        path: str
 ) -> DirectoryResponse:
     """
     获取目录内容
 
+    路径必须以用户名开头，如 /api/directory/admin 或 /api/directory/admin/docs
+
     :param session: 数据库会话
     :param user: 当前登录用户
-    :param path: 目录路径
+    :param path: 目录路径（必须以用户名开头）
     :return: 目录内容
     """
-    folder = await Object.get_by_path(session, user.id, path or "/", user.username)
+    # 路径必须以用户名开头
+    path = path.strip("/")
+    if not path:
+        raise HTTPException(status_code=400, detail="路径不能为空，请使用 /{username} 格式")
+
+    path_parts = path.split("/")
+    if path_parts[0] != user.username:
+        raise HTTPException(status_code=403, detail="无权访问其他用户的目录")
+
+    folder = await Object.get_by_path(session, user.id, "/" + path, user.username)
 
     if not folder:
         raise HTTPException(status_code=404, detail="目录不存在")
