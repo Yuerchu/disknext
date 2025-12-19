@@ -28,13 +28,13 @@ async def router_directory_get(
         session: SessionDep,
         user: Annotated[User, Depends(AuthRequired)],
         path: str = ""
-) -> response.ResponseModel:
+) -> DirectoryResponse:
     """
     获取目录内容
 
     :param session: 数据库会话
     :param user: 当前登录用户
-    :param path: 目录路径，空或 "/" 表示根目录
+    :param path: 目录路径， "~" 表示根目录
     :return: 目录内容
     """
     folder = await Object.get_by_path(session, user.id, path or "/")
@@ -44,6 +44,9 @@ async def router_directory_get(
 
     if not folder.is_folder:
         raise HTTPException(status_code=400, detail="指定路径不是目录")
+    
+    if path != "~":
+        path = path.lstrip("~")
 
     children = await Object.get_children(session, user.id, folder.id)
     policy = await folder.awaitable_attrs.policy
@@ -55,7 +58,7 @@ async def router_directory_get(
             path=f"/{child.name}",  # TODO: 完整路径
             thumb=False,
             size=child.size,
-            type="folder" if child.is_folder else "file",
+            type=ObjectType.FOLDER if child.is_folder else ObjectType.FILE,
             date=child.updated_at,
             create_date=child.created_at,
             source_enabled=False,
@@ -63,18 +66,17 @@ async def router_directory_get(
         for child in children
     ]
 
-    return response.ResponseModel(
-        data=DirectoryResponse(
-            parent=str(folder.parent_id) if folder.parent_id else None,
-            objects=objects,
-            policy=PolicyResponse(
-                id=str(policy.id),
-                name=policy.name,
-                type=policy.type.value,
-                max_size=policy.max_size,
-                file_type=[],
-            ),
-        )
+    policy=PolicyResponse(
+        id=str(policy.id),
+        name=policy.name,
+        type=policy.type.value,
+        max_size=policy.max_size,
+    )
+
+    return DirectoryResponse(
+        parent=str(folder.parent_id) if folder.parent_id else None,
+        objects=objects,
+        policy=policy,
     )
 
 

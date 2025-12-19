@@ -1,4 +1,5 @@
 from datetime import datetime
+from enum import StrEnum
 from typing import Literal, Optional, TYPE_CHECKING
 
 from sqlmodel import Field, Relationship
@@ -25,6 +26,13 @@ Option 需求
 - 时区
 - 切换到不同存储策略是否提醒
 """
+
+class AvatarType(StrEnum):
+    """头像类型枚举"""
+    
+    DEFAULT = "default"
+    GRAVATAR = "gravatar"
+    FILE = "file"
 
 
 # ==================== Base 模型 ====================
@@ -227,7 +235,7 @@ class User(UserBase, TableBase, table=True):
     username: str = Field(max_length=50, unique=True, index=True)
     """用户名，唯一，一经注册不可更改"""
 
-    nick: str | None = Field(default=None, max_length=50)
+    nickname: str | None = Field(default=None, max_length=50)
     """用于公开展示的名字，可使用真实姓名或昵称"""
 
     password: str = Field(max_length=255)
@@ -242,7 +250,7 @@ class User(UserBase, TableBase, table=True):
     two_factor: str | None = Field(default=None, min_length=32, max_length=32)
     """两步验证密钥"""
 
-    avatar: str | None = Field(default=None, max_length=255)
+    avatar: str = Field(default="default", max_length=255)
     """头像地址"""
 
     options: str | None = None

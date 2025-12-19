@@ -15,8 +15,8 @@ async def migration() -> None:
     log.info('开始进行数据库初始化...')
 
     await init_default_settings()
-    await init_default_group()
     await init_default_policy()
+    await init_default_group()
     await init_default_user()
 
     log.info('数据库初始化结束')
@@ -147,6 +147,7 @@ async def init_default_group() -> None:
         if not await Group.get(session, Group.id == 1):
             admin_group = await Group(
                 name="管理员",
+                policies="1",
                 max_storage=1 * 1024 * 1024 * 1024,  # 1GB
                 share_enabled=True,
                 web_dav_enabled=True,
@@ -158,7 +159,10 @@ async def init_default_group() -> None:
                 archive_download=True,
                 archive_task=True,
                 share_download=True,
+                share_free=True,
                 aria2=True,
+                select_node=True,
+                advance_delete=True,
             ).save(session)
 
         # 未找到初始注册会员时，则创建

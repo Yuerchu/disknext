@@ -25,7 +25,7 @@ class GroupOptionsBase(SQLModelBase):
     """是否允许分享下载"""
 
     share_free: bool = False
-    """是否免积分分享"""
+    """是否免积分获取需要积分的内容"""
 
     relocate: bool = False
     """是否允许文件重定位"""
@@ -136,3 +136,22 @@ class Group(GroupBase, TableBase, table=True):
         back_populates="previous_group",
         sa_relationship_kwargs={"foreign_keys": "User.previous_group_id"}
     )
+
+    def to_response(self) -> "GroupResponse":
+        """转换为响应 DTO"""
+        opts = self.options
+        return GroupResponse(
+            id=self.id,
+            name=self.name,
+            allow_share=self.share_enabled,
+            webdav=self.web_dav_enabled,
+            share_download=opts.share_download if opts else False,
+            share_free=opts.share_free if opts else False,
+            relocate=opts.relocate if opts else False,
+            source_batch=opts.source_batch if opts else 0,
+            select_node=opts.select_node if opts else False,
+            advance_delete=opts.advance_delete if opts else False,
+            allow_remote_download=opts.aria2 if opts else False,
+            allow_archive_download=opts.archive_download if opts else False,
+            allow_webdav_proxy=opts.webdav_proxy if opts else False,
+        )

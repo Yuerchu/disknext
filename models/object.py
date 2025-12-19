@@ -84,8 +84,8 @@ class PolicyResponse(SQLModelBase):
     max_size: int = 0
     """单文件最大限制，单位字节，0表示不限制"""
 
-    file_type: list[str] = []
-    """允许的文件类型列表，空列表表示不限制"""
+    file_type: list[str] | None = None
+    """允许的文件类型列表，None 表示不限制"""
 
 
 class DirectoryResponse(SQLModelBase):
