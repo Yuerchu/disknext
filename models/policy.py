@@ -20,9 +20,44 @@ class GroupPolicyLink(SQLModelBase, table=True):
     policy_id: UUID = Field(foreign_key="policy.id", primary_key=True)
     """存储策略UUID"""
 
+
 class PolicyType(StrEnum):
     LOCAL = "local"
     S3 = "s3"
+
+
+class PolicyOptionsBase(SQLModelBase):
+    """存储策略选项的基础模型"""
+
+    token: str | None = None
+    """访问令牌"""
+
+    file_type: str | None = None
+    """允许的文件类型"""
+
+    mimetype: str | None = None
+    """MIME类型"""
+
+    od_redirect: str | None = None
+    """OneDrive重定向地址"""
+
+    chunk_size: int = Field(default=52428800, sa_column_kwargs={"server_default": "52428800"})
+    """分片上传大小（字节），默认50MB"""
+
+    s3_path_style: bool = Field(default=False, sa_column_kwargs={"server_default": text("false")})
+    """是否使用S3路径风格"""
+
+
+class PolicyOptions(PolicyOptionsBase, UUIDTableBase, table=True):
+    """存储策略选项模型（与Policy一对一关联）"""
+
+    policy_id: UUID = Field(foreign_key="policy.id", unique=True)
+    """关联的策略UUID"""
+
+    # 反向关系
+    policy: "Policy" = Relationship(back_populates="options")
+    """关联的策略"""
+
 
 class Policy(UUIDTableBase, table=True):
     """存储策略模型"""
@@ -50,6 +85,7 @@ class Policy(UUIDTableBase, table=True):
 
     secret_key: str | None = Field(default=None)
     """Secret Key"""
+
     max_size: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
     """允许上传的最大文件尺寸（字节）"""
 
@@ -64,11 +100,14 @@ class Policy(UUIDTableBase, table=True):
 
     is_origin_link_enable: bool = Field(default=False, sa_column_kwargs={"server_default": text("false")})
     """是否开启源链接访问"""
-    
-    options: str | None = Field(default=None)
-    """其他选项 (JSON格式)"""
-    # options 示例: {"token":"","file_type":null,"mimetype":"","od_redirect":"http://127.0.0.1:8000/...","chunk_size":52428800,"s3_path_style":false}
-    
+
+    # 一对一关系：策略选项
+    options: PolicyOptions | None = Relationship(
+        back_populates="policy",
+        sa_relationship_kwargs={"uselist": False},
+    )
+    """策略的扩展选项"""
+
     # 关系
     objects: list["Object"] = Relationship(back_populates="policy")
     """策略下的所有对象"""

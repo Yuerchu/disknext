@@ -29,7 +29,7 @@ from .object import (
     PolicyResponse,
 )
 from .order import Order
-from .policy import Policy, PolicyType
+from .policy import Policy, PolicyOptions, PolicyOptionsBase, PolicyType
 from .redeem import Redeem
 from .report import Report
 from .setting import Setting, SettingsType, SiteConfigResponse
