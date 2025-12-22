@@ -7,8 +7,13 @@
 ```
 models/
 ├── base/                   # 基础模型类
-│   ├── sqlmodel_base.py    # SQLModelBase 基类
-│   └── table_base.py       # TableBase 和 UUIDTableBase
+│   ├── __init__.py         # 导出 SQLModelBase
+│   └── sqlmodel_base.py    # SQLModelBase 基类（元类魔法）
+├── mixin/                  # Mixin 模块
+│   ├── __init__.py         # 统一导出
+│   ├── table.py            # TableBaseMixin, UUIDTableBaseMixin（CRUD + 时间戳）
+│   ├── polymorphic.py      # 联表继承工具（create_subclass_id_mixin 等）
+│   └── info_response.py    # DTO 用的 id/时间戳 Mixin
 ├── user.py                 # 用户模型
 ├── user_authn.py           # 用户 WebAuthn 凭证
 ├── group.py                # 用户组模型
@@ -37,13 +42,15 @@ models/
 
 ### SQLModelBase
 
-所有模型的基类，配置了：
+所有模型的基类，位于 `models.base.sqlmodel_base`，配置了：
 - `use_attribute_docstrings=True`：使用属性后的 docstring 作为字段描述
 - `validate_by_name=True`：允许按名称验证
 
-### TableBase
+### TableBaseMixin
 
-数据库表基类，包含以下公共字段：
+数据库表 Mixin，位于 `models.mixin.table`，继承后自动设置 `table=True`。
+
+包含以下公共字段：
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -52,20 +59,49 @@ models/
 | `updated_at` | `datetime` | 更新时间（自动更新） |
 
 提供的 CRUD 方法：
-- `add()` - 新增记录
+- `add()` - 新增记录（类方法）
 - `save()` - 保存实例
 - `update()` - 更新记录
 - `delete()` - 删除记录
-- `get()` - 查询记录
+- `get()` - 查询记录（类方法）
+- `get_with_count()` - 分页查询（类方法）
 - `get_exist_one()` - 获取存在的记录（不存在则抛出 404）
+- `count()` - 统计记录数（类方法）
 
-### UUIDTableBase
+**使用方式**：
+```python
+from models.base import SQLModelBase
+from models.mixin import TableBaseMixin
 
-继承自 TableBase，将主键改为 UUID 类型：
+class MyModel(SQLModelBase, TableBaseMixin):
+    name: str
+```
+
+### UUIDTableBaseMixin
+
+继承自 TableBaseMixin，将主键改为 UUID 类型：
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `id` | `UUID` | UUID 主键（自动生成） |
+
+**使用方式**：
+```python
+from models.base import SQLModelBase
+from models.mixin import UUIDTableBaseMixin
+
+class MyUUIDModel(SQLModelBase, UUIDTableBaseMixin):
+    name: str
+```
+
+**注意**：当有 Base 类已继承 SQLModelBase 时，子类不需要重复继承：
+```python
+class UserBase(SQLModelBase):
+    username: str
+
+class User(UserBase, UUIDTableBaseMixin):  # 不需要再写 SQLModelBase
+    password: str
+```
 
 ---
 
@@ -74,7 +110,7 @@ models/
 ### 1. User（用户）
 
 **表名**: `user`
-**基类**: `UUIDTableBase`
+**基类**: `UUIDTableBaseMixin`
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -99,7 +135,7 @@ models/
 ### 2. UserAuthn（WebAuthn 凭证）
 
 **表名**: `userauthn`
-**基类**: `TableBase`
+**基类**: `TableBaseMixin`
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -118,7 +154,7 @@ models/
 ### 3. Group（用户组）
 
 **表名**: `group`
-**基类**: `UUIDTableBase`
+**基类**: `UUIDTableBaseMixin`
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -135,7 +171,7 @@ models/
 ### 4. GroupOptions（用户组选项）
 
 **表名**: `groupoptions`
-**基类**: `TableBase`
+**基类**: `TableBaseMixin`
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -170,7 +206,7 @@ models/
 ### 6. Policy（存储策略）
 
 **表名**: `policy`
-**基类**: `UUIDTableBase`
+**基类**: `UUIDTableBaseMixin`
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -197,7 +233,7 @@ models/
 ### 7. PolicyOptions（存储策略选项）
 
 **表名**: `policyoptions`
-**基类**: `UUIDTableBase`
+**基类**: `UUIDTableBaseMixin`
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -215,7 +251,7 @@ models/
 ### 8. Object（统一对象）
 
 **表名**: `object`
-**基类**: `UUIDTableBase`
+**基类**: `UUIDTableBaseMixin`
 
 合并了文件和目录，通过 `type` 字段区分。
 
@@ -237,14 +273,14 @@ models/
 - 名称不能包含斜杠
 
 **关系**:
-- `metadata`: 一对一关联 FileMetadata
+- `file_metadata`: 一对一关联 FileMetadata
 
 ---
 
 ### 9. FileMetadata（文件元数据）
 
 **表名**: `filemetadata`
-**基类**: `UUIDTableBase`
+**基类**: `UUIDTableBaseMixin`
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -267,7 +303,7 @@ models/
 ### 10. SourceLink（源链接）
 
 **表名**: `sourcelink`
-**基类**: `TableBase`
+**基类**: `TableBaseMixin`
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -281,7 +317,7 @@ models/
 ### 11. Share（分享）
 
 **表名**: `share`
-**基类**: `TableBase`
+**基类**: `TableBaseMixin`
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -303,7 +339,7 @@ models/
 ### 12. Report（举报）
 
 **表名**: `report`
-**基类**: `TableBase`
+**基类**: `TableBaseMixin`
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -317,7 +353,7 @@ models/
 ### 13. Tag（标签）
 
 **表名**: `tag`
-**基类**: `TableBase`
+**基类**: `TableBaseMixin`
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -336,7 +372,7 @@ models/
 ### 14. Task（任务）
 
 **表名**: `task`
-**基类**: `TableBase`
+**基类**: `TableBaseMixin`
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -358,7 +394,7 @@ models/
 ### 15. TaskProps（任务属性）
 
 **表名**: `taskprops`
-**基类**: `SQLModelBase`
+**基类**: `TableBaseMixin`（主键为外键 task_id）
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -372,7 +408,7 @@ models/
 ### 16. Download（离线下载）
 
 **表名**: `download`
-**基类**: `UUIDTableBase`
+**基类**: `UUIDTableBaseMixin`
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -404,7 +440,7 @@ models/
 ### 17. DownloadAria2Info（Aria2下载信息）
 
 **表名**: `downloadaria2info`
-**基类**: `SQLModelBase`
+**基类**: `TableBaseMixin`（主键为外键 download_id）
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -424,7 +460,7 @@ models/
 ### 18. DownloadAria2File（Aria2下载文件）
 
 **表名**: `downloadaria2file`
-**基类**: `TableBase`
+**基类**: `TableBaseMixin`
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -441,7 +477,7 @@ models/
 ### 19. Node（节点）
 
 **表名**: `node`
-**基类**: `TableBase`
+**基类**: `TableBaseMixin`
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -466,7 +502,7 @@ models/
 ### 20. Aria2Configuration（Aria2配置）
 
 **表名**: `aria2configuration`
-**基类**: `TableBase`
+**基类**: `TableBaseMixin`
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -483,7 +519,7 @@ models/
 ### 21. Order（订单）
 
 **表名**: `order`
-**基类**: `TableBase`
+**基类**: `TableBaseMixin`
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -503,7 +539,7 @@ models/
 ### 22. Redeem（兑换码）
 
 **表名**: `redeem`
-**基类**: `TableBase`
+**基类**: `TableBaseMixin`
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -519,7 +555,7 @@ models/
 ### 23. StoragePack（容量包）
 
 **表名**: `storagepack`
-**基类**: `TableBase`
+**基类**: `TableBaseMixin`
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -535,7 +571,7 @@ models/
 ### 24. WebDAV（WebDAV 账户）
 
 **表名**: `webdav`
-**基类**: `TableBase`
+**基类**: `TableBaseMixin`
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -554,7 +590,7 @@ models/
 ### 25. Setting（系统设置）
 
 **表名**: `setting`
-**基类**: `TableBase`
+**基类**: `TableBaseMixin`
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
