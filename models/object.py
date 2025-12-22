@@ -1,12 +1,13 @@
 
 from datetime import datetime
-from typing import TYPE_CHECKING, Literal, Optional
+from typing import TYPE_CHECKING, Literal
 from uuid import UUID
 
 from enum import StrEnum
 from sqlmodel import Field, Relationship, UniqueConstraint, CheckConstraint, Index
 
-from .base import SQLModelBase, UUIDTableBase
+from .base import SQLModelBase
+from .mixin import UUIDTableBaseMixin
 
 if TYPE_CHECKING:
     from .user import User
@@ -19,6 +20,43 @@ class ObjectType(StrEnum):
     """对象类型枚举"""
     FILE = "file"
     FOLDER = "folder"
+    
+class StorageType(StrEnum):
+    """存储类型枚举"""
+    LOCAL = "local"
+    QINIU = "qiniu"
+    TENCENT = "tencent"
+    ALIYUN = "aliyun"
+    ONEDRIVE = "onedrive"
+    GOOGLE_DRIVE = "google_drive"
+    DROPBOX = "dropbox"
+    WEBDAV = "webdav"
+    REMOTE = "remote"
+
+
+class FileMetadataBase(SQLModelBase):
+    """文件元数据基础模型"""
+
+    width: int | None = Field(default=None)
+    """图片宽度（像素）"""
+
+    height: int | None = Field(default=None)
+    """图片高度（像素）"""
+
+    duration: float | None = Field(default=None)
+    """音视频时长（秒）"""
+
+    bitrate: int | None = Field(default=None)
+    """比特率（kbps）"""
+
+    mime_type: str | None = Field(default=None, max_length=127)
+    """MIME类型"""
+
+    checksum_md5: str | None = Field(default=None, max_length=32)
+    """MD5校验和"""
+
+    checksum_sha256: str | None = Field(default=None, max_length=64)
+    """SHA256校验和"""
 
 
 # ==================== Base 模型 ====================
@@ -99,10 +137,10 @@ class PolicyResponse(SQLModelBase):
     name: str
     """策略名称"""
 
-    type: Literal["local", "qiniu", "tencent", "aliyun", "onedrive", "google_drive", "dropbox", "webdav", "remote"]
+    type: StorageType
     """存储类型"""
 
-    max_size: int = 0
+    max_size: int = Field(ge=0, default=0)
     """单文件最大限制，单位字节，0表示不限制"""
 
     file_type: list[str] | None = None
@@ -127,7 +165,18 @@ class DirectoryResponse(SQLModelBase):
 
 # ==================== 数据库模型 ====================
 
-class Object(ObjectBase, UUIDTableBase, table=True):
+class FileMetadata(FileMetadataBase, UUIDTableBaseMixin):
+    """文件元数据模型（与Object一对一关联）"""
+
+    object_id: UUID = Field(foreign_key="object.id", unique=True, index=True)
+    """关联的对象UUID"""
+
+    # 反向关系
+    object: "Object" = Relationship(back_populates="file_metadata")
+    """关联的对象"""
+
+
+class Object(ObjectBase, UUIDTableBaseMixin):
     """
     统一对象模型
 
@@ -143,7 +192,7 @@ class Object(ObjectBase, UUIDTableBase, table=True):
     __table_args__ = (
         # 同一父目录下名称唯一（包括 parent_id 为 NULL 的情况）
         UniqueConstraint("owner_id", "parent_id", "name", name="uq_object_parent_name"),
-        # 名称不能包含斜杠
+        # 名称不能包含斜杠 ([TODO] 还有特殊字符)
         CheckConstraint(
             "name NOT LIKE '%/%' AND name NOT LIKE '%\\%'",
             name="ck_object_name_no_slash",
@@ -168,7 +217,7 @@ class Object(ObjectBase, UUIDTableBase, table=True):
 
     # ==================== 文件专属字段 ====================
 
-    source_name: str | None = None
+    source_name: str | None = Field(default=None, max_length=255)
     """源文件名（仅文件有效）"""
 
     size: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
@@ -176,10 +225,6 @@ class Object(ObjectBase, UUIDTableBase, table=True):
 
     upload_session_id: str | None = Field(default=None, max_length=255, unique=True, index=True)
     """分块上传会话ID（仅文件有效）"""
-
-    # [TODO] 拆分
-    file_metadata: str | None = None
-    """文件元数据 (JSON格式)，仅文件有效"""
 
     # ==================== 外键 ====================
 
@@ -201,7 +246,7 @@ class Object(ObjectBase, UUIDTableBase, table=True):
     """存储策略"""
 
     # 自引用关系
-    parent: Optional["Object"] = Relationship(
+    parent: "Object" = Relationship(
         back_populates="children",
         sa_relationship_kwargs={"remote_side": "Object.id"},
     )
@@ -211,6 +256,12 @@ class Object(ObjectBase, UUIDTableBase, table=True):
     """子对象（文件和子目录）"""
 
     # 仅文件有效的关系
+    file_metadata: FileMetadata | None = Relationship(
+        back_populates="object",
+        sa_relationship_kwargs={"uselist": False},
+    )
+    """文件元数据（仅文件有效）"""
+
     source_links: list["SourceLink"] = Relationship(back_populates="object")
     """源链接列表（仅文件有效）"""
 

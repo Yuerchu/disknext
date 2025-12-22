@@ -4,7 +4,8 @@ from uuid import UUID
 from enum import StrEnum
 from sqlmodel import Field, Relationship, text
 
-from .base import SQLModelBase, UUIDTableBase
+from .base import SQLModelBase
+from .mixin import UUIDTableBaseMixin
 
 if TYPE_CHECKING:
     from .object import Object
@@ -29,16 +30,16 @@ class PolicyType(StrEnum):
 class PolicyOptionsBase(SQLModelBase):
     """存储策略选项的基础模型"""
 
-    token: str | None = None
+    token: str | None = Field(default=None)
     """访问令牌"""
 
-    file_type: str | None = None
+    file_type: str | None = Field(default=None)
     """允许的文件类型"""
 
-    mimetype: str | None = None
+    mimetype: str | None = Field(default=None, max_length=127)
     """MIME类型"""
 
-    od_redirect: str | None = None
+    od_redirect: str | None = Field(default=None, max_length=255)
     """OneDrive重定向地址"""
 
     chunk_size: int = Field(default=52428800, sa_column_kwargs={"server_default": "52428800"})
@@ -48,7 +49,7 @@ class PolicyOptionsBase(SQLModelBase):
     """是否使用S3路径风格"""
 
 
-class PolicyOptions(PolicyOptionsBase, UUIDTableBase, table=True):
+class PolicyOptions(PolicyOptionsBase, UUIDTableBaseMixin):
     """存储策略选项模型（与Policy一对一关联）"""
 
     policy_id: UUID = Field(foreign_key="policy.id", unique=True)
@@ -59,7 +60,7 @@ class PolicyOptions(PolicyOptionsBase, UUIDTableBase, table=True):
     """关联的策略"""
 
 
-class Policy(UUIDTableBase, table=True):
+class Policy(SQLModelBase, UUIDTableBaseMixin):
     """存储策略模型"""
 
     name: str = Field(max_length=255, unique=True)

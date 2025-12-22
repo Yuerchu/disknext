@@ -1,9 +1,10 @@
 from typing import Literal
+from enum import StrEnum
 
 from sqlmodel import Field, UniqueConstraint
 
-from .base import TableBase, SQLModelBase
-from enum import StrEnum
+from .base import SQLModelBase
+from .mixin import TableBaseMixin
 
 
 # ==================== DTO 模型 ====================
@@ -72,7 +73,7 @@ class SettingsType(StrEnum):
     WOPI = "wopi"
 
 # 数据库模型
-class Setting(TableBase, table=True):
+class Setting(SQLModelBase, TableBaseMixin):
     """设置模型"""
 
     __table_args__ = (UniqueConstraint("type", "name", name="uq_setting_type_name"),)

@@ -4,7 +4,8 @@ from uuid import UUID
 
 from sqlmodel import Field, Relationship, text
 
-from .base import TableBase, SQLModelBase, UUIDTableBase
+from .base import SQLModelBase
+from .mixin import TableBaseMixin, UUIDTableBaseMixin
 
 if TYPE_CHECKING:
     from .user import User
@@ -75,7 +76,7 @@ class GroupResponse(GroupBase, GroupOptionsBase):
 from .policy import GroupPolicyLink
 
 
-class GroupOptions(GroupOptionsBase, TableBase, table=True):
+class GroupOptions(GroupOptionsBase, TableBaseMixin):
     """用户组选项模型"""
 
     group_id: UUID = Field(foreign_key="group.id", unique=True)
@@ -100,7 +101,7 @@ class GroupOptions(GroupOptionsBase, TableBase, table=True):
     group: "Group" = Relationship(back_populates="options")
 
 
-class Group(GroupBase, UUIDTableBase, table=True):
+class Group(GroupBase, UUIDTableBaseMixin):
     """用户组模型"""
 
     name: str = Field(max_length=255, unique=True)
@@ -134,14 +135,17 @@ class Group(GroupBase, UUIDTableBase, table=True):
     )
 
     # 关系：一个组可以有多个用户
-    user: list["User"] = Relationship(
+    users: list["User"] = Relationship(
         back_populates="group",
         sa_relationship_kwargs={"foreign_keys": "User.group_id"}
     )
-    previous_user: list["User"] = Relationship(
+    """当前属于该组的用户列表"""
+
+    previous_users: list["User"] = Relationship(
         back_populates="previous_group",
         sa_relationship_kwargs={"foreign_keys": "User.previous_group_id"}
     )
+    """之前属于该组的用户列表（用于过期后恢复）"""
 
     def to_response(self) -> "GroupResponse":
         """转换为响应 DTO"""

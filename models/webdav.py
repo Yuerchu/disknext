@@ -4,12 +4,13 @@ from uuid import UUID
 
 from sqlmodel import Field, Relationship, UniqueConstraint, text, Column, func, DateTime
 
-from .base import TableBase
+from .base import SQLModelBase
+from .mixin import TableBaseMixin
 
 if TYPE_CHECKING:
     from .user import User
 
-class WebDAV(TableBase, table=True):
+class WebDAV(SQLModelBase, TableBaseMixin):
     """WebDAV账户模型"""
 
     __table_args__ = (UniqueConstraint("name", "user_id", name="uq_webdav_name_user"),)

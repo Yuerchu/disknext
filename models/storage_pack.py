@@ -1,16 +1,17 @@
 
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 from datetime import datetime
 from uuid import UUID
 
 from sqlmodel import Field, Relationship, Column, func, DateTime
 
-from .base import TableBase
+from .base import SQLModelBase
+from .mixin import TableBaseMixin
 
 if TYPE_CHECKING:
     from .user import User
 
-class StoragePack(TableBase, table=True):
+class StoragePack(SQLModelBase, TableBaseMixin):
     """容量包模型"""
 
     name: str = Field(max_length=255, description="容量包名称")

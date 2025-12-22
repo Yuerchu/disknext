@@ -5,7 +5,8 @@ from uuid import UUID
 
 from sqlmodel import Field, Relationship, text, UniqueConstraint, Index
 
-from .base import TableBase
+from .base import SQLModelBase
+from .mixin import TableBaseMixin
 
 if TYPE_CHECKING:
     from .user import User
@@ -13,7 +14,7 @@ if TYPE_CHECKING:
     from .object import Object
 
 
-class Share(TableBase, table=True):
+class Share(SQLModelBase, TableBaseMixin):
     """分享模型"""
 
     __table_args__ = (
@@ -38,10 +39,10 @@ class Share(TableBase, table=True):
     downloads: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
     """下载次数"""
 
-    remain_downloads: int | None = None
+    remain_downloads: int | None = Field(default=None)
     """剩余下载次数 (NULL为不限制)"""
 
-    expires: datetime | None = None
+    expires: datetime | None = Field(default=None)
     """过期时间 (NULL为永不过期)"""
 
     preview_enabled: bool = Field(default=True, sa_column_kwargs={"server_default": text("true")})

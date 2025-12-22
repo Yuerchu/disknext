@@ -1,15 +1,12 @@
 """
 通用响应模型定义
 """
-
-from typing import Any
 import uuid
 
 from sqlmodel import Field
 
 from .base import SQLModelBase
 
-# [TODO] 未来把这拆了，直接按需返回状态码
 class ResponseBase(SQLModelBase):
     """通用响应模型"""
 

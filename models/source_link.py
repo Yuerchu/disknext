@@ -4,13 +4,14 @@ from uuid import UUID
 
 from sqlmodel import Field, Relationship, Index
 
-from .base import TableBase
+from .base import SQLModelBase
+from .mixin import TableBaseMixin
 
 if TYPE_CHECKING:
     from .object import Object
 
 
-class SourceLink(TableBase, table=True):
+class SourceLink(SQLModelBase, TableBaseMixin):
     """链接模型"""
 
     __table_args__ = (

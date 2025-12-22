@@ -228,7 +228,6 @@ models/
 | `source_name` | `str?` | 源文件名（仅文件） |
 | `size` | `int` | 文件大小（字节），目录为 0 |
 | `upload_session_id` | `str?` | 分块上传会话 ID |
-| `file_metadata` | `str?` | 文件元数据（JSON 格式） |
 | `parent_id` | `UUID?` | 父目录（外键，NULL 表示根目录） |
 | `owner_id` | `UUID` | 所有者用户（外键） |
 | `policy_id` | `UUID` | 存储策略（外键） |
@@ -237,9 +236,35 @@ models/
 - 同一父目录下名称唯一
 - 名称不能包含斜杠
 
+**关系**:
+- `metadata`: 一对一关联 FileMetadata
+
 ---
 
-### 9. SourceLink（源链接）
+### 9. FileMetadata（文件元数据）
+
+**表名**: `filemetadata`
+**基类**: `UUIDTableBase`
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | `UUID` | 主键 |
+| `object_id` | `UUID` | 关联的对象（外键，唯一） |
+| `width` | `int?` | 图片/视频宽度 |
+| `height` | `int?` | 图片/视频高度 |
+| `duration` | `float?` | 音视频时长（秒） |
+| `mime_type` | `str?` | MIME类型 |
+| `bit_rate` | `int?` | 比特率 |
+| `sample_rate` | `int?` | 采样率 |
+| `channels` | `int?` | 音频通道数 |
+| `codec` | `str?` | 编解码器 |
+| `frame_rate` | `float?` | 视频帧率 |
+| `orientation` | `int?` | 图片方向 |
+| `has_thumbnail` | `bool` | 是否有缩略图 |
+
+---
+
+### 10. SourceLink（源链接）
 
 **表名**: `sourcelink`
 **基类**: `TableBase`
@@ -253,7 +278,7 @@ models/
 
 ---
 
-### 10. Share（分享）
+### 11. Share（分享）
 
 **表名**: `share`
 **基类**: `TableBase`
@@ -275,7 +300,7 @@ models/
 
 ---
 
-### 11. Report（举报）
+### 12. Report（举报）
 
 **表名**: `report`
 **基类**: `TableBase`
@@ -289,7 +314,7 @@ models/
 
 ---
 
-### 12. Tag（标签）
+### 13. Tag（标签）
 
 **表名**: `tag`
 **基类**: `TableBase`
@@ -300,7 +325,7 @@ models/
 | `name` | `str` | 标签名称 |
 | `icon` | `str?` | 标签图标 |
 | `color` | `str?` | 标签颜色 |
-| `type` | `int` | 标签类型：0=手动，1=自动 |
+| `type` | `TagType` | 标签类型：manual/automatic |
 | `expression` | `str?` | 自动标签的匹配表达式 |
 | `user_id` | `UUID` | 所属用户（外键） |
 
@@ -308,7 +333,7 @@ models/
 
 ---
 
-### 13. Task（任务）
+### 14. Task（任务）
 
 **表名**: `task`
 **基类**: `TableBase`
@@ -316,16 +341,35 @@ models/
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `id` | `int` | 主键 |
-| `status` | `int` | 任务状态：0=排队中，1=处理中，2=完成，3=错误 |
-| `type` | `int` | 任务类型 |
+| `status` | `TaskStatus` | 任务状态：queued/running/completed/error |
+| `type` | `int` | 任务类型（[TODO] 待定义枚举） |
 | `progress` | `int` | 任务进度（0-100） |
 | `error` | `str?` | 错误信息 |
-| `props` | `str?` | 任务属性（JSON 格式） |
 | `user_id` | `UUID` | 所属用户（外键） |
+
+**索引**: `ix_task_status`, `ix_task_user_status`
+
+**关系**:
+- `props`: 一对一关联 TaskProps
+- `downloads`: 一对多关联 Download
 
 ---
 
-### 14. Download（离线下载）
+### 15. TaskProps（任务属性）
+
+**表名**: `taskprops`
+**基类**: `SQLModelBase`
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `task_id` | `int` | 关联的任务（外键，主键） |
+| `source_path` | `str?` | 源路径 |
+| `dest_path` | `str?` | 目标路径 |
+| `file_ids` | `str?` | 文件ID列表（逗号分隔） |
+
+---
+
+### 16. Download（离线下载）
 
 **表名**: `download`
 **基类**: `UUIDTableBase`
@@ -333,15 +377,14 @@ models/
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `id` | `UUID` | 主键 |
-| `status` | `int` | 下载状态：0=进行中，1=完成，2=错误 |
-| `type` | `int` | 任务类型 |
+| `status` | `DownloadStatus` | 下载状态：running/completed/error |
+| `type` | `int` | 任务类型（[TODO] 待定义枚举） |
 | `source` | `str` | 来源 URL 或标识 |
 | `total_size` | `int` | 总大小（字节） |
 | `downloaded_size` | `int` | 已下载大小（字节） |
 | `g_id` | `str?` | Aria2 GID |
 | `speed` | `int` | 下载速度（bytes/s） |
 | `parent` | `str?` | 父任务标识 |
-| `attrs` | `str?` | 额外属性（JSON 格式） |
 | `error` | `str?` | 错误信息 |
 | `dst` | `str` | 目标存储路径 |
 | `user_id` | `UUID` | 所属用户（外键） |
@@ -350,9 +393,52 @@ models/
 
 **约束**: 同一节点下 g_id 唯一
 
+**索引**: `ix_download_status`, `ix_download_user_status`
+
+**关系**:
+- `aria2_info`: 一对一关联 DownloadAria2Info
+- `aria2_files`: 一对多关联 DownloadAria2File
+
 ---
 
-### 15. Node（节点）
+### 17. DownloadAria2Info（Aria2下载信息）
+
+**表名**: `downloadaria2info`
+**基类**: `SQLModelBase`
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `download_id` | `UUID` | 关联的下载任务（外键，主键） |
+| `info_hash` | `str?` | InfoHash（BT种子） |
+| `piece_length` | `int` | 分片大小 |
+| `num_pieces` | `int` | 分片数量 |
+| `num_seeders` | `int` | 做种人数 |
+| `connections` | `int` | 连接数 |
+| `upload_speed` | `int` | 上传速度（bytes/s） |
+| `upload_length` | `int` | 已上传大小（字节） |
+| `error_code` | `str?` | 错误代码 |
+| `error_message` | `str?` | 错误信息 |
+
+---
+
+### 18. DownloadAria2File（Aria2下载文件）
+
+**表名**: `downloadaria2file`
+**基类**: `TableBase`
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | `int` | 主键 |
+| `download_id` | `UUID` | 关联的下载任务（外键） |
+| `file_index` | `int` | 文件索引（从1开始） |
+| `path` | `str` | 文件路径 |
+| `length` | `int` | 文件大小（字节） |
+| `completed_length` | `int` | 已完成大小（字节） |
+| `is_selected` | `bool` | 是否选中下载 |
+
+---
+
+### 19. Node（节点）
 
 **表名**: `node`
 **基类**: `TableBase`
@@ -360,19 +446,41 @@ models/
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `id` | `int` | 主键 |
-| `status` | `int` | 节点状态：0=正常，1=离线 |
+| `status` | `NodeStatus` | 节点状态：online/offline |
 | `name` | `str` | 节点名称，唯一 |
-| `type` | `int` | 节点类型 |
+| `type` | `int` | 节点类型（[TODO] 待定义枚举） |
 | `server` | `str` | 节点地址（IP 或域名） |
 | `slave_key` | `str?` | 从机通讯密钥 |
 | `master_key` | `str?` | 主机通讯密钥 |
 | `aria2_enabled` | `bool` | 是否启用 Aria2 |
-| `aria2_options` | `str?` | Aria2 配置（JSON 格式） |
 | `rank` | `int` | 节点排序权重 |
+
+**索引**: `ix_node_status`
+
+**关系**:
+- `aria2_config`: 一对一关联 Aria2Configuration
+- `downloads`: 一对多关联 Download
 
 ---
 
-### 16. Order（订单）
+### 20. Aria2Configuration（Aria2配置）
+
+**表名**: `aria2configuration`
+**基类**: `TableBase`
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | `int` | 主键 |
+| `node_id` | `int` | 关联的节点（外键，唯一） |
+| `rpc_url` | `str?` | RPC地址 |
+| `rpc_secret` | `str?` | RPC密钥 |
+| `temp_path` | `str?` | 临时下载路径 |
+| `max_concurrent` | `int` | 最大并发数（1-50，默认5） |
+| `timeout` | `int` | 请求超时时间（秒，默认300） |
+
+---
+
+### 21. Order（订单）
 
 **表名**: `order`
 **基类**: `TableBase`
@@ -381,18 +489,18 @@ models/
 |------|------|------|
 | `id` | `int` | 主键 |
 | `order_no` | `str` | 订单号，唯一 |
-| `type` | `int` | 订单类型 |
+| `type` | `int` | 订单类型（[TODO] 待定义枚举） |
 | `method` | `str?` | 支付方式 |
 | `product_id` | `int?` | 商品 ID |
 | `num` | `int` | 购买数量 |
 | `name` | `str` | 商品名称 |
 | `price` | `int` | 订单价格（分） |
-| `status` | `int` | 订单状态：0=待支付，1=已完成，2=已取消 |
+| `status` | `OrderStatus` | 订单状态：pending/completed/cancelled |
 | `user_id` | `UUID` | 所属用户（外键） |
 
 ---
 
-### 17. Redeem（兑换码）
+### 22. Redeem（兑换码）
 
 **表名**: `redeem`
 **基类**: `TableBase`
@@ -400,7 +508,7 @@ models/
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `id` | `int` | 主键 |
-| `type` | `int` | 兑换码类型 |
+| `type` | `int` | 兑换码类型（[TODO] 待定义枚举） |
 | `product_id` | `int?` | 关联的商品/权益 ID |
 | `num` | `int` | 可兑换数量/时长等 |
 | `code` | `str` | 兑换码，唯一 |
@@ -408,7 +516,7 @@ models/
 
 ---
 
-### 18. StoragePack（容量包）
+### 23. StoragePack（容量包）
 
 **表名**: `storagepack`
 **基类**: `TableBase`
@@ -424,7 +532,7 @@ models/
 
 ---
 
-### 19. WebDAV（WebDAV 账户）
+### 24. WebDAV（WebDAV 账户）
 
 **表名**: `webdav`
 **基类**: `TableBase`
@@ -443,7 +551,7 @@ models/
 
 ---
 
-### 20. Setting（系统设置）
+### 25. Setting（系统设置）
 
 **表名**: `setting`
 **基类**: `TableBase`
@@ -467,23 +575,39 @@ models/
 ### 一对一关系
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                      一对一关系                         │
-├─────────────────────────────────────────────────────────┤
-│                                                         │
-│   Group ◄────────────────────────> GroupOptions         │
-│          group_id (unique FK)                           │
-│                                                         │
-│   Policy ◄───────────────────────> PolicyOptions        │
-│          policy_id (unique FK)                          │
-│                                                         │
-└─────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────┐
+│                         一对一关系                                 │
+├───────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│   Group ◄─────────────────────────> GroupOptions                  │
+│          group_id (unique FK)                                     │
+│                                                                   │
+│   Policy ◄────────────────────────> PolicyOptions                 │
+│          policy_id (unique FK)                                    │
+│                                                                   │
+│   Object ◄────────────────────────> FileMetadata                  │
+│          object_id (unique FK)                                    │
+│                                                                   │
+│   Node ◄──────────────────────────> Aria2Configuration            │
+│          node_id (unique FK)                                      │
+│                                                                   │
+│   Task ◄──────────────────────────> TaskProps                     │
+│          task_id (PK/FK)                                          │
+│                                                                   │
+│   Download ◄──────────────────────> DownloadAria2Info             │
+│          download_id (PK/FK)                                      │
+│                                                                   │
+└───────────────────────────────────────────────────────────────────┘
 ```
 
 | 主表 | 从表 | 外键 | 说明 |
 |------|------|------|------|
 | Group | GroupOptions | `group_id` (unique) | 每个用户组有且仅有一个选项配置 |
 | Policy | PolicyOptions | `policy_id` (unique) | 每个存储策略有且仅有一个扩展选项 |
+| Object | FileMetadata | `object_id` (unique) | 每个文件对象有且仅有一个元数据 |
+| Node | Aria2Configuration | `node_id` (unique) | 每个节点有且仅有一个 Aria2 配置 |
+| Task | TaskProps | `task_id` (PK) | 每个任务有且仅有一个属性配置 |
+| Download | DownloadAria2Info | `download_id` (PK) | 每个下载任务有且仅有一个 Aria2 信息 |
 
 ---
 
@@ -540,6 +664,7 @@ models/
 | **Share** | Report | `share_id` | 分享的举报 |
 | **Task** | Download | `task_id` | 任务关联的下载 |
 | **Node** | Download | `node_id` | 节点执行的下载任务 |
+| **Download** | DownloadAria2File | `download_id` | 下载任务的文件列表 |
 
 ---
 
@@ -665,6 +790,56 @@ class AvatarType(StrEnum):
     GRAVATAR = "gravatar"  # Gravatar
     FILE = "file"          # 自定义文件
 ```
+
+### TagType
+```python
+class TagType(StrEnum):
+    MANUAL = "manual"        # 手动标签
+    AUTOMATIC = "automatic"  # 自动标签
+```
+
+### TaskStatus
+```python
+class TaskStatus(StrEnum):
+    QUEUED = "queued"        # 排队中
+    RUNNING = "running"      # 处理中
+    COMPLETED = "completed"  # 已完成
+    ERROR = "error"          # 错误
+```
+
+### DownloadStatus
+```python
+class DownloadStatus(StrEnum):
+    RUNNING = "running"      # 进行中
+    COMPLETED = "completed"  # 已完成
+    ERROR = "error"          # 错误
+```
+
+### NodeStatus
+```python
+class NodeStatus(StrEnum):
+    ONLINE = "online"    # 正常
+    OFFLINE = "offline"  # 离线
+```
+
+### OrderStatus
+```python
+class OrderStatus(StrEnum):
+    PENDING = "pending"      # 待支付
+    COMPLETED = "completed"  # 已完成
+    CANCELLED = "cancelled"  # 已取消
+```
+
+### 待定义枚举（[TODO]）
+
+以下枚举已定义框架，具体值待业务需求确定：
+
+- `TaskType` - 任务类型
+- `DownloadType` - 下载类型
+- `NodeType` - 节点类型
+- `OrderType` - 订单类型
+- `RedeemType` - 兑换码类型
+- `ReportReason` - 举报原因
 
 ---
 

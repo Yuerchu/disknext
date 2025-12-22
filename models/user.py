@@ -1,11 +1,12 @@
 from datetime import datetime
 from enum import StrEnum
-from typing import Literal, Optional, TYPE_CHECKING
+from typing import Literal, TYPE_CHECKING
 from uuid import UUID
 
 from sqlmodel import Field, Relationship
 
-from .base import SQLModelBase, UUIDTableBase
+from .base import SQLModelBase
+from .mixin import UUIDTableBaseMixin
 
 if TYPE_CHECKING:
     from .group import Group
@@ -18,15 +19,6 @@ if TYPE_CHECKING:
     from .task import Task
     from .user_authn import UserAuthn
     from .webdav import WebDAV
-
-"""
-Option 需求
-- 主题 跟随系统/浅色/深色
-- 颜色方案 参考 ThemeResponse
-- 语言
-- 时区
-- 切换到不同存储策略是否提醒
-"""
 
 class AvatarType(StrEnum):
     """头像类型枚举"""
@@ -42,6 +34,13 @@ class ThemeType(StrEnum):
     DARK = "dark"
     SYSTEM = "system"
 
+class UserStatus(StrEnum):
+    """用户状态枚举"""
+    
+    ACTIVE = "active"
+    ADMIN_BANNED = "admin_banned"
+    SYSTEM_BANNED = "system_banned"
+
 
 # ==================== Base 模型 ====================
 
@@ -51,8 +50,8 @@ class UserBase(SQLModelBase):
     username: str
     """用户名"""
 
-    status: bool = True
-    """用户状态: True=正常, False=封禁"""
+    status: UserStatus = UserStatus.ACTIVE
+    """用户状态"""
 
     score: int = 0
     """用户积分"""
@@ -72,7 +71,7 @@ class LoginRequest(SQLModelBase):
     captcha: str | None = None
     """验证码"""
 
-    two_fa_code: str | None = None
+    two_fa_code: int | None = Field(min_length=6, max_length=6)
     """两步验证代码"""
 
 
@@ -192,9 +191,6 @@ class UserSettingResponse(SQLModelBase):
     prefer_theme: str = "#5898d4"
     """用户首选主题"""
 
-    qq: str | None = None
-    """QQ号"""
-
     themes: dict[str, str] = {}
     """用户主题配置"""
 
@@ -216,7 +212,7 @@ UserSettingResponse.model_rebuild()
 
 # ==================== 数据库模型 ====================
 
-class User(UserBase, UUIDTableBase, table=True):
+class User(UserBase, UUIDTableBaseMixin):
     """用户模型"""
 
     username: str = Field(max_length=50, unique=True, index=True)
@@ -243,7 +239,7 @@ class User(UserBase, UUIDTableBase, table=True):
     score: int = Field(default=0, sa_column_kwargs={"server_default": "0"}, ge=0)
     """用户积分"""
 
-    group_expires: datetime | None = None
+    group_expires: datetime | None = Field(default=None)
     """当前用户组过期时间"""
 
     # Option 相关字段
@@ -266,13 +262,13 @@ class User(UserBase, UUIDTableBase, table=True):
 
     # 关系
     group: "Group" = Relationship(
-        back_populates="user",
+        back_populates="users",
         sa_relationship_kwargs={
             "foreign_keys": "User.group_id"
         }
     )
-    previous_group: Optional["Group"] = Relationship(
-        back_populates="previous_user",
+    previous_group: "Group" = Relationship(
+        back_populates="previous_users",
         sa_relationship_kwargs={
             "foreign_keys": "User.previous_group_id"
         }

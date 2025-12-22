@@ -25,7 +25,7 @@ app = FastAPI(
 )
 
 # 挂载路由
-app.include_router(router, prefix='/api')
+app.include_router(router)
 
 # 防止直接运行 main.py
 if __name__ == "__main__":

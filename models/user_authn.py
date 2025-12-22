@@ -4,7 +4,8 @@ from uuid import UUID
 from sqlalchemy import Column, Text
 from sqlmodel import Field, Relationship
 
-from .base import TableBase, SQLModelBase
+from .base import SQLModelBase
+from .mixin import TableBaseMixin
 
 if TYPE_CHECKING:
     from .user import User
@@ -24,7 +25,7 @@ class AuthnResponse(SQLModelBase):
 
 # ==================== 数据库模型 ====================
 
-class UserAuthn(TableBase, table=True):
+class UserAuthn(SQLModelBase, TableBaseMixin):
     """用户 WebAuthn 凭证模型，与 User 为多对一关系"""
 
     credential_id: str = Field(max_length=255, unique=True, index=True)
