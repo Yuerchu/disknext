@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Literal
 from uuid import UUID
 
 from enum import StrEnum
-from sqlmodel import Field, Relationship, UniqueConstraint, CheckConstraint, Index
+from sqlmodel import Field, Relationship, UniqueConstraint, CheckConstraint, Index, text
 
 from .base import SQLModelBase
 from .mixin import UUIDTableBaseMixin
@@ -258,10 +258,38 @@ class Object(ObjectBase, UUIDTableBaseMixin):
     )
     """存储策略UUID（文件直接使用，目录作为子文件的默认策略）"""
 
+    # ==================== 封禁相关字段 ====================
+
+    is_banned: bool = Field(default=False, sa_column_kwargs={"server_default": text("false")})
+    """是否被封禁"""
+
+    banned_at: datetime | None = None
+    """封禁时间"""
+
+    banned_by: UUID | None = Field(
+        default=None,
+        foreign_key="user.id",
+        index=True,
+        ondelete="SET NULL",
+        sa_column_kwargs={"name": "banned_by"}
+    )
+    """封禁操作者UUID"""
+
+    ban_reason: str | None = Field(default=None, max_length=500)
+    """封禁原因"""
+
     # ==================== 关系 ====================
 
-    owner: "User" = Relationship(back_populates="objects")
+    owner: "User" = Relationship(
+        back_populates="objects",
+        sa_relationship_kwargs={"foreign_keys": "[Object.owner_id]"}
+    )
     """所有者"""
+
+    banner: "User" = Relationship(
+        sa_relationship_kwargs={"foreign_keys": "[Object.banned_by]"}
+    )
+    """封禁操作者"""
 
     policy: "Policy" = Relationship(back_populates="objects")
     """存储策略"""
@@ -642,3 +670,47 @@ class ObjectPropertyDetailResponse(ObjectPropertyResponse):
 
     reference_count: int = 1
     """物理文件引用计数（仅文件有效）"""
+
+
+# ==================== 管理员文件管理 DTO ====================
+
+class AdminFileResponse(ObjectResponse):
+    """管理员文件响应 DTO"""
+
+    owner_id: UUID
+    """所有者UUID"""
+
+    owner_username: str
+    """所有者用户名"""
+
+    policy_name: str
+    """存储策略名称"""
+
+    is_banned: bool = False
+    """是否被封禁"""
+
+    banned_at: datetime | None = None
+    """封禁时间"""
+
+    ban_reason: str | None = None
+    """封禁原因"""
+
+
+class FileBanRequest(SQLModelBase):
+    """文件封禁请求 DTO"""
+
+    is_banned: bool = True
+    """是否封禁"""
+
+    reason: str | None = Field(default=None, max_length=500)
+    """封禁原因"""
+
+
+class AdminFileListResponse(SQLModelBase):
+    """管理员文件列表响应 DTO"""
+
+    files: list[AdminFileResponse] = []
+    """文件列表"""
+
+    total: int = 0
+    """总数"""

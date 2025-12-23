@@ -38,15 +38,6 @@ async def AuthRequired(
     except InvalidTokenError:
         raise credentials_exception
 
-async def SignRequired(
-    session: SessionDep,
-    token: Annotated[str, Depends(JWT.oauth2_scheme)],
-) -> User | None:
-    """
-    SignAuthRequired 需要验证请求签名
-    """
-    pass
-
 async def AdminRequired(
     user: Annotated[User, Depends(AuthRequired)],
 ) -> User:

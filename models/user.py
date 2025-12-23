@@ -201,6 +201,68 @@ class UserSettingResponse(SQLModelBase):
     """用户UUID"""
 
 
+# ==================== 管理员用户管理 DTO ====================
+
+class UserAdminUpdateRequest(SQLModelBase):
+    """管理员更新用户请求 DTO"""
+
+    nickname: str | None = Field(default=None, max_length=50)
+    """昵称"""
+
+    password: str | None = None
+    """新密码（为空则不修改）"""
+
+    group_id: UUID | None = None
+    """用户组UUID"""
+
+    status: bool | None = None
+    """用户状态"""
+
+    score: int | None = Field(default=None, ge=0)
+    """积分"""
+
+    storage: int | None = Field(default=None, ge=0)
+    """已用存储空间（用于手动校准）"""
+
+    group_expires: datetime | None = None
+    """用户组过期时间"""
+
+
+class UserCalibrateResponse(SQLModelBase):
+    """用户存储校准响应 DTO"""
+
+    user_id: UUID
+    """用户UUID"""
+
+    previous_storage: int
+    """校准前的存储空间（字节）"""
+
+    current_storage: int
+    """校准后的存储空间（字节）"""
+
+    difference: int
+    """差异值（字节）"""
+
+    file_count: int
+    """实际文件数量"""
+
+
+class UserAdminDetailResponse(UserPublic):
+    """管理员用户详情响应 DTO"""
+
+    two_factor_enabled: bool = False
+    """是否启用两步验证"""
+
+    file_count: int = 0
+    """文件数量"""
+
+    share_count: int = 0
+    """分享数量"""
+
+    task_count: int = 0
+    """任务数量"""
+
+
 # 前向引用导入
 from .group import GroupResponse  # noqa: E402
 from .user_authn import AuthnResponse  # noqa: E402

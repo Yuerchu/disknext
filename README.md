@@ -171,7 +171,7 @@ fastapi dev
 fastapi run
 ```
 
-访问 http://localhost:8000/docs 查看 API 文档。
+访问 <http://localhost:8000/docs> 查看 API 文档。
 
 ## 测试
 

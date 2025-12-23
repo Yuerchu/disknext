@@ -8,6 +8,10 @@ from .user import (
     UserResponse,
     UserSettingResponse,
     WebAuthnInfo,
+    # 管理员DTO
+    UserAdminUpdateRequest,
+    UserCalibrateResponse,
+    UserAdminDetailResponse,
 )
 from .user_authn import AuthnResponse, UserAuthn
 from .color import ThemeResponse
@@ -27,7 +31,11 @@ from .node import (
     NodeStatus,
     NodeType,
 )
-from .group import Group, GroupBase, GroupOptions, GroupOptionsBase, GroupResponse
+from .group import (
+    Group, GroupBase, GroupOptions, GroupOptionsBase, GroupResponse,
+    # 管理员DTO
+    GroupCreateRequest, GroupUpdateRequest, GroupDetailResponse, GroupListResponse,
+)
 from .object import (
     CreateFileRequest,
     CreateUploadSessionRequest,
@@ -50,13 +58,21 @@ from .object import (
     UploadSession,
     UploadSessionBase,
     UploadSessionResponse,
+    # 管理员DTO
+    AdminFileResponse,
+    AdminFileListResponse,
+    FileBanRequest,
 )
 from .physical_file import PhysicalFile, PhysicalFileBase
 from .order import Order, OrderStatus, OrderType
 from .policy import Policy, PolicyOptions, PolicyOptionsBase, PolicyType
 from .redeem import Redeem, RedeemType
 from .report import Report, ReportReason
-from .setting import Setting, SettingsType, SiteConfigResponse
+from .setting import (
+    Setting, SettingsType, SiteConfigResponse,
+    # 管理员DTO
+    SettingItem, SettingsUpdateRequest, SettingsGetResponse,
+)
 from .share import Share
 from .source_link import SourceLink
 from .storage_pack import StoragePack
@@ -66,13 +82,10 @@ from .webdav import WebDAV
 
 from .database import engine, get_session
 
-
-import uuid
-from sqlmodel import Field
-from .base import SQLModelBase
-
-class ResponseBase(SQLModelBase):
-    """通用响应模型"""
-
-    instance_id: uuid.UUID = Field(default_factory=uuid.uuid4)
-    """实例ID，用于标识请求的唯一性"""
+from .model_base import (
+    MCPBase,
+    MCPMethod,
+    MCPRequestBase,
+    MCPResponseBase,
+    ResponseBase,
+)

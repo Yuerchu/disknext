@@ -40,6 +40,32 @@ class SiteConfigResponse(SQLModelBase):
     """验证码密钥"""
 
 
+# ==================== 管理员设置 DTO ====================
+
+class SettingItem(SQLModelBase):
+    """设置项 DTO"""
+
+    name: str
+    """设置项名称"""
+
+    value: str | None = None
+    """设置值"""
+
+
+class SettingsUpdateRequest(SQLModelBase):
+    """更新设置请求 DTO"""
+
+    settings: dict[str, dict[str, str | None]]
+    """按类型分组的设置项，格式: {"basic": {"siteName": "xxx", ...}, ...}"""
+
+
+class SettingsGetResponse(SQLModelBase):
+    """获取设置响应 DTO"""
+
+    settings: dict[str, dict[str, str | None]] = {}
+    """按类型分组的设置项"""
+
+
 # ==================== 数据库模型 ====================
 
 class SettingsType(StrEnum):

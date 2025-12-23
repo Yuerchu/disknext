@@ -3,19 +3,21 @@
 
 提供文件上传、下载、创建等核心功能。
 
-路由前缀：
+路由结构：
 - /file - 文件操作
 - /file/upload - 上传相关操作
+- /file/download - 下载相关操作
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Annotated
 from uuid import UUID
 
+import jwt
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from loguru import logger as l
 
-from middleware.auth import AuthRequired, SignRequired
+from middleware.auth import AuthRequired
 from middleware.dependencies import SessionDep
 from models import (
     CreateFileRequest,
@@ -25,28 +27,61 @@ from models import (
     PhysicalFile,
     Policy,
     PolicyType,
+    ResponseBase,
     UploadChunkResponse,
     UploadSession,
     UploadSessionResponse,
     User,
 )
-from models import ResponseBase
-from service.storage import LocalStorageService, StorageFileNotFoundError
-
-file_router = APIRouter(
-    prefix="/file",
-    tags=["file"]
-)
-
-file_upload_router = APIRouter(
-    prefix="/file/upload",
-    tags=["file"]
-)
+from service.storage import LocalStorageService
+from utils.JWT import SECRET_KEY
 
 
-# ==================== 上传会话管理 ====================
+# ==================== 下载令牌管理 ====================
 
-@file_upload_router.put(
+class DownloadTokenManager:
+    """下载令牌管理器（JWT 无状态）"""
+
+    _ttl: timedelta = timedelta(hours=1)
+
+    @classmethod
+    def create(cls, file_id: UUID, owner_id: int) -> str:
+        """创建下载令牌"""
+        payload = {
+            "file_id": str(file_id),
+            "owner_id": owner_id,
+            "exp": datetime.now(timezone.utc) + cls._ttl,
+            "type": "download",
+        }
+        return jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+
+    @classmethod
+    def verify(cls, token: str) -> tuple[UUID, int] | None:
+        """
+        验证令牌并返回 (file_id, owner_id)
+
+        :return: (file_id, owner_id) 或 None（验证失败）
+        """
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+            if payload.get("type") != "download":
+                return None
+            return UUID(payload["file_id"]), payload["owner_id"]
+        except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
+            return None
+
+
+# ==================== 主路由 ====================
+
+router = APIRouter(prefix="/file", tags=["file"])
+
+
+# ==================== 上传子路由 ====================
+
+_upload_router = APIRouter(prefix="/upload")
+
+
+@_upload_router.put(
     path='/',
     summary='创建上传会话',
     description='创建文件上传会话，返回会话ID用于后续分片上传。',
@@ -65,11 +100,6 @@ async def create_upload_session(
     3. 验证文件大小限制
     4. 创建上传会话并生成存储路径
     5. 返回会话信息
-
-    :param session: 数据库会话
-    :param user: 当前登录用户
-    :param request: 创建请求
-    :return: 上传会话信息
     """
     # 验证文件名
     if not request.file_name or '/' in request.file_name or '\\' in request.file_name:
@@ -121,7 +151,6 @@ async def create_upload_session(
         )
         storage_path = full_path
     else:
-        # S3 后续实现
         raise HTTPException(status_code=501, detail="S3 存储暂未实现")
 
     # 创建上传会话
@@ -131,7 +160,7 @@ async def create_upload_session(
         chunk_size=chunk_size,
         total_chunks=total_chunks,
         storage_path=storage_path,
-        expires_at=datetime.now() + timedelta(hours=24),  # 24小时过期
+        expires_at=datetime.now() + timedelta(hours=24),
         owner_id=user.id,
         parent_id=request.parent_id,
         policy_id=policy_id,
@@ -151,7 +180,7 @@ async def create_upload_session(
     )
 
 
-@file_upload_router.post(
+@_upload_router.post(
     path='/{session_id}/{chunk_index}',
     summary='上传文件分片',
     description='上传指定分片，分片索引从0开始。',
@@ -171,13 +200,6 @@ async def upload_chunk(
     2. 写入分片数据
     3. 更新会话进度
     4. 如果所有分片上传完成，创建 Object 记录
-
-    :param session: 数据库会话
-    :param user: 当前登录用户
-    :param session_id: 上传会话UUID
-    :param chunk_index: 分片索引（从0开始）
-    :param file: 上传的文件分片
-    :return: 上传进度信息
     """
     # 获取上传会话
     upload_session = await UploadSession.get(session, UploadSession.id == session_id)
@@ -262,7 +284,7 @@ async def upload_chunk(
     )
 
 
-@file_upload_router.delete(
+@_upload_router.delete(
     path='/{session_id}',
     summary='删除上传会话',
     description='取消上传并删除会话及已上传的临时文件。',
@@ -272,14 +294,7 @@ async def delete_upload_session(
     user: Annotated[User, Depends(AuthRequired)],
     session_id: UUID,
 ) -> ResponseBase:
-    """
-    删除上传会话端点
-
-    :param session: 数据库会话
-    :param user: 当前登录用户
-    :param session_id: 上传会话UUID
-    :return: 删除结果
-    """
+    """删除上传会话端点"""
     upload_session = await UploadSession.get(session, UploadSession.id == session_id)
     if not upload_session or upload_session.owner_id != user.id:
         raise HTTPException(status_code=404, detail="上传会话不存在")
@@ -298,7 +313,7 @@ async def delete_upload_session(
     return ResponseBase(data={"deleted": True})
 
 
-@file_upload_router.delete(
+@_upload_router.delete(
     path='/',
     summary='清除所有上传会话',
     description='清除当前用户的所有上传会话。',
@@ -307,13 +322,7 @@ async def clear_upload_sessions(
     session: SessionDep,
     user: Annotated[User, Depends(AuthRequired)],
 ) -> ResponseBase:
-    """
-    清除所有上传会话端点
-
-    :param session: 数据库会话
-    :param user: 当前登录用户
-    :return: 清除结果
-    """
+    """清除所有上传会话端点"""
     # 获取所有会话
     sessions = await UploadSession.get(
         session,
@@ -337,28 +346,74 @@ async def clear_upload_sessions(
     return ResponseBase(data={"deleted": deleted_count})
 
 
-# ==================== 文件下载 ====================
-
-@file_upload_router.get(
-    path='/download/{file_id}',
-    summary='下载文件',
-    description='下载指定文件。',
+@_upload_router.get(
+    path='/archive/{session_id}/archive.zip',
+    summary='打包并下载文件',
+    description='获取打包后的文件。',
 )
-async def download_file(
+async def download_archive(session_id: str) -> ResponseBase:
+    """打包下载"""
+    raise HTTPException(status_code=501, detail="打包下载功能暂未实现")
+
+
+# ==================== 下载子路由 ====================
+
+_download_router = APIRouter(prefix="/download")
+
+
+@_download_router.put(
+    path='/{file_id}',
+    summary='创建下载令牌',
+    description='为指定文件创建下载令牌（JWT），有效期1小时。',
+)
+async def create_download_token(
     session: SessionDep,
     user: Annotated[User, Depends(AuthRequired)],
     file_id: UUID,
+) -> ResponseBase:
+    """
+    创建下载令牌端点
+
+    验证文件存在且属于当前用户后，生成 JWT 下载令牌。
+    """
+    file_obj = await Object.get(session, Object.id == file_id)
+    if not file_obj or file_obj.owner_id != user.id:
+        raise HTTPException(status_code=404, detail="文件不存在")
+
+    if not file_obj.is_file:
+        raise HTTPException(status_code=400, detail="对象不是文件")
+
+    token = DownloadTokenManager.create(file_id, user.id)
+
+    l.debug(f"创建下载令牌: file_id={file_id}, user_id={user.id}")
+
+    return ResponseBase(data={"token": token, "expires_in": 3600})
+
+
+@_download_router.get(
+    path='/{token}',
+    summary='下载文件',
+    description='使用下载令牌下载文件。',
+)
+async def download_file(
+    session: SessionDep,
+    token: str,
 ) -> FileResponse:
     """
     下载文件端点
 
-    :param session: 数据库会话
-    :param user: 当前登录用户
-    :param file_id: 文件UUID
-    :return: 文件响应
+    验证 JWT 令牌后返回文件内容。
     """
+    # 验证令牌
+    result = DownloadTokenManager.verify(token)
+    if not result:
+        raise HTTPException(status_code=401, detail="下载令牌无效或已过期")
+
+    file_id, owner_id = result
+
+    # 获取文件对象
     file_obj = await Object.get(session, Object.id == file_id)
-    if not file_obj or file_obj.owner_id != user.id:
+    if not file_obj or file_obj.owner_id != owner_id:
         raise HTTPException(status_code=404, detail="文件不存在")
 
     if not file_obj.is_file:
@@ -386,9 +441,15 @@ async def download_file(
         raise HTTPException(status_code=501, detail="S3 存储暂未实现")
 
 
+# ==================== 包含子路由 ====================
+
+router.include_router(_upload_router)
+router.include_router(_download_router)
+
+
 # ==================== 创建空白文件 ====================
 
-@file_router.post(
+@router.post(
     path='/create',
     summary='创建空白文件',
     description='在指定目录下创建空白文件。',
@@ -398,14 +459,7 @@ async def create_empty_file(
     user: Annotated[User, Depends(AuthRequired)],
     request: CreateFileRequest,
 ) -> ResponseBase:
-    """
-    创建空白文件端点
-
-    :param session: 数据库会话
-    :param user: 当前登录用户
-    :param request: 创建请求
-    :return: 创建结果
-    """
+    """创建空白文件端点"""
     # 存储 user.id，避免后续 save() 导致 user 过期后无法访问
     user_id = user.id
 
@@ -482,175 +536,146 @@ async def create_empty_file(
 
 # ==================== 文件外链（保留原有端点结构） ====================
 
-@file_router.get(
+@router.get(
     path='/get/{id}/{name}',
     summary='文件外链（直接输出文件数据）',
     description='通过外链直接获取文件内容。',
 )
-async def router_file_get(
+async def file_get(
     session: SessionDep,
     id: str,
     name: str,
 ) -> FileResponse:
-    """
-    文件外链端点（直接输出）
-
-    TODO: 实现签名验证和权限控制
-    """
+    """文件外链端点（直接输出）"""
     raise HTTPException(status_code=501, detail="外链功能暂未实现")
 
 
-@file_router.get(
+@router.get(
     path='/source/{id}/{name}',
     summary='文件外链(301跳转)',
     description='通过外链获取文件重定向地址。',
 )
-async def router_file_source_redirect(id: str, name: str) -> ResponseBase:
-    """
-    文件外链端点（301跳转）
-
-    TODO: 实现签名验证和重定向
-    """
+async def file_source_redirect(id: str, name: str) -> ResponseBase:
+    """文件外链端点（301跳转）"""
     raise HTTPException(status_code=501, detail="外链功能暂未实现")
 
 
-@file_router.put(
+@router.put(
     path='/update/{id}',
     summary='更新文件',
     description='更新文件内容。',
     dependencies=[Depends(AuthRequired)]
 )
-async def router_file_update(id: str) -> ResponseBase:
+async def file_update(id: str) -> ResponseBase:
     """更新文件内容"""
     raise HTTPException(status_code=501, detail="更新文件功能暂未实现")
 
 
-@file_router.get(
+@router.get(
     path='/preview/{id}',
     summary='预览文件',
     description='获取文件预览。',
     dependencies=[Depends(AuthRequired)]
 )
-async def router_file_preview(id: str) -> ResponseBase:
+async def file_preview(id: str) -> ResponseBase:
     """预览文件"""
     raise HTTPException(status_code=501, detail="预览功能暂未实现")
 
 
-@file_router.get(
+@router.get(
     path='/content/{id}',
     summary='获取文本文件内容',
     description='获取文本文件内容。',
     dependencies=[Depends(AuthRequired)]
 )
-async def router_file_content(id: str) -> ResponseBase:
+async def file_content(id: str) -> ResponseBase:
     """获取文本文件内容"""
     raise HTTPException(status_code=501, detail="文本内容功能暂未实现")
 
 
-@file_router.get(
+@router.get(
     path='/doc/{id}',
     summary='获取Office文档预览地址',
     description='获取Office文档在线预览地址。',
     dependencies=[Depends(AuthRequired)]
 )
-async def router_file_doc(id: str) -> ResponseBase:
+async def file_doc(id: str) -> ResponseBase:
     """获取Office文档预览地址"""
     raise HTTPException(status_code=501, detail="Office预览功能暂未实现")
 
 
-@file_router.get(
+@router.get(
     path='/thumb/{id}',
     summary='获取文件缩略图',
     description='获取文件缩略图。',
     dependencies=[Depends(AuthRequired)]
 )
-async def router_file_thumb(id: str) -> ResponseBase:
+async def file_thumb(id: str) -> ResponseBase:
     """获取文件缩略图"""
     raise HTTPException(status_code=501, detail="缩略图功能暂未实现")
 
 
-@file_router.post(
+@router.post(
     path='/source/{id}',
     summary='取得文件外链',
     description='获取文件的外链地址。',
     dependencies=[Depends(AuthRequired)]
 )
-async def router_file_source(id: str) -> ResponseBase:
+async def file_source(id: str) -> ResponseBase:
     """获取文件外链"""
     raise HTTPException(status_code=501, detail="外链功能暂未实现")
 
 
-@file_router.post(
+@router.post(
     path='/archive',
     summary='打包要下载的文件',
     description='将多个文件打包下载。',
     dependencies=[Depends(AuthRequired)]
 )
-async def router_file_archive() -> ResponseBase:
+async def file_archive() -> ResponseBase:
     """打包文件"""
     raise HTTPException(status_code=501, detail="打包功能暂未实现")
 
 
-@file_router.post(
+@router.post(
     path='/compress',
     summary='创建文件压缩任务',
     description='创建文件压缩任务。',
     dependencies=[Depends(AuthRequired)]
 )
-async def router_file_compress() -> ResponseBase:
+async def file_compress() -> ResponseBase:
     """创建压缩任务"""
     raise HTTPException(status_code=501, detail="压缩功能暂未实现")
 
 
-@file_router.post(
+@router.post(
     path='/decompress',
     summary='创建文件解压任务',
     description='创建文件解压任务。',
     dependencies=[Depends(AuthRequired)]
 )
-async def router_file_decompress() -> ResponseBase:
+async def file_decompress() -> ResponseBase:
     """创建解压任务"""
     raise HTTPException(status_code=501, detail="解压功能暂未实现")
 
 
-@file_router.post(
+@router.post(
     path='/relocate',
     summary='创建文件转移任务',
     description='创建文件转移任务。',
     dependencies=[Depends(AuthRequired)]
 )
-async def router_file_relocate() -> ResponseBase:
+async def file_relocate() -> ResponseBase:
     """创建转移任务"""
     raise HTTPException(status_code=501, detail="转移功能暂未实现")
 
 
-@file_router.get(
+@router.get(
     path='/search/{type}/{keyword}',
     summary='搜索文件',
     description='按关键字搜索文件。',
     dependencies=[Depends(AuthRequired)]
 )
-async def router_file_search(type: str, keyword: str) -> ResponseBase:
+async def file_search(type: str, keyword: str) -> ResponseBase:
     """搜索文件"""
     raise HTTPException(status_code=501, detail="搜索功能暂未实现")
-
-
-@file_upload_router.get(
-    path='/archive/{sessionID}/archive.zip',
-    summary='打包并下载文件',
-    description='获取打包后的文件。',
-)
-async def router_file_archive_download(sessionID: str) -> ResponseBase:
-    """打包下载"""
-    raise HTTPException(status_code=501, detail="打包下载功能暂未实现")
-
-
-@file_router.put(
-    path='/download/{id}',
-    summary='创建文件下载会话',
-    description='创建文件下载会话。',
-    dependencies=[Depends(AuthRequired)]
-)
-async def router_file_download_session(id: str) -> ResponseBase:
-    """创建下载会话"""
-    raise HTTPException(status_code=501, detail="下载会话功能暂未实现")

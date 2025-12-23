@@ -45,6 +45,151 @@ class GroupOptionsBase(SQLModelBase):
 
 # ==================== DTO 模型 ====================
 
+class GroupCreateRequest(SQLModelBase):
+    """创建用户组请求 DTO"""
+
+    name: str = Field(max_length=255)
+    """用户组名称"""
+
+    max_storage: int = Field(default=0, ge=0)
+    """最大存储空间（字节），0表示不限制"""
+
+    share_enabled: bool = False
+    """是否允许创建分享"""
+
+    web_dav_enabled: bool = False
+    """是否允许使用WebDAV"""
+
+    speed_limit: int = Field(default=0, ge=0)
+    """速度限制 (KB/s), 0为不限制"""
+
+    # 用户组选项
+    share_download: bool = False
+    """是否允许分享下载"""
+
+    share_free: bool = False
+    """是否免积分获取需要积分的内容"""
+
+    relocate: bool = False
+    """是否允许文件重定位"""
+
+    source_batch: int = Field(default=0, ge=0)
+    """批量获取源地址数量"""
+
+    select_node: bool = False
+    """是否允许选择节点"""
+
+    advance_delete: bool = False
+    """是否允许高级删除"""
+
+    archive_download: bool = False
+    """是否允许打包下载"""
+
+    archive_task: bool = False
+    """是否允许创建打包任务"""
+
+    webdav_proxy: bool = False
+    """是否允许WebDAV代理"""
+
+    aria2: bool = False
+    """是否允许使用aria2"""
+
+    redirected_source: bool = False
+    """是否使用重定向源"""
+
+    policy_ids: list[UUID] = []
+    """关联的存储策略UUID列表"""
+
+
+class GroupUpdateRequest(SQLModelBase):
+    """更新用户组请求 DTO（所有字段可选）"""
+
+    name: str | None = Field(default=None, max_length=255)
+    """用户组名称"""
+
+    max_storage: int | None = Field(default=None, ge=0)
+    """最大存储空间（字节）"""
+
+    share_enabled: bool | None = None
+    """是否允许创建分享"""
+
+    web_dav_enabled: bool | None = None
+    """是否允许使用WebDAV"""
+
+    speed_limit: int | None = Field(default=None, ge=0)
+    """速度限制 (KB/s)"""
+
+    # 用户组选项
+    share_download: bool | None = None
+    share_free: bool | None = None
+    relocate: bool | None = None
+    source_batch: int | None = None
+    select_node: bool | None = None
+    advance_delete: bool | None = None
+    archive_download: bool | None = None
+    archive_task: bool | None = None
+    webdav_proxy: bool | None = None
+    aria2: bool | None = None
+    redirected_source: bool | None = None
+
+    policy_ids: list[UUID] | None = None
+    """关联的存储策略UUID列表"""
+
+
+class GroupDetailResponse(SQLModelBase):
+    """用户组详情响应 DTO"""
+
+    id: UUID
+    """用户组UUID"""
+
+    name: str
+    """用户组名称"""
+
+    max_storage: int = 0
+    """最大存储空间（字节）"""
+
+    share_enabled: bool = False
+    """是否允许创建分享"""
+
+    web_dav_enabled: bool = False
+    """是否允许使用WebDAV"""
+
+    admin: bool = False
+    """是否为管理员组"""
+
+    speed_limit: int = 0
+    """速度限制 (KB/s)"""
+
+    user_count: int = 0
+    """用户数量"""
+
+    policy_ids: list[UUID] = []
+    """关联的存储策略UUID列表"""
+
+    # 选项
+    share_download: bool = False
+    share_free: bool = False
+    relocate: bool = False
+    source_batch: int = 0
+    select_node: bool = False
+    advance_delete: bool = False
+    archive_download: bool = False
+    archive_task: bool = False
+    webdav_proxy: bool = False
+    aria2: bool = False
+    redirected_source: bool = False
+
+
+class GroupListResponse(SQLModelBase):
+    """用户组列表响应 DTO"""
+
+    groups: list["GroupDetailResponse"] = []
+    """用户组列表"""
+
+    total: int = 0
+    """总数"""
+
+
 class GroupResponse(GroupBase, GroupOptionsBase):
     """用户组响应 DTO"""
 

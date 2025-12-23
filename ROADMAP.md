@@ -21,6 +21,7 @@
 ### 已完成
 
 #### 基础架构
+
 - [x] FastAPI 应用框架搭建
 - [x] SQLModel ORM 集成
 - [x] 异步数据库支持 (aiosqlite)
@@ -28,6 +29,7 @@
 - [x] 开发规范文档 (CLAUDE.md)
 
 #### 数据模型
+
 - [x] 基类定义 (SQLModelBase, TableBase, UUIDTableBase)
 - [x] 用户模型 (User)
 - [x] 用户组模型 (Group, GroupOptions)
@@ -40,6 +42,7 @@
 - [x] 其他模型 (Order, Redeem, Report, Task, SourceLink, StoragePack, Download, Node)
 
 #### 用户系统
+
 - [x] 用户注册接口
 - [x] 用户登录接口 (OAuth2.1 Password Grant)
 - [x] JWT 令牌认证
@@ -47,6 +50,7 @@
 - [x] 用户存储空间查询
 
 #### 认证安全
+
 - [x] Argon2 密码哈希
 - [x] JWT 令牌生成与验证
 - [x] 认证中间件
@@ -54,6 +58,7 @@
 - [x] WebAuthn 注册初始化
 
 #### 测试
+
 - [x] pytest 测试框架配置
 - [x] 单元测试结构
 - [x] 集成测试结构
@@ -62,17 +67,20 @@
 ### 进行中
 
 #### 用户系统
+
 - [ ] WebAuthn 完整流程
 - [ ] OAuth 第三方登录 (QQ, GitHub)
 - [ ] 用户设置管理
 - [ ] 头像上传/Gravatar
 
 #### 目录系统
+
 - [ ] 目录浏览接口
 - [ ] 目录创建接口
 - [ ] 路径解析优化
 
 #### 存储策略
+
 - [ ] 本地存储策略实现
 - [ ] S3 存储策略实现
 
