@@ -142,8 +142,8 @@ Server/
 
 ```bash
 # 克隆项目
-git clone https://github.com/yourusername/DiskNext-Server.git
-cd DiskNext-Server
+git clone https://github.com/DiskNext/Server.git
+cd Server
 
 # 使用 uv 安装依赖
 uv sync
@@ -165,10 +165,10 @@ DATABASE_URL=sqlite+aiosqlite:///disknext.db
 
 ```bash
 # 开发模式
-fastapi dev main:app
+fastapi dev
 
 # 生产模式
-fastapi run main:app
+fastapi run
 ```
 
 访问 http://localhost:8000/docs 查看 API 文档。
