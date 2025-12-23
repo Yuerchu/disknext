@@ -50,7 +50,11 @@ class UserAuthn(SQLModelBase, TableBaseMixin):
     """用户自定义的凭证名称，便于识别"""
 
     # 外键
-    user_id: UUID = Field(foreign_key="user.id", index=True)
+    user_id: UUID = Field(
+        foreign_key="user.id",
+        index=True,
+        ondelete="CASCADE"
+    )
     """所属用户UUID"""
 
     # 关系

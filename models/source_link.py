@@ -25,7 +25,11 @@ class SourceLink(SQLModelBase, TableBaseMixin):
     """通过此链接的下载次数"""
 
     # 外键
-    object_id: UUID = Field(foreign_key="object.id", index=True)
+    object_id: UUID = Field(
+        foreign_key="object.id",
+        index=True,
+        ondelete="CASCADE"
+    )
     """关联的对象UUID（必须是文件类型）"""
 
     # 关系

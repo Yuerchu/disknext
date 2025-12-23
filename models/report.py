@@ -24,7 +24,12 @@ class Report(SQLModelBase, TableBaseMixin):
     description: str | None = Field(default=None, max_length=255, description="补充描述")
     
     # 外键
-    share_id: int = Field(foreign_key="share.id", index=True, description="被举报的分享ID")
+    share_id: int = Field(
+        foreign_key="share.id",
+        index=True,
+        ondelete="CASCADE"
+    )
+    """被举报的分享ID"""
     
     # 关系
     share: "Share" = Relationship(back_populates="reports")

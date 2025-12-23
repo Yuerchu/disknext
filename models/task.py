@@ -49,7 +49,11 @@ class TaskPropsBase(SQLModelBase):
 class TaskProps(TaskPropsBase, TableBaseMixin):
     """任务属性模型（与Task一对一关联）"""
 
-    task_id: int = Field(foreign_key="task.id", primary_key=True)
+    task_id: int = Field(
+        foreign_key="task.id",
+        primary_key=True,
+        ondelete="CASCADE"
+    )
     """关联的任务ID"""
 
     # 反向关系
@@ -79,13 +83,17 @@ class Task(SQLModelBase, TableBaseMixin):
     """错误信息"""
 
     # 外键
-    user_id: UUID = Field(foreign_key="user.id", index=True)
+    user_id: UUID = Field(
+        foreign_key="user.id",
+        index=True,
+        ondelete="CASCADE"
+    )
     """所属用户UUID"""
 
     # 关系
     props: TaskProps | None = Relationship(
         back_populates="task",
-        sa_relationship_kwargs={"uselist": False},
+        sa_relationship_kwargs={"uselist": False, "cascade": "all, delete-orphan"},
     )
     """任务属性"""
 

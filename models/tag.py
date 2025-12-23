@@ -39,7 +39,12 @@ class Tag(SQLModelBase, TableBaseMixin):
     expression: str | None = Field(default=None, description="自动标签的匹配表达式")
     
     # 外键
-    user_id: UUID = Field(foreign_key="user.id", index=True, description="所属用户UUID")
+    user_id: UUID = Field(
+        foreign_key="user.id",
+        index=True,
+        ondelete="CASCADE"
+    )
+    """所属用户UUID"""
     
     # 关系
     user: "User" = Relationship(back_populates="tags")

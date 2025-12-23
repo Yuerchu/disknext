@@ -22,7 +22,12 @@ class WebDAV(SQLModelBase, TableBaseMixin):
     use_proxy: bool = Field(default=False, description="是否使用代理下载")
     
     # 外键
-    user_id: UUID = Field(foreign_key="user.id", index=True, description="所属用户UUID")
+    user_id: UUID = Field(
+        foreign_key="user.id",
+        index=True,
+        ondelete="CASCADE"
+    )
+    """所属用户UUID"""
     
     # 关系
     user: "User" = Relationship(back_populates="webdavs")

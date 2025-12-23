@@ -48,7 +48,12 @@ class Aria2ConfigurationBase(SQLModelBase):
 class Aria2Configuration(Aria2ConfigurationBase, TableBaseMixin):
     """Aria2配置模型（与Node一对一关联）"""
 
-    node_id: int = Field(foreign_key="node.id", unique=True, index=True)
+    node_id: int = Field(
+        foreign_key="node.id",
+        unique=True,
+        index=True,
+        ondelete="CASCADE"
+    )
     """关联的节点ID"""
 
     # 反向关系
@@ -90,7 +95,7 @@ class Node(SQLModelBase, TableBaseMixin):
     # 关系
     aria2_config: Aria2Configuration | None = Relationship(
         back_populates="node",
-        sa_relationship_kwargs={"uselist": False},
+        sa_relationship_kwargs={"uselist": False, "cascade": "all, delete-orphan"},
     )
     """Aria2配置"""
 

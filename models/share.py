@@ -30,7 +30,11 @@ class Share(SQLModelBase, TableBaseMixin):
     password: str | None = Field(default=None, max_length=255)
     """分享密码（加密后）"""
 
-    object_id: UUID = Field(foreign_key="object.id", index=True)
+    object_id: UUID = Field(
+        foreign_key="object.id",
+        index=True,
+        ondelete="CASCADE"
+    )
     """关联的对象UUID"""
 
     views: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
@@ -55,7 +59,11 @@ class Share(SQLModelBase, TableBaseMixin):
     """兑换此分享所需的积分"""
 
     # 外键
-    user_id: UUID = Field(foreign_key="user.id", index=True)
+    user_id: UUID = Field(
+        foreign_key="user.id",
+        index=True,
+        ondelete="CASCADE"
+    )
     """创建分享的用户UUID"""
 
     # 关系
@@ -65,7 +73,10 @@ class Share(SQLModelBase, TableBaseMixin):
     object: "Object" = Relationship(back_populates="shares")
     """关联的对象"""
 
-    reports: list["Report"] = Relationship(back_populates="share")
+    reports: list["Report"] = Relationship(
+        back_populates="share",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
     """举报列表"""
 
     @property

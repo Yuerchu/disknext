@@ -79,7 +79,11 @@ from .policy import GroupPolicyLink
 class GroupOptions(GroupOptionsBase, TableBaseMixin):
     """用户组选项模型"""
 
-    group_id: UUID = Field(foreign_key="group.id", unique=True)
+    group_id: UUID = Field(
+        foreign_key="group.id",
+        unique=True,
+        ondelete="CASCADE"
+    )
     """关联的用户组UUID"""
 
     archive_download: bool = False
@@ -125,7 +129,7 @@ class Group(GroupBase, UUIDTableBaseMixin):
     # 一对一关系：用户组选项
     options: GroupOptions | None = Relationship(
         back_populates="group",
-        sa_relationship_kwargs={"uselist": False}
+        sa_relationship_kwargs={"uselist": False, "cascade": "all, delete-orphan"}
     )
 
     # 多对多关系：用户组可以关联多个存储策略

@@ -168,7 +168,12 @@ class DirectoryResponse(SQLModelBase):
 class FileMetadata(FileMetadataBase, UUIDTableBaseMixin):
     """文件元数据模型（与Object一对一关联）"""
 
-    object_id: UUID = Field(foreign_key="object.id", unique=True, index=True)
+    object_id: UUID = Field(
+        foreign_key="object.id",
+        unique=True,
+        index=True,
+        ondelete="CASCADE"
+    )
     """关联的对象UUID"""
 
     # 反向关系
@@ -228,13 +233,26 @@ class Object(ObjectBase, UUIDTableBaseMixin):
 
     # ==================== 外键 ====================
 
-    parent_id: UUID | None = Field(default=None, foreign_key="object.id", index=True)
+    parent_id: UUID | None = Field(
+        default=None,
+        foreign_key="object.id",
+        index=True,
+        ondelete="CASCADE"
+    )
     """父目录UUID，NULL 表示这是用户的根目录"""
 
-    owner_id: UUID = Field(foreign_key="user.id", index=True)
+    owner_id: UUID = Field(
+        foreign_key="user.id",
+        index=True,
+        ondelete="CASCADE"
+    )
     """所有者用户UUID"""
 
-    policy_id: UUID = Field(foreign_key="policy.id", index=True)
+    policy_id: UUID = Field(
+        foreign_key="policy.id",
+        index=True,
+        ondelete="RESTRICT"
+    )
     """存储策略UUID（文件直接使用，目录作为子文件的默认策略）"""
 
     # ==================== 关系 ====================
@@ -252,20 +270,29 @@ class Object(ObjectBase, UUIDTableBaseMixin):
     )
     """父目录"""
 
-    children: list["Object"] = Relationship(back_populates="parent")
+    children: list["Object"] = Relationship(
+        back_populates="parent",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
     """子对象（文件和子目录）"""
 
     # 仅文件有效的关系
     file_metadata: FileMetadata | None = Relationship(
         back_populates="object",
-        sa_relationship_kwargs={"uselist": False},
+        sa_relationship_kwargs={"uselist": False, "cascade": "all, delete-orphan"},
     )
     """文件元数据（仅文件有效）"""
 
-    source_links: list["SourceLink"] = Relationship(back_populates="object")
+    source_links: list["SourceLink"] = Relationship(
+        back_populates="object",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
     """源链接列表（仅文件有效）"""
 
-    shares: list["Share"] = Relationship(back_populates="object")
+    shares: list["Share"] = Relationship(
+        back_populates="object",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
     """分享列表"""
 
     # ==================== 业务属性 ====================

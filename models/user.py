@@ -253,10 +253,18 @@ class User(UserBase, UUIDTableBaseMixin):
     """时区，UTC 偏移小时数"""
 
     # 外键
-    group_id: UUID = Field(foreign_key="group.id", index=True)
+    group_id: UUID = Field(
+        foreign_key="group.id",
+        index=True,
+        ondelete="RESTRICT"
+    )
     """所属用户组UUID"""
 
-    previous_group_id: UUID | None = Field(default=None, foreign_key="group.id")
+    previous_group_id: UUID | None = Field(
+        default=None,
+        foreign_key="group.id",
+        ondelete="SET NULL"
+    )
     """之前的用户组UUID（用于过期后恢复）"""
 
 
@@ -274,16 +282,43 @@ class User(UserBase, UUIDTableBaseMixin):
         }
     )
 
-    downloads: list["Download"] = Relationship(back_populates="user")
-    objects: list["Object"] = Relationship(back_populates="owner")
+    downloads: list["Download"] = Relationship(
+        back_populates="user",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
+    objects: list["Object"] = Relationship(
+        back_populates="owner",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
     """用户的所有对象（文件和目录）"""
-    orders: list["Order"] = Relationship(back_populates="user")
-    shares: list["Share"] = Relationship(back_populates="user")
-    storage_packs: list["StoragePack"] = Relationship(back_populates="user")
-    tags: list["Tag"] = Relationship(back_populates="user")
-    tasks: list["Task"] = Relationship(back_populates="user")
-    webdavs: list["WebDAV"] = Relationship(back_populates="user")
-    authns: list["UserAuthn"] = Relationship(back_populates="user")
+    orders: list["Order"] = Relationship(
+        back_populates="user",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
+    shares: list["Share"] = Relationship(
+        back_populates="user",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
+    storage_packs: list["StoragePack"] = Relationship(
+        back_populates="user",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
+    tags: list["Tag"] = Relationship(
+        back_populates="user",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
+    tasks: list["Task"] = Relationship(
+        back_populates="user",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
+    webdavs: list["WebDAV"] = Relationship(
+        back_populates="user",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
+    authns: list["UserAuthn"] = Relationship(
+        back_populates="user",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
 
     def to_public(self) -> "UserPublic":
         """转换为公开 DTO，排除敏感字段"""

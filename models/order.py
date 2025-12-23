@@ -55,7 +55,12 @@ class Order(SQLModelBase, TableBaseMixin):
     """订单状态"""
     
     # 外键
-    user_id: UUID = Field(foreign_key="user.id", index=True, description="所属用户UUID")
+    user_id: UUID = Field(
+        foreign_key="user.id",
+        index=True,
+        ondelete="CASCADE"
+    )
+    """所属用户UUID"""
     
     # 关系
     user: "User" = Relationship(back_populates="orders")

@@ -15,10 +15,18 @@ if TYPE_CHECKING:
 class GroupPolicyLink(SQLModelBase, table=True):
     """用户组与存储策略的多对多关联表"""
 
-    group_id: UUID = Field(foreign_key="group.id", primary_key=True)
+    group_id: UUID = Field(
+        foreign_key="group.id",
+        primary_key=True,
+        ondelete="CASCADE"
+    )
     """用户组UUID"""
 
-    policy_id: UUID = Field(foreign_key="policy.id", primary_key=True)
+    policy_id: UUID = Field(
+        foreign_key="policy.id",
+        primary_key=True,
+        ondelete="CASCADE"
+    )
     """存储策略UUID"""
 
 
@@ -52,7 +60,11 @@ class PolicyOptionsBase(SQLModelBase):
 class PolicyOptions(PolicyOptionsBase, UUIDTableBaseMixin):
     """存储策略选项模型（与Policy一对一关联）"""
 
-    policy_id: UUID = Field(foreign_key="policy.id", unique=True)
+    policy_id: UUID = Field(
+        foreign_key="policy.id",
+        unique=True,
+        ondelete="CASCADE"
+    )
     """关联的策略UUID"""
 
     # 反向关系
@@ -105,7 +117,7 @@ class Policy(SQLModelBase, UUIDTableBaseMixin):
     # 一对一关系：策略选项
     options: PolicyOptions | None = Relationship(
         back_populates="policy",
-        sa_relationship_kwargs={"uselist": False},
+        sa_relationship_kwargs={"uselist": False, "cascade": "all, delete-orphan"},
     )
     """策略的扩展选项"""
 

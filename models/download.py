@@ -66,7 +66,11 @@ class DownloadAria2InfoBase(SQLModelBase):
 class DownloadAria2Info(DownloadAria2InfoBase, SQLModelBase, table=True):
     """Aria2下载信息模型（与Download一对一关联）"""
 
-    download_id: UUID = Field(foreign_key="download.id", primary_key=True)
+    download_id: UUID = Field(
+        foreign_key="download.id",
+        primary_key=True,
+        ondelete="CASCADE"
+    )
     """关联的下载任务UUID"""
 
     # 反向关系
@@ -77,7 +81,11 @@ class DownloadAria2Info(DownloadAria2InfoBase, SQLModelBase, table=True):
 class DownloadAria2File(SQLModelBase, TableBaseMixin):
     """Aria2下载文件列表（与Download一对多关联）"""
 
-    download_id: UUID = Field(foreign_key="download.id", index=True)
+    download_id: UUID = Field(
+        foreign_key="download.id",
+        index=True,
+        ondelete="CASCADE"
+    )
     """关联的下载任务UUID"""
 
     file_index: int = Field(ge=1)
@@ -145,23 +153,39 @@ class Download(DownloadBase, UUIDTableBaseMixin):
     """目标存储路径"""
 
     # 外键
-    user_id: UUID = Field(foreign_key="user.id", index=True)
+    user_id: UUID = Field(
+        foreign_key="user.id",
+        index=True,
+        ondelete="CASCADE"
+    )
     """所属用户UUID"""
 
-    task_id: int | None = Field(default=None, foreign_key="task.id", index=True)
+    task_id: int | None = Field(
+        default=None,
+        foreign_key="task.id",
+        index=True,
+        ondelete="SET NULL"
+    )
     """关联的任务ID"""
 
-    node_id: int = Field(foreign_key="node.id", index=True)
+    node_id: int = Field(
+        foreign_key="node.id",
+        index=True,
+        ondelete="RESTRICT"
+    )
     """执行下载的节点ID"""
 
     # 关系
     aria2_info: DownloadAria2Info | None = Relationship(
         back_populates="download",
-        sa_relationship_kwargs={"uselist": False},
+        sa_relationship_kwargs={"uselist": False, "cascade": "all, delete-orphan"},
     )
     """Aria2下载信息"""
 
-    aria2_files: list[DownloadAria2File] = Relationship(back_populates="download")
+    aria2_files: list[DownloadAria2File] = Relationship(
+        back_populates="download",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
     """Aria2文件列表"""
 
     user: "User" = Relationship(back_populates="downloads")
