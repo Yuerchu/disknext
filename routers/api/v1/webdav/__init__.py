@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Request
 from middleware.auth import SignRequired
-from models.response import ResponseBase
+from models import ResponseBase
 
 # WebDAV 管理路由
 webdav_router = APIRouter(

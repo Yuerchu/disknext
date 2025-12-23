@@ -12,7 +12,7 @@ from models import (
     ObjectType,
     PolicyResponse,
     User,
-    response,
+    ResponseBase,
 )
 
 directory_router = APIRouter(
@@ -63,7 +63,6 @@ async def router_directory_get(
         ObjectResponse(
             id=child.id,
             name=child.name,
-            path=f"/{child.name}",  # TODO: 完整路径
             thumb=False,
             size=child.size,
             type=ObjectType.FOLDER if child.is_folder else ObjectType.FILE,
@@ -97,7 +96,7 @@ async def router_directory_create(
         session: SessionDep,
         user: Annotated[User, Depends(AuthRequired)],
         request: DirectoryCreateRequest
-) -> response.ResponseBase:
+) -> ResponseBase:
     """
     创建目录
 
@@ -111,6 +110,7 @@ async def router_directory_create(
     if not name:
         raise HTTPException(status_code=400, detail="目录名称不能为空")
 
+    # [TODO] 进一步验证名称合法性
     if "/" in name or "\\" in name:
         raise HTTPException(status_code=400, detail="目录名称不能包含斜杠")
 
@@ -146,7 +146,7 @@ async def router_directory_create(
     new_folder_name = new_folder.name
     await new_folder.save(session)
 
-    return response.ResponseBase(
+    return ResponseBase(
         data={
             "id": new_folder_id,
             "name": new_folder_name,

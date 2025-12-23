@@ -62,3 +62,6 @@ node_modules/
 *.bak
 *.tmp
 *.temp
+
+# 文件
+data/

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import PlainTextResponse, RedirectResponse
 from middleware.auth import SignRequired
-from models.response import ResponseBase
+from models import ResponseBase
 import service.oauth
 
 callback_router = APIRouter(

@@ -96,7 +96,7 @@ async def router_user_session(
 async def router_user_register(
     session: SessionDep,
     request: models.RegisterRequest,
-) -> models.response.ResponseBase:
+) -> models.ResponseBase:
     """
     用户注册端点
 
@@ -157,7 +157,7 @@ async def router_user_register(
         policy_id=default_policy.id,
     ).save(session)
 
-    return models.response.ResponseBase(
+    return models.ResponseBase(
         data={
             "user_id": new_user_id,
             "username": new_user_username,
@@ -172,7 +172,7 @@ async def router_user_register(
 )
 def router_user_email_code(
     reason: Literal['register', 'reset'] = 'register',
-) -> models.response.ResponseBase:
+) -> models.ResponseBase:
     """
     Send a verification code email.
     
@@ -186,7 +186,7 @@ def router_user_email_code(
     summary='初始化QQ登录',
     description='Initialize QQ login for a user.',
 )
-def router_user_qq() -> models.response.ResponseBase: 
+def router_user_qq() -> models.ResponseBase: 
     """
     Initialize QQ login for a user.
     
@@ -200,7 +200,7 @@ def router_user_qq() -> models.response.ResponseBase:
     summary='WebAuthn登录初始化',
     description='Initialize WebAuthn login for a user.',
 )
-async def router_user_authn(username: str) -> models.response.ResponseBase:
+async def router_user_authn(username: str) -> models.ResponseBase:
     
     pass
 
@@ -209,7 +209,7 @@ async def router_user_authn(username: str) -> models.response.ResponseBase:
     summary='WebAuthn登录',
     description='Finish WebAuthn login for a user.',
 )
-def router_user_authn_finish(username: str) -> models.response.ResponseBase:
+def router_user_authn_finish(username: str) -> models.ResponseBase:
     """
     Finish WebAuthn login for a user.
     
@@ -226,7 +226,7 @@ def router_user_authn_finish(username: str) -> models.response.ResponseBase:
     summary='获取用户主页展示用分享',
     description='Get user profile for display.',
 )
-def router_user_profile(id: str) -> models.response.ResponseBase:
+def router_user_profile(id: str) -> models.ResponseBase:
     """
     Get user profile for display.
     
@@ -243,7 +243,7 @@ def router_user_profile(id: str) -> models.response.ResponseBase:
     summary='获取用户头像',
     description='Get user avatar by ID and size.',
 )
-def router_user_avatar(id: str, size: int = 128) -> models.response.ResponseBase:
+def router_user_avatar(id: str, size: int = 128) -> models.ResponseBase:
     """
     Get user avatar by ID and size.
     
@@ -265,17 +265,17 @@ def router_user_avatar(id: str, size: int = 128) -> models.response.ResponseBase
     summary='获取用户信息',
     description='Get user information.',
     dependencies=[Depends(dependency=AuthRequired)],
-    response_model=models.response.ResponseBase,
+    response_model=models.ResponseBase,
 )
 async def router_user_me(
     session: SessionDep,
     user: Annotated[models.User, Depends(AuthRequired)],
-) -> models.response.ResponseBase:
+) -> models.ResponseBase:
     """
     获取用户信息.
 
-    :return: response.ResponseBase containing user information.
-    :rtype: response.ResponseBase
+    :return: ResponseBase containing user information.
+    :rtype: ResponseBase
     """
     # 加载 group 及其 options 关系
     group = await models.Group.get(
@@ -302,7 +302,7 @@ async def router_user_me(
         tags=[tag.name for tag in user_tags] if user_tags else [],
     )
 
-    return models.response.ResponseBase(data=user_response.model_dump())
+    return models.ResponseBase(data=user_response.model_dump())
 
 @user_router.get(
     path='/storage',
@@ -313,7 +313,7 @@ async def router_user_me(
 async def router_user_storage(
     session: SessionDep,
     user: Annotated[models.user.User, Depends(AuthRequired)],
-) -> models.response.ResponseBase:
+) -> models.ResponseBase:
     """
     获取用户存储空间信息。
 
@@ -330,7 +330,7 @@ async def router_user_storage(
     used: int = user.storage
     free: int = max(0, total - used)
 
-    return models.response.ResponseBase(
+    return models.ResponseBase(
         data={
             "used": used,
             "free": free,
@@ -347,7 +347,7 @@ async def router_user_storage(
 async def router_user_authn_start(
     session: SessionDep,
     user: Annotated[models.user.User, Depends(AuthRequired)],
-) -> models.response.ResponseBase:
+) -> models.ResponseBase:
     """
     Initialize WebAuthn login for a user.
 
@@ -378,7 +378,7 @@ async def router_user_authn_start(
         user_display_name=user.nick or user.username,
     )
 
-    return models.response.ResponseBase(data=options_to_json_dict(options))
+    return models.ResponseBase(data=options_to_json_dict(options))
 
 @user_router.put(
     path='/authn/finish',
@@ -386,7 +386,7 @@ async def router_user_authn_start(
     description='Finish WebAuthn login for a user.',
     dependencies=[Depends(AuthRequired)],
 )
-def router_user_authn_finish() -> models.response.ResponseBase:
+def router_user_authn_finish() -> models.ResponseBase:
     """
     Finish WebAuthn login for a user.
     
@@ -400,7 +400,7 @@ def router_user_authn_finish() -> models.response.ResponseBase:
     summary='获取用户可选存储策略',
     description='Get user selectable storage policies.',
 )
-def router_user_settings_policies() -> models.response.ResponseBase:
+def router_user_settings_policies() -> models.ResponseBase:
     """
     Get user selectable storage policies.
     
@@ -415,7 +415,7 @@ def router_user_settings_policies() -> models.response.ResponseBase:
     description='Get user selectable nodes.',
     dependencies=[Depends(AuthRequired)],
 )
-def router_user_settings_nodes() -> models.response.ResponseBase:
+def router_user_settings_nodes() -> models.ResponseBase:
     """
     Get user selectable nodes.
     
@@ -430,7 +430,7 @@ def router_user_settings_nodes() -> models.response.ResponseBase:
     description='Get user task queue.',
     dependencies=[Depends(AuthRequired)],
 )
-def router_user_settings_tasks() -> models.response.ResponseBase:
+def router_user_settings_tasks() -> models.ResponseBase:
     """
     Get user task queue.
     
@@ -445,14 +445,14 @@ def router_user_settings_tasks() -> models.response.ResponseBase:
     description='Get current user settings.',
     dependencies=[Depends(AuthRequired)],
 )
-def router_user_settings() -> models.response.ResponseBase:
+def router_user_settings() -> models.ResponseBase:
     """
     Get current user settings.
     
     Returns:
         dict: A dictionary containing the current user settings.
     """
-    return models.response.ResponseBase(data=models.UserSettingResponse().model_dump())
+    return models.ResponseBase(data=models.UserSettingResponse().model_dump())
 
 @user_settings_router.post(
     path='/avatar',
@@ -460,7 +460,7 @@ def router_user_settings() -> models.response.ResponseBase:
     description='Upload user avatar from file.',
     dependencies=[Depends(AuthRequired)],
 )
-def router_user_settings_avatar() -> models.response.ResponseBase:
+def router_user_settings_avatar() -> models.ResponseBase:
     """
     Upload user avatar from file.
     
@@ -475,7 +475,7 @@ def router_user_settings_avatar() -> models.response.ResponseBase:
     description='Set user avatar to Gravatar.',
     dependencies=[Depends(AuthRequired)],
 )
-def router_user_settings_avatar_gravatar() -> models.response.ResponseBase:
+def router_user_settings_avatar_gravatar() -> models.ResponseBase:
     """
     Set user avatar to Gravatar.
     
@@ -490,7 +490,7 @@ def router_user_settings_avatar_gravatar() -> models.response.ResponseBase:
     description='Update user settings.',
     dependencies=[Depends(AuthRequired)],
 )
-def router_user_settings_patch(option: str) -> models.response.ResponseBase:
+def router_user_settings_patch(option: str) -> models.ResponseBase:
     """
     Update user settings.
     
@@ -510,7 +510,7 @@ def router_user_settings_patch(option: str) -> models.response.ResponseBase:
 )
 async def router_user_settings_2fa(
     user: Annotated[models.user.User, Depends(AuthRequired)],
-) -> models.response.ResponseBase:
+) -> models.ResponseBase:
     """
     Get two-factor authentication initialization information.
     
@@ -518,7 +518,7 @@ async def router_user_settings_2fa(
         dict: A dictionary containing two-factor authentication setup information.
     """
 
-    return models.response.ResponseBase(
+    return models.ResponseBase(
         data=await Password.generate_totp(user.username)
     )
 
@@ -533,7 +533,7 @@ async def router_user_settings_2fa_enable(
     user: Annotated[models.user.User, Depends(AuthRequired)],
     setup_token: str,
     code: str,
-) -> models.response.ResponseBase:
+) -> models.ResponseBase:
     """
     Enable two-factor authentication for the user.
     
@@ -559,6 +559,6 @@ async def router_user_settings_2fa_enable(
     user.two_factor = secret
     user = await user.save(session)
 
-    return models.response.ResponseBase(
+    return models.ResponseBase(
         data={"message": "Two-factor authentication enabled successfully"}
     )

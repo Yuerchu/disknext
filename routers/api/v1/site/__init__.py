@@ -3,7 +3,7 @@ from sqlalchemy import and_
 import json
 
 from middleware.dependencies import SessionDep
-from models.response import ResponseBase
+from models import ResponseBase
 from models.setting import Setting
 
 site_router = APIRouter(

@@ -1,11 +1,57 @@
-from fastapi import APIRouter, Depends
-from loguru import logger
+from fastapi import APIRouter, Depends, HTTPException
+from loguru import logger as l
+from sqlmodel import Field
 
 from middleware.auth import AdminRequired
 from middleware.dependencies import SessionDep
-from models import User
+from models import Policy, PolicyOptions, PolicyType, User
+from models.base import SQLModelBase
+from models import ResponseBase
 from models.user import UserPublic
-from models.response import ResponseBase
+from service.storage import DirectoryCreationError, LocalStorageService
+
+
+class PolicyCreateRequest(SQLModelBase):
+    """创建存储策略请求 DTO"""
+
+    name: str = Field(max_length=255)
+    """策略名称"""
+
+    type: PolicyType
+    """策略类型"""
+
+    server: str | None = Field(default=None, max_length=255)
+    """服务器地址/本地路径（本地存储必填）"""
+
+    bucket_name: str | None = Field(default=None, max_length=255)
+    """存储桶名称（S3必填）"""
+
+    is_private: bool = True
+    """是否为私有空间"""
+
+    base_url: str | None = Field(default=None, max_length=255)
+    """访问文件的基础URL"""
+
+    access_key: str | None = None
+    """Access Key"""
+
+    secret_key: str | None = None
+    """Secret Key"""
+
+    max_size: int = Field(default=0, ge=0)
+    """允许上传的最大文件尺寸（字节），0表示不限制"""
+
+    auto_rename: bool = False
+    """是否自动重命名"""
+
+    dir_name_rule: str | None = Field(default=None, max_length=255)
+    """目录命名规则"""
+
+    file_name_rule: str | None = Field(default=None, max_length=255)
+    """文件命名规则"""
+
+    is_origin_link_enable: bool = False
+    """是否开启源链接访问"""
 
 # 管理员根目录 /api/admin
 admin_router = APIRouter(
@@ -464,11 +510,72 @@ def router_policy_test_slave() -> ResponseBase:
 @admin_policy_router.post(
     path='/',
     summary='创建存储策略',
-    description='',
+    description='创建新的存储策略。对于本地存储策略，会自动创建物理目录。',
     dependencies=[Depends(AdminRequired)]
 )
-def router_policy_add_policy() -> ResponseBase:
-    pass
+async def router_policy_add_policy(
+    session: SessionDep,
+    request: PolicyCreateRequest,
+) -> ResponseBase:
+    """
+    创建存储策略端点
+
+    功能：
+    - 创建新的存储策略配置
+    - 对于 LOCAL 类型，自动创建物理目录
+
+    认证：
+    - 需要管理员权限
+
+    :param session: 数据库会话
+    :param request: 创建请求
+    :return: 创建结果
+    """
+    # 验证本地存储策略必须指定 server 路径
+    if request.type == PolicyType.LOCAL:
+        if not request.server:
+            raise HTTPException(status_code=400, detail="本地存储策略必须指定 server 路径")
+
+    # 检查策略名称是否已存在
+    existing = await Policy.get(session, Policy.name == request.name)
+    if existing:
+        raise HTTPException(status_code=409, detail="策略名称已存在")
+
+    # 创建策略对象
+    policy = Policy(
+        name=request.name,
+        type=request.type,
+        server=request.server,
+        bucket_name=request.bucket_name,
+        is_private=request.is_private,
+        base_url=request.base_url,
+        access_key=request.access_key,
+        secret_key=request.secret_key,
+        max_size=request.max_size,
+        auto_rename=request.auto_rename,
+        dir_name_rule=request.dir_name_rule,
+        file_name_rule=request.file_name_rule,
+        is_origin_link_enable=request.is_origin_link_enable,
+    )
+
+    # 对于本地存储策略，创建物理目录
+    if policy.type == PolicyType.LOCAL:
+        try:
+            storage_service = LocalStorageService(policy)
+            await storage_service.ensure_base_directory()
+            l.info(f"已为本地存储策略 '{policy.name}' 创建目录: {policy.server}")
+        except DirectoryCreationError as e:
+            raise HTTPException(status_code=500, detail=f"创建存储目录失败: {e}")
+
+    # 保存到数据库
+    policy = await policy.save(session)
+
+    return ResponseBase(data={
+        "id": str(policy.id),
+        "name": policy.name,
+        "type": policy.type.value,
+        "server": policy.server,
+    })
 
 @admin_policy_router.post(
     path='/cors',

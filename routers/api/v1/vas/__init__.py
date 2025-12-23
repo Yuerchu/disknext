@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from middleware.auth import SignRequired
-from models.response import ResponseBase
+from models import ResponseBase
 
 vas_router = APIRouter(
     prefix="/vas",

@@ -12,7 +12,7 @@ from .admin import admin_vas_router
 from .callback import callback_router
 from .directory import directory_router
 from .download import download_router
-from .file import file_router
+from .file import file_router, file_upload_router
 from .object import object_router
 from .share import share_router
 from .site import site_router
@@ -36,6 +36,7 @@ router.include_router(callback_router)
 router.include_router(directory_router)
 router.include_router(download_router)
 router.include_router(file_router)
+router.include_router(file_upload_router)
 router.include_router(object_router)
 router.include_router(share_router)
 router.include_router(site_router)

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from fastapi.responses import FileResponse
 from middleware.auth import SignRequired
-from models.response import ResponseBase
+from models import ResponseBase
 
 slave_router = APIRouter(
     prefix="/slave",

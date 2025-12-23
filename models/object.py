@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from .policy import Policy
     from .source_link import SourceLink
     from .share import Share
+    from .physical_file import PhysicalFile
 
 
 class ObjectType(StrEnum):
@@ -111,9 +112,6 @@ class ObjectResponse(ObjectBase):
 
     id: UUID
     """对象UUID"""
-
-    path: str
-    """对象路径"""
 
     thumb: bool = False
     """是否有缩略图"""
@@ -222,14 +220,19 @@ class Object(ObjectBase, UUIDTableBaseMixin):
 
     # ==================== 文件专属字段 ====================
 
-    source_name: str | None = Field(default=None, max_length=255)
-    """源文件名（仅文件有效）"""
-
     size: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
     """文件大小（字节），目录为 0"""
 
     upload_session_id: str | None = Field(default=None, max_length=255, unique=True, index=True)
     """分块上传会话ID（仅文件有效）"""
+
+    physical_file_id: UUID | None = Field(
+        default=None,
+        foreign_key="physicalfile.id",
+        index=True,
+        ondelete="SET NULL"
+    )
+    """关联的物理文件UUID（仅文件有效，目录为NULL）"""
 
     # ==================== 外键 ====================
 
@@ -295,7 +298,21 @@ class Object(ObjectBase, UUIDTableBaseMixin):
     )
     """分享列表"""
 
+    physical_file: "PhysicalFile" = Relationship(back_populates="objects")
+    """关联的物理文件（仅文件有效）"""
+
     # ==================== 业务属性 ====================
+
+    @property
+    def source_name(self) -> str | None:
+        """
+        源文件存储路径（向后兼容属性）
+
+        :return: 物理文件存储路径，如果没有关联物理文件则返回 None
+        """
+        if self.physical_file:
+            return self.physical_file.storage_path
+        return None
 
     @property
     def is_file(self) -> bool:
@@ -397,3 +414,231 @@ class Object(ObjectBase, UUIDTableBaseMixin):
             (cls.owner_id == user_id) & (cls.parent_id == parent_id),
             fetch_mode="all"
         )
+
+
+# ==================== 上传会话模型 ====================
+
+class UploadSessionBase(SQLModelBase):
+    """上传会话基础字段"""
+
+    file_name: str = Field(max_length=255)
+    """原始文件名"""
+
+    file_size: int = Field(ge=0)
+    """文件总大小（字节）"""
+
+    chunk_size: int = Field(ge=1)
+    """分片大小（字节）"""
+
+    total_chunks: int = Field(ge=1)
+    """总分片数"""
+
+
+class UploadSession(UploadSessionBase, UUIDTableBaseMixin):
+    """
+    上传会话模型
+
+    用于管理分片上传的会话状态。
+    会话有效期为24小时，过期后自动失效。
+    """
+
+    # 会话状态
+    uploaded_chunks: int = 0
+    """已上传分片数"""
+
+    uploaded_size: int = 0
+    """已上传大小（字节）"""
+
+    storage_path: str | None = Field(default=None, max_length=512)
+    """文件存储路径"""
+
+    expires_at: datetime
+    """会话过期时间"""
+
+    # 外键
+    owner_id: UUID = Field(foreign_key="user.id", index=True, ondelete="CASCADE")
+    """上传者用户UUID"""
+
+    parent_id: UUID = Field(foreign_key="object.id", index=True, ondelete="CASCADE")
+    """目标父目录UUID"""
+
+    policy_id: UUID = Field(foreign_key="policy.id", index=True, ondelete="RESTRICT")
+    """存储策略UUID"""
+
+    # 关系
+    owner: "User" = Relationship()
+    """上传者"""
+
+    parent: "Object" = Relationship(
+        sa_relationship_kwargs={"foreign_keys": "[UploadSession.parent_id]"}
+    )
+    """目标父目录"""
+
+    policy: "Policy" = Relationship()
+    """存储策略"""
+
+    @property
+    def is_expired(self) -> bool:
+        """会话是否已过期"""
+        return datetime.now() > self.expires_at
+
+    @property
+    def is_complete(self) -> bool:
+        """上传是否完成"""
+        return self.uploaded_chunks >= self.total_chunks
+
+
+# ==================== 上传会话相关 DTO ====================
+
+class CreateUploadSessionRequest(SQLModelBase):
+    """创建上传会话请求 DTO"""
+
+    file_name: str = Field(max_length=255)
+    """文件名"""
+
+    file_size: int = Field(ge=0)
+    """文件大小（字节）"""
+
+    parent_id: UUID
+    """父目录UUID"""
+
+    policy_id: UUID | None = None
+    """存储策略UUID，不指定则使用父目录的策略"""
+
+
+class UploadSessionResponse(SQLModelBase):
+    """上传会话响应 DTO"""
+
+    id: UUID
+    """会话UUID"""
+
+    file_name: str
+    """原始文件名"""
+
+    file_size: int
+    """文件总大小（字节）"""
+
+    chunk_size: int
+    """分片大小（字节）"""
+
+    total_chunks: int
+    """总分片数"""
+
+    uploaded_chunks: int
+    """已上传分片数"""
+
+    expires_at: datetime
+    """过期时间"""
+
+
+class UploadChunkResponse(SQLModelBase):
+    """上传分片响应 DTO"""
+
+    uploaded_chunks: int
+    """已上传分片数"""
+
+    total_chunks: int
+    """总分片数"""
+
+    is_complete: bool
+    """是否上传完成"""
+
+    object_id: UUID | None = None
+    """完成后的文件对象UUID，未完成时为None"""
+
+
+class CreateFileRequest(SQLModelBase):
+    """创建空白文件请求 DTO"""
+
+    name: str = Field(max_length=255)
+    """文件名"""
+
+    parent_id: UUID
+    """父目录UUID"""
+
+    policy_id: UUID | None = None
+    """存储策略UUID，不指定则使用父目录的策略"""
+
+
+# ==================== 对象操作相关 DTO ====================
+
+class ObjectCopyRequest(SQLModelBase):
+    """复制对象请求 DTO"""
+
+    src_ids: list[UUID]
+    """源对象UUID列表"""
+
+    dst_id: UUID
+    """目标文件夹UUID"""
+
+
+class ObjectRenameRequest(SQLModelBase):
+    """重命名对象请求 DTO"""
+
+    id: UUID
+    """对象UUID"""
+
+    new_name: str = Field(max_length=255)
+    """新名称"""
+
+
+class ObjectPropertyResponse(SQLModelBase):
+    """对象基本属性响应 DTO"""
+
+    id: UUID
+    """对象UUID"""
+
+    name: str
+    """对象名称"""
+
+    type: ObjectType
+    """对象类型"""
+
+    size: int
+    """文件大小（字节）"""
+
+    created_at: datetime
+    """创建时间"""
+
+    updated_at: datetime
+    """修改时间"""
+
+    parent_id: UUID | None
+    """父目录UUID"""
+
+
+class ObjectPropertyDetailResponse(ObjectPropertyResponse):
+    """对象详细属性响应 DTO（继承基本属性）"""
+
+    # 元数据信息
+    mime_type: str | None = None
+    """MIME类型"""
+
+    width: int | None = None
+    """图片宽度（像素）"""
+
+    height: int | None = None
+    """图片高度（像素）"""
+
+    duration: float | None = None
+    """音视频时长（秒）"""
+
+    checksum_md5: str | None = None
+    """MD5校验和"""
+
+    # 分享统计
+    share_count: int = 0
+    """分享次数"""
+
+    total_views: int = 0
+    """总浏览次数"""
+
+    total_downloads: int = 0
+    """总下载次数"""
+
+    # 存储信息
+    policy_name: str | None = None
+    """存储策略名称"""
+
+    reference_count: int = 1
+    """物理文件引用计数（仅文件有效）"""

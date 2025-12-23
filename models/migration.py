@@ -283,6 +283,7 @@ async def init_default_user() -> None:
 async def init_default_policy() -> None:
     from .policy import Policy, PolicyType
     from .database import get_session
+    from service.storage import LocalStorageService
 
     log.info('初始化默认存储策略...')
 
@@ -302,6 +303,10 @@ async def init_default_policy() -> None:
                 file_name_rule="{randomkey16}_{originname}",
             )
 
-            await local_policy.save(session)
+            local_policy = await local_policy.save(session)
+
+            # 创建物理存储目录
+            storage_service = LocalStorageService(local_policy)
+            await storage_service.ensure_base_directory()
 
             log.info('已创建默认本地存储策略，存储目录：./data')
