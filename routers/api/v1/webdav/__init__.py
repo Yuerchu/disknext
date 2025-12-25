@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Request
-from middleware.auth import SignRequired
+from middleware.auth import AuthRequired
 from models import ResponseBase
 
 # WebDAV 管理路由
@@ -12,7 +12,7 @@ webdav_router = APIRouter(
     path='/accounts',
     summary='获取账号信息',
     description='Get account information for WebDAV.',
-    dependencies=[Depends(SignRequired)],
+    dependencies=[Depends(AuthRequired)],
 )
 def router_webdav_accounts() -> ResponseBase:
     """
@@ -27,7 +27,7 @@ def router_webdav_accounts() -> ResponseBase:
     path='/accounts',
     summary='新建账号',
     description='Create a new WebDAV account.',
-    dependencies=[Depends(SignRequired)],
+    dependencies=[Depends(AuthRequired)],
 )
 def router_webdav_create_account() -> ResponseBase:
     """
@@ -42,7 +42,7 @@ def router_webdav_create_account() -> ResponseBase:
     path='/accounts/{id}',
     summary='删除账号',
     description='Delete a WebDAV account by its ID.',
-    dependencies=[Depends(SignRequired)],
+    dependencies=[Depends(AuthRequired)],
 )
 def router_webdav_delete_account(id: str) -> ResponseBase:
     """
@@ -60,7 +60,7 @@ def router_webdav_delete_account(id: str) -> ResponseBase:
     path='/mount',
     summary='新建目录挂载',
     description='Create a new WebDAV mount point.',
-    dependencies=[Depends(SignRequired)],
+    dependencies=[Depends(AuthRequired)],
 )
 def router_webdav_create_mount() -> ResponseBase:
     """
@@ -75,7 +75,7 @@ def router_webdav_create_mount() -> ResponseBase:
     path='/mount/{id}',
     summary='删除目录挂载',
     description='Delete a WebDAV mount point by its ID.',
-    dependencies=[Depends(SignRequired)],
+    dependencies=[Depends(AuthRequired)],
 )
 def router_webdav_delete_mount(id: str) -> ResponseBase:
     """
@@ -93,7 +93,7 @@ def router_webdav_delete_mount(id: str) -> ResponseBase:
     path='accounts/{id}',
     summary='更新账号信息',
     description='Update WebDAV account information by ID.',
-    dependencies=[Depends(SignRequired)],
+    dependencies=[Depends(AuthRequired)],
 )
 def router_webdav_update_account(id: str) -> ResponseBase:
     """

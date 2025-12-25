@@ -1,10 +1,12 @@
-from fastapi import FastAPI
+from typing import Callable
 from contextlib import asynccontextmanager
 
-__on_startup: list[callable] = []
-__on_shutdown: list[callable] = []
+from fastapi import FastAPI
 
-def add_startup(func: callable):
+__on_startup: list[Callable] = []
+__on_shutdown: list[Callable] = []
+
+def add_startup(func: Callable):
     """
     注册一个函数，在应用启动时调用。
     
@@ -12,7 +14,7 @@ def add_startup(func: callable):
     """
     __on_startup.append(func)
 
-def add_shutdown(func: callable):
+def add_shutdown(func: Callable):
     """
     注册一个函数，在应用关闭时调用。
     

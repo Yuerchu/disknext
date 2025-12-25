@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from fastapi.responses import FileResponse
-from middleware.auth import SignRequired
+from middleware.auth import AuthRequired
 from models import ResponseBase
 
 slave_router = APIRouter(
@@ -32,7 +32,7 @@ def router_slave_ping() -> ResponseBase:
     path='/post',
     summary='上传',
     description='Upload data to the server.',
-    dependencies=[Depends(SignRequired)],
+    dependencies=[Depends(AuthRequired)],
 )
 def router_slave_post(data: str) -> ResponseBase:
     """
@@ -68,7 +68,7 @@ def router_slave_download(speed: int, path: str, name: str) -> ResponseBase:
     path='/download/{sign}',
     summary='根据签名下载文件',
     description='Download a file based on its signature.',
-    dependencies=[Depends(SignRequired)],
+    dependencies=[Depends(AuthRequired)],
 )
 def router_slave_download_by_sign(sign: str) -> FileResponse:
     """
@@ -86,7 +86,7 @@ def router_slave_download_by_sign(sign: str) -> FileResponse:
     path='/source/{speed}/{path}/{name}',
     summary='获取文件外链',
     description='Get the external link for a file based on its signature.',
-    dependencies=[Depends(SignRequired)],
+    dependencies=[Depends(AuthRequired)],
 )
 def router_slave_source(speed: int, path: str, name: str) -> ResponseBase:
     """
@@ -106,7 +106,7 @@ def router_slave_source(speed: int, path: str, name: str) -> ResponseBase:
     path='/source/{sign}',
     summary='根据签名获取文件',
     description='Get a file based on its signature.',
-    dependencies=[Depends(SignRequired)],
+    dependencies=[Depends(AuthRequired)],
 )
 def router_slave_source_by_sign(sign: str) -> FileResponse:
     """
@@ -124,7 +124,7 @@ def router_slave_source_by_sign(sign: str) -> FileResponse:
     path='/thumb/{id}',
     summary='获取缩略图',
     description='Get a thumbnail image based on its ID.',
-    dependencies=[Depends(SignRequired)],
+    dependencies=[Depends(AuthRequired)],
 )
 def router_slave_thumb(id: str) -> ResponseBase:
     """
@@ -142,7 +142,7 @@ def router_slave_thumb(id: str) -> ResponseBase:
     path='/delete',
     summary='删除文件',
     description='Delete a file from the server.',
-    dependencies=[Depends(SignRequired)],
+    dependencies=[Depends(AuthRequired)],
 )
 def router_slave_delete(path: str) -> ResponseBase:
     """
@@ -160,7 +160,7 @@ def router_slave_delete(path: str) -> ResponseBase:
     path='/test',
     summary='测试从机连接Aria2服务',
     description='Test the connection to the Aria2 service from the slave.',
-    dependencies=[Depends(SignRequired)],
+    dependencies=[Depends(AuthRequired)],
 )
 def router_slave_aria2_test() -> ResponseBase:
     """
@@ -172,7 +172,7 @@ def router_slave_aria2_test() -> ResponseBase:
     path='/get/{gid}',
     summary='获取Aria2任务信息',
     description='Get information about an Aria2 task by its GID.',
-    dependencies=[Depends(SignRequired)],
+    dependencies=[Depends(AuthRequired)],
 )
 def router_slave_aria2_get(gid: str = None) -> ResponseBase:
     """
@@ -190,7 +190,7 @@ def router_slave_aria2_get(gid: str = None) -> ResponseBase:
     path='/add',
     summary='添加Aria2任务',
     description='Add a new Aria2 task.',
-    dependencies=[Depends(SignRequired)],
+    dependencies=[Depends(AuthRequired)],
 )
 def router_slave_aria2_add(gid: str, url: str, options: dict = None) -> ResponseBase:
     """
@@ -210,7 +210,7 @@ def router_slave_aria2_add(gid: str, url: str, options: dict = None) -> Response
     path='/remove/{gid}',
     summary='删除Aria2任务',
     description='Remove an Aria2 task by its GID.',
-    dependencies=[Depends(SignRequired)],
+    dependencies=[Depends(AuthRequired)],
 )
 def router_slave_aria2_remove(gid: str) -> ResponseBase:
     """

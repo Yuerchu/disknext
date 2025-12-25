@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import PlainTextResponse, RedirectResponse
-from middleware.auth import SignRequired
+from middleware.auth import AuthRequired
 from models import ResponseBase
 import service.oauth
 

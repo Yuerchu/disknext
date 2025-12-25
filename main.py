@@ -30,5 +30,5 @@ app.include_router(router)
 # 防止直接运行 main.py
 if __name__ == "__main__":
     from loguru import logger
-    logger.error("请用 fastapi ['dev', 'main'] 命令启动服务")
+    logger.error("请用 fastapi ['dev', 'run'] 命令启动服务")
     exit(1)

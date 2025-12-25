@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends
-from middleware.auth import SignRequired
+from middleware.auth import AuthRequired
 from models import ResponseBase
 
 download_router = APIRouter(
@@ -18,7 +18,7 @@ download_router.include_router(aria2_router)
     path='/url',
     summary='创建URL下载任务',
     description='Create a URL download task endpoint.',
-    dependencies=[Depends(SignRequired)]
+    dependencies=[Depends(AuthRequired)]
 )
 def router_aria2_url() -> ResponseBase:
     """
@@ -33,7 +33,7 @@ def router_aria2_url() -> ResponseBase:
     path='/torrent/{id}',
     summary='创建种子下载任务',
     description='Create a torrent download task endpoint.',
-    dependencies=[Depends(SignRequired)]
+    dependencies=[Depends(AuthRequired)]
 )
 def router_aria2_torrent(id: str) -> ResponseBase:
     """
@@ -51,7 +51,7 @@ def router_aria2_torrent(id: str) -> ResponseBase:
     path='/select/{gid}',
     summary='重新选择要下载的文件',
     description='Re-select files to download endpoint.',
-    dependencies=[Depends(SignRequired)]
+    dependencies=[Depends(AuthRequired)]
 )
 def router_aria2_select(gid: str) -> ResponseBase:
     """
@@ -69,7 +69,7 @@ def router_aria2_select(gid: str) -> ResponseBase:
     path='/task/{gid}',
     summary='取消或删除下载任务',
     description='Delete a download task endpoint.',
-    dependencies=[Depends(SignRequired)]
+    dependencies=[Depends(AuthRequired)]
 )
 def router_aria2_delete(gid: str) -> ResponseBase:
     """
@@ -87,7 +87,7 @@ def router_aria2_delete(gid: str) -> ResponseBase:
     '/downloading',
     summary='获取正在下载中的任务',
     description='Get currently downloading tasks endpoint.',
-    dependencies=[Depends(SignRequired)]
+    dependencies=[Depends(AuthRequired)]
 )
 def router_aria2_downloading() -> ResponseBase:
     """
@@ -102,7 +102,7 @@ def router_aria2_downloading() -> ResponseBase:
     path='/finished',
     summary='获取已完成的任务',
     description='Get finished tasks endpoint.',
-    dependencies=[Depends(SignRequired)]
+    dependencies=[Depends(AuthRequired)]
 )
 def router_aria2_finished() -> ResponseBase:
     """

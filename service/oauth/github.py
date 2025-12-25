@@ -54,7 +54,6 @@ async def get_access_token(code: str) -> GithubAccessToken:
                 'code': code
             },
             headers={'accept': 'application/json'},
-            proxy='socks5://127.0.0.1:7890'
         ) as access_resp:
             access_data = await access_resp.json()
             return GithubAccessToken(
@@ -73,7 +72,6 @@ async def get_user_info(access_token: str | GithubAccessToken) -> GithubUserInfo
             headers={
                 'accept': 'application/json',
                 'Authorization': f'token {access_token}'},
-            proxy='socks5://127.0.0.1:7890'
             ) as resp:
             user_data = await resp.json()
             return GithubUserInfoResponse(**user_data)

@@ -25,7 +25,7 @@ from models.setting import SettingsUpdateRequest, SettingsGetResponse
 from models.object import AdminFileResponse, AdminFileListResponse, FileBanRequest
 from models.policy import GroupPolicyLink
 from service.storage import DirectoryCreationError, LocalStorageService
-from service.password import Password
+from utils import Password
 
 
 class PolicyTestPathRequest(SQLModelBase):

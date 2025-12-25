@@ -89,6 +89,17 @@ async def router_user_session(
         raise HTTPException(status_code=500, detail="Internal server error during login")
 
 @user_router.post(
+    path='/session/refresh',
+    summary="用刷新令牌刷新会话",
+    description="Refresh the user session using a refresh token."
+)
+async def router_user_session_refresh(
+    session: SessionDep,
+    request, # RefreshTokenRequest
+) -> models.TokenResponse:
+    ...
+
+@user_router.post(
     path='/',
     summary='用户注册',
     description='User registration endpoint.',

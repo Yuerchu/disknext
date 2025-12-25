@@ -1,11 +1,16 @@
-from typing import Literal
 from enum import StrEnum
 
-from sqlmodel import Field, UniqueConstraint
+from sqlmodel import UniqueConstraint
 
 from .base import SQLModelBase
 from .mixin import TableBaseMixin
+from .user import UserResponse
 
+class CaptchaType(StrEnum):
+    """验证码类型枚举"""
+    DEFAULT = "default"
+    GCAPTCHA = "gcaptcha"
+    CLOUD_FLARE_TURNSTILE = "cloudflare turnstile"
 
 # ==================== DTO 模型 ====================
 
@@ -24,7 +29,7 @@ class SiteConfigResponse(SQLModelBase):
     site_notice: str | None = None
     """网站公告"""
 
-    user: dict[str, str | int | bool] = {}
+    user: UserResponse
     """用户信息"""
 
     logo_light: str | None = None
@@ -33,7 +38,7 @@ class SiteConfigResponse(SQLModelBase):
     logo_dark: str | None = None
     """网站Logo URL（深色模式）"""
 
-    captcha_type: Literal["none", "default", "gcaptcha", "cloudflare turnstile"] = "none"
+    captcha_type: CaptchaType | None = None
     """验证码类型"""
 
     captcha_key: str | None = None
@@ -104,6 +109,11 @@ class Setting(SQLModelBase, TableBaseMixin):
 
     __table_args__ = (UniqueConstraint("type", "name", name="uq_setting_type_name"),)
 
-    type: SettingsType = Field(max_length=255, description="设置类型/分组")
-    name: str = Field(max_length=255, description="设置项名称")
-    value: str | None = Field(default=None, description="设置值")
+    type: SettingsType
+    """设置类型/分组"""
+
+    name: str
+    """设置项名称"""
+
+    value: str | None
+    """设置值"""

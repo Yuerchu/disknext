@@ -5,6 +5,12 @@ from sqlmodel import Field
 
 from .base import SQLModelBase
 
+class ResponseBase(SQLModelBase):
+    """通用响应模型"""
+
+    instance_id: uuid.UUID = Field(default_factory=uuid.uuid4)
+    """实例ID，用于标识请求的唯一性"""
+
 class MCPMethod(StrEnum):
     """MCP 方法枚举"""
 
@@ -31,9 +37,3 @@ class MCPResponseBase(MCPBase):
 
     result: str
     """方法返回结果"""
-
-class ResponseBase(SQLModelBase):
-    """通用响应模型"""
-
-    instance_id: uuid.UUID = Field(default_factory=uuid.uuid4)
-    """实例ID，用于标识请求的唯一性"""

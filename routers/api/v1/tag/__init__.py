@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends
-from middleware.auth import SignRequired
+from middleware.auth import AuthRequired
 from models import ResponseBase
 
 tag_router = APIRouter(
@@ -11,7 +11,7 @@ tag_router = APIRouter(
     path='/filter',
     summary='创建文件分类标签',
     description='Create a file classification tag.',
-    dependencies=[Depends(SignRequired)],
+    dependencies=[Depends(AuthRequired)],
 )
 def router_tag_create_filter() -> ResponseBase:
     """
@@ -26,7 +26,7 @@ def router_tag_create_filter() -> ResponseBase:
     path='/link',
     summary='创建目录快捷方式标签',
     description='Create a directory shortcut tag.',
-    dependencies=[Depends(SignRequired)],
+    dependencies=[Depends(AuthRequired)],
 )
 def router_tag_create_link() -> ResponseBase:
     """
@@ -41,7 +41,7 @@ def router_tag_create_link() -> ResponseBase:
     path='/{id}',
     summary='删除标签',
     description='Delete a tag by its ID.',
-    dependencies=[Depends(SignRequired)],
+    dependencies=[Depends(AuthRequired)],
 )
 def router_tag_delete(id: str) -> ResponseBase:
     """

@@ -69,10 +69,10 @@ class ObjectBase(SQLModelBase):
     """对象名称（文件名或目录名）"""
 
     type: ObjectType
-    """对象类型：file 或 folder"""
+    """对象类型"""
 
-    size: int = 0
-    """文件大小（字节），目录为 0"""
+    size: int | None = None
+    """文件大小（字节），目录为 None"""
 
 
 # ==================== DTO 模型 ====================
@@ -93,7 +93,7 @@ class DirectoryCreateRequest(SQLModelBase):
 class ObjectMoveRequest(SQLModelBase):
     """移动对象请求 DTO"""
 
-    src_ids: list[UUID]
+    src_ids: UUID | list[UUID]
     """源对象UUID列表"""
 
     dst_id: UUID
@@ -103,7 +103,7 @@ class ObjectMoveRequest(SQLModelBase):
 class ObjectDeleteRequest(SQLModelBase):
     """删除对象请求 DTO"""
 
-    ids: list[UUID]
+    ids: UUID | list[UUID]
     """待删除对象UUID列表"""
 
 

@@ -259,7 +259,6 @@ async def init_default_user() -> None:
             admin_user = User(
                 username="admin",
                 nickname="admin",
-                status=True,
                 group_id=admin_group.id,
                 password=hashed_admin_password,
             )

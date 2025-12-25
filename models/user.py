@@ -6,6 +6,7 @@ from uuid import UUID
 from sqlmodel import Field, Relationship
 
 from .base import SQLModelBase
+from .model_base import ResponseBase
 from .mixin import UUIDTableBaseMixin
 
 if TYPE_CHECKING:
@@ -110,7 +111,7 @@ class WebAuthnInfo(SQLModelBase):
     """支持的传输方式"""
 
 
-class TokenResponse(SQLModelBase):
+class TokenResponse(ResponseBase):
     """访问令牌响应 DTO"""
 
     access_expires: datetime
@@ -126,7 +127,7 @@ class TokenResponse(SQLModelBase):
     """刷新令牌"""
 
 
-class UserResponse(UserBase):
+class UserResponse(ResponseBase):
     """用户响应 DTO"""
 
     id: UUID
@@ -215,7 +216,7 @@ class UserAdminUpdateRequest(SQLModelBase):
     group_id: UUID | None = None
     """用户组UUID"""
 
-    status: bool | None = None
+    status: UserStatus = UserStatus.ACTIVE
     """用户状态"""
 
     score: int | None = Field(default=None, ge=0)
@@ -286,8 +287,8 @@ class User(UserBase, UUIDTableBaseMixin):
     password: str = Field(max_length=255)
     """用户密码（加密后）"""
 
-    status: bool = Field(default=True, sa_column_kwargs={"server_default": "true"})
-    """用户状态: True=正常, False=封禁"""
+    status: UserStatus = UserStatus.ACTIVE
+    """用户状态"""
 
     storage: int = Field(default=0, sa_column_kwargs={"server_default": "0"}, ge=0)
     """已用存储空间（字节）"""
@@ -350,7 +351,10 @@ class User(UserBase, UUIDTableBaseMixin):
     )
     objects: list["Object"] = Relationship(
         back_populates="owner",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+        sa_relationship_kwargs={
+            "cascade": "all, delete-orphan",
+            "foreign_keys": "[Object.owner_id]"
+        }
     )
     """用户的所有对象（文件和目录）"""
     orders: list["Order"] = Relationship(

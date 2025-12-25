@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends
-from middleware.auth import SignRequired
+from middleware.auth import AuthRequired
 from models import ResponseBase
 
 share_router = APIRouter(
@@ -225,7 +225,7 @@ def router_share_search_public(keywords: str, type: str = 'all') -> ResponseBase
     path='/',
     summary='创建新分享',
     description='Create a new share endpoint.',
-    dependencies=[Depends(SignRequired)]
+    dependencies=[Depends(AuthRequired)]
 )
 def router_share_create() -> ResponseBase:
     """
@@ -240,7 +240,7 @@ def router_share_create() -> ResponseBase:
     path='/',
     summary='列出我的分享',
     description='Get a list of shares.',
-    dependencies=[Depends(SignRequired)]
+    dependencies=[Depends(AuthRequired)]
 )
 def router_share_list() -> ResponseBase:
     """
@@ -255,7 +255,7 @@ def router_share_list() -> ResponseBase:
     path='/save/{id}',
     summary='转存他人分享',
     description='Save another user\'s share by ID.',
-    dependencies=[Depends(SignRequired)]
+    dependencies=[Depends(AuthRequired)]
 )
 def router_share_save(id: str) -> ResponseBase:
     """
@@ -273,7 +273,7 @@ def router_share_save(id: str) -> ResponseBase:
     path='/{id}',
     summary='更新分享信息',
     description='Update share information by ID.',
-    dependencies=[Depends(SignRequired)]
+    dependencies=[Depends(AuthRequired)]
 )
 def router_share_update(id: str) -> ResponseBase:
     """
@@ -291,7 +291,7 @@ def router_share_update(id: str) -> ResponseBase:
     path='/{id}',
     summary='删除分享',
     description='Delete a share by ID.',
-    dependencies=[Depends(SignRequired)]
+    dependencies=[Depends(AuthRequired)]
 )
 def router_share_delete(id: str) -> ResponseBase:
     """
