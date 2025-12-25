@@ -34,7 +34,7 @@ def parse_args() -> argparse.Namespace:
                        help='仅列出将要删除的文件，不实际删除')
     return parser.parse_args()
 
-def confirm_action(message: str, auto_yes: str = False) -> bool:
+def confirm_action(message: str, auto_yes: bool = False) -> bool:
     if auto_yes:
         return True
     return input(f"{message} (y/N): ").lower() == 'y'

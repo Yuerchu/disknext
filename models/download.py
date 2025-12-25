@@ -1,5 +1,5 @@
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated
 from uuid import UUID
 
 from sqlmodel import Field, Relationship, UniqueConstraint, Index
@@ -7,6 +7,10 @@ from sqlmodel import Field, Relationship, UniqueConstraint, Index
 from .base import SQLModelBase
 from .mixin import UUIDTableBaseMixin, TableBaseMixin
 
+if TYPE_CHECKING:
+    from .user import User
+    from .task import Task
+    from .node import Node
 
 class DownloadStatus(StrEnum):
     """下载状态枚举"""
@@ -24,18 +28,12 @@ class DownloadType(StrEnum):
     pass
 
 
-if TYPE_CHECKING:
-    from .user import User
-    from .task import Task
-    from .node import Node
-
-
 # ==================== Aria2 信息模型 ====================
 
 class DownloadAria2InfoBase(SQLModelBase):
     """Aria2下载信息基础模型"""
 
-    info_hash: str | None = Field(default=None, max_length=40)
+    info_hash: Annotated[str | None, Field(max_length=40)] = None
     """InfoHash（BT种子）"""
 
     piece_length: int = 0
@@ -118,11 +116,10 @@ class Download(DownloadBase, UUIDTableBaseMixin):
 
     __table_args__ = (
         UniqueConstraint("node_id", "g_id", name="uq_download_node_gid"),
-        Index("ix_download_status", "status"),
         Index("ix_download_user_status", "user_id", "status"),
     )
 
-    status: DownloadStatus = Field(default=DownloadStatus.RUNNING, sa_column_kwargs={"server_default": "'running'"})
+    status: DownloadStatus = Field(default=DownloadStatus.RUNNING, sa_column_kwargs={"server_default": "'running'"}, index=True)
     """下载状态"""
 
     type: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
@@ -196,5 +193,4 @@ class Download(DownloadBase, UUIDTableBaseMixin):
 
     node: "Node" = Relationship(back_populates="downloads")
     """执行下载的节点"""
-    
     

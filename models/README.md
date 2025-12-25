@@ -18,7 +18,8 @@ models/
 ├── user_authn.py           # 用户 WebAuthn 凭证
 ├── group.py                # 用户组模型
 ├── policy.py               # 存储策略模型
-├── object.py               # 统一对象模型（文件/目录）
+├── physical_file.py        # 物理文件模型（文件去重）
+├── object.py               # 统一对象模型（文件/目录）+ 上传会话
 ├── share.py                # 分享模型
 ├── tag.py                  # 标签模型
 ├── download.py             # 离线下载任务
@@ -32,7 +33,7 @@ models/
 ├── storage_pack.py         # 容量包模型
 ├── webdav.py               # WebDAV 账户模型
 ├── color.py                # 主题颜色 DTO
-├── response.py             # 响应 DTO
+├── model_base.py           # 响应基类 DTO
 └── database.py             # 数据库连接配置
 ```
 
@@ -118,7 +119,7 @@ class User(UserBase, UUIDTableBaseMixin):  # 不需要再写 SQLModelBase
 | `username` | `str` | 用户名，唯一，不可更改 |
 | `nickname` | `str?` | 用户昵称 |
 | `password` | `str` | 密码（加密后） |
-| `status` | `bool` | 用户状态：True=正常，False=封禁 |
+| `status` | `UserStatus` | 用户状态：active/admin_banned/system_banned |
 | `storage` | `int` | 已用存储空间（字节） |
 | `two_factor` | `str?` | 两步验证密钥 |
 | `avatar` | `str` | 头像类型/地址 |
@@ -129,6 +130,10 @@ class User(UserBase, UUIDTableBaseMixin):  # 不需要再写 SQLModelBase
 | `timezone` | `int` | 时区 UTC 偏移（-12 ~ 12） |
 | `group_id` | `UUID` | 所属用户组（外键） |
 | `previous_group_id` | `UUID?` | 之前的用户组（用于过期后恢复） |
+
+**关系**:
+- `group`: 所属用户组
+- `previous_group`: 之前的用户组（用于过期后恢复）
 
 ---
 
@@ -248,7 +253,38 @@ class User(UserBase, UUIDTableBaseMixin):  # 不需要再写 SQLModelBase
 
 ---
 
-### 8. Object（统一对象）
+### 8. PhysicalFile（物理文件）
+
+**表名**: `physicalfile`
+**基类**: `UUIDTableBaseMixin`
+
+表示磁盘上的实际文件。多个 Object 可以引用同一个 PhysicalFile，实现文件共享而不复制物理文件。
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | `UUID` | 物理文件 UUID（主键） |
+| `storage_path` | `str` | 物理存储路径（相对于存储策略根目录） |
+| `size` | `int` | 文件大小（字节） |
+| `checksum_md5` | `str?` | MD5 校验和（用于文件去重和完整性校验） |
+| `policy_id` | `UUID` | 存储策略（外键） |
+| `reference_count` | `int` | 引用计数（有多少个 Object 引用此物理文件） |
+
+**索引**:
+- `ix_physical_file_policy_path`: (policy_id, storage_path)
+- `ix_physical_file_checksum`: (checksum_md5)
+
+**关系**:
+- `policy`: 存储策略
+- `objects`: 引用此物理文件的所有逻辑对象（一对多）
+
+**业务方法**:
+- `increment_reference()`: 增加引用计数
+- `decrement_reference()`: 减少引用计数
+- `can_be_deleted`: 属性，是否可物理删除（引用计数为 0）
+
+---
+
+### 9. Object（统一对象）
 
 **表名**: `object`
 **基类**: `UUIDTableBaseMixin`
@@ -261,23 +297,45 @@ class User(UserBase, UUIDTableBaseMixin):  # 不需要再写 SQLModelBase
 | `name` | `str` | 对象名称（文件名或目录名） |
 | `type` | `ObjectType` | 对象类型：file/folder |
 | `password` | `str?` | 对象独立密码 |
-| `source_name` | `str?` | 源文件名（仅文件） |
 | `size` | `int` | 文件大小（字节），目录为 0 |
 | `upload_session_id` | `str?` | 分块上传会话 ID |
+| `physical_file_id` | `UUID?` | 关联的物理文件（仅文件有效，目录为 NULL） |
 | `parent_id` | `UUID?` | 父目录（外键，NULL 表示根目录） |
 | `owner_id` | `UUID` | 所有者用户（外键） |
 | `policy_id` | `UUID` | 存储策略（外键） |
+| `is_banned` | `bool` | 是否被封禁 |
+| `banned_at` | `datetime?` | 封禁时间 |
+| `banned_by` | `UUID?` | 封禁操作者 UUID |
+| `ban_reason` | `str?` | 封禁原因 |
 
 **约束**:
-- 同一父目录下名称唯一
+- 同一父目录下名称唯一（owner_id + parent_id + name）
 - 名称不能包含斜杠
+
+**索引**:
+- `ix_object_owner_updated`: (owner_id, updated_at)
+- `ix_object_parent_updated`: (parent_id, updated_at)
+- `ix_object_owner_type`: (owner_id, type)
+- `ix_object_owner_size`: (owner_id, size)
 
 **关系**:
 - `file_metadata`: 一对一关联 FileMetadata
+- `physical_file`: 关联的物理文件（仅文件有效）
+- `owner`: 所有者用户
+- `banner`: 封禁操作者
+- `parent`: 父目录（自引用）
+- `children`: 子对象列表（自引用）
+- `source_links`: 源链接列表
+- `shares`: 分享列表
+
+**业务属性**:
+- `source_name`: 向后兼容属性，返回物理文件的存储路径
+- `is_file`: 是否为文件
+- `is_folder`: 是否为目录
 
 ---
 
-### 9. FileMetadata（文件元数据）
+### 10. FileMetadata（文件元数据）
 
 **表名**: `filemetadata`
 **基类**: `UUIDTableBaseMixin`
@@ -286,21 +344,53 @@ class User(UserBase, UUIDTableBaseMixin):  # 不需要再写 SQLModelBase
 |------|------|------|
 | `id` | `UUID` | 主键 |
 | `object_id` | `UUID` | 关联的对象（外键，唯一） |
-| `width` | `int?` | 图片/视频宽度 |
-| `height` | `int?` | 图片/视频高度 |
+| `width` | `int?` | 图片/视频宽度（像素） |
+| `height` | `int?` | 图片/视频高度（像素） |
 | `duration` | `float?` | 音视频时长（秒） |
-| `mime_type` | `str?` | MIME类型 |
-| `bit_rate` | `int?` | 比特率 |
-| `sample_rate` | `int?` | 采样率 |
-| `channels` | `int?` | 音频通道数 |
-| `codec` | `str?` | 编解码器 |
-| `frame_rate` | `float?` | 视频帧率 |
-| `orientation` | `int?` | 图片方向 |
-| `has_thumbnail` | `bool` | 是否有缩略图 |
+| `bitrate` | `int?` | 比特率（kbps） |
+| `mime_type` | `str?` | MIME 类型 |
+| `checksum_md5` | `str?` | MD5 校验和 |
+| `checksum_sha256` | `str?` | SHA256 校验和 |
+
+**关系**:
+- `object`: 关联的 Object（一对一）
 
 ---
 
-### 10. SourceLink（源链接）
+### 11. UploadSession（上传会话）
+
+**表名**: `uploadsession`
+**基类**: `UUIDTableBaseMixin`
+
+用于管理分片上传的会话状态。会话有效期为 24 小时，过期后自动失效。
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | `UUID` | 会话 UUID（主键） |
+| `file_name` | `str` | 原始文件名 |
+| `file_size` | `int` | 文件总大小（字节） |
+| `chunk_size` | `int` | 分片大小（字节） |
+| `total_chunks` | `int` | 总分片数 |
+| `uploaded_chunks` | `int` | 已上传分片数 |
+| `uploaded_size` | `int` | 已上传大小（字节） |
+| `storage_path` | `str?` | 文件存储路径 |
+| `expires_at` | `datetime` | 会话过期时间 |
+| `owner_id` | `UUID` | 上传者用户（外键） |
+| `parent_id` | `UUID` | 目标父目录（外键） |
+| `policy_id` | `UUID` | 存储策略（外键） |
+
+**关系**:
+- `owner`: 上传者用户
+- `parent`: 目标父目录
+- `policy`: 存储策略
+
+**业务属性**:
+- `is_expired`: 会话是否已过期
+- `is_complete`: 上传是否完成
+
+---
+
+### 12. SourceLink（源链接）
 
 **表名**: `sourcelink`
 **基类**: `TableBaseMixin`
@@ -314,7 +404,7 @@ class User(UserBase, UUIDTableBaseMixin):  # 不需要再写 SQLModelBase
 
 ---
 
-### 11. Share（分享）
+### 13. Share（分享）
 
 **表名**: `share`
 **基类**: `TableBaseMixin`
@@ -336,7 +426,7 @@ class User(UserBase, UUIDTableBaseMixin):  # 不需要再写 SQLModelBase
 
 ---
 
-### 12. Report（举报）
+### 14. Report（举报）
 
 **表名**: `report`
 **基类**: `TableBaseMixin`
@@ -350,7 +440,7 @@ class User(UserBase, UUIDTableBaseMixin):  # 不需要再写 SQLModelBase
 
 ---
 
-### 13. Tag（标签）
+### 15. Tag（标签）
 
 **表名**: `tag`
 **基类**: `TableBaseMixin`
@@ -369,7 +459,7 @@ class User(UserBase, UUIDTableBaseMixin):  # 不需要再写 SQLModelBase
 
 ---
 
-### 14. Task（任务）
+### 16. Task（任务）
 
 **表名**: `task`
 **基类**: `TableBaseMixin`
@@ -391,7 +481,7 @@ class User(UserBase, UUIDTableBaseMixin):  # 不需要再写 SQLModelBase
 
 ---
 
-### 15. TaskProps（任务属性）
+### 17. TaskProps（任务属性）
 
 **表名**: `taskprops`
 **基类**: `TableBaseMixin`（主键为外键 task_id）
@@ -405,7 +495,7 @@ class User(UserBase, UUIDTableBaseMixin):  # 不需要再写 SQLModelBase
 
 ---
 
-### 16. Download（离线下载）
+### 18. Download（离线下载）
 
 **表名**: `download`
 **基类**: `UUIDTableBaseMixin`
@@ -437,7 +527,7 @@ class User(UserBase, UUIDTableBaseMixin):  # 不需要再写 SQLModelBase
 
 ---
 
-### 17. DownloadAria2Info（Aria2下载信息）
+### 19. DownloadAria2Info（Aria2下载信息）
 
 **表名**: `downloadaria2info`
 **基类**: `TableBaseMixin`（主键为外键 download_id）
@@ -457,7 +547,7 @@ class User(UserBase, UUIDTableBaseMixin):  # 不需要再写 SQLModelBase
 
 ---
 
-### 18. DownloadAria2File（Aria2下载文件）
+### 20. DownloadAria2File（Aria2下载文件）
 
 **表名**: `downloadaria2file`
 **基类**: `TableBaseMixin`
@@ -474,7 +564,7 @@ class User(UserBase, UUIDTableBaseMixin):  # 不需要再写 SQLModelBase
 
 ---
 
-### 19. Node（节点）
+### 21. Node（节点）
 
 **表名**: `node`
 **基类**: `TableBaseMixin`
@@ -499,7 +589,7 @@ class User(UserBase, UUIDTableBaseMixin):  # 不需要再写 SQLModelBase
 
 ---
 
-### 20. Aria2Configuration（Aria2配置）
+### 22. Aria2Configuration（Aria2配置）
 
 **表名**: `aria2configuration`
 **基类**: `TableBaseMixin`
@@ -516,7 +606,7 @@ class User(UserBase, UUIDTableBaseMixin):  # 不需要再写 SQLModelBase
 
 ---
 
-### 21. Order（订单）
+### 23. Order（订单）
 
 **表名**: `order`
 **基类**: `TableBaseMixin`
@@ -536,7 +626,7 @@ class User(UserBase, UUIDTableBaseMixin):  # 不需要再写 SQLModelBase
 
 ---
 
-### 22. Redeem（兑换码）
+### 24. Redeem（兑换码）
 
 **表名**: `redeem`
 **基类**: `TableBaseMixin`
@@ -552,7 +642,7 @@ class User(UserBase, UUIDTableBaseMixin):  # 不需要再写 SQLModelBase
 
 ---
 
-### 23. StoragePack（容量包）
+### 25. StoragePack（容量包）
 
 **表名**: `storagepack`
 **基类**: `TableBaseMixin`
@@ -568,7 +658,7 @@ class User(UserBase, UUIDTableBaseMixin):  # 不需要再写 SQLModelBase
 
 ---
 
-### 24. WebDAV（WebDAV 账户）
+### 26. WebDAV（WebDAV 账户）
 
 **表名**: `webdav`
 **基类**: `TableBaseMixin`
@@ -587,7 +677,7 @@ class User(UserBase, UUIDTableBaseMixin):  # 不需要再写 SQLModelBase
 
 ---
 
-### 25. Setting（系统设置）
+### 27. Setting（系统设置）
 
 **表名**: `setting`
 **基类**: `TableBaseMixin`
@@ -632,6 +722,22 @@ class User(UserBase, UUIDTableBaseMixin):  # 不需要再写 SQLModelBase
 │                                                                   │
 │   Download ◄──────────────────────> DownloadAria2Info             │
 │          download_id (PK/FK)                                      │
+│                                                                   │
+└───────────────────────────────────────────────────────────────────┘
+```
+
+**新增关系**:
+```
+┌───────────────────────────────────────────────────────────────────┐
+│                     一对多关系（新增）                              │
+├───────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│   PhysicalFile ◄──────────────────> Object (多个)                 │
+│          physical_file_id (FK)      文件去重：多个Object可引用    │
+│                                     同一个PhysicalFile            │
+│                                                                   │
+│   User ◄──────────────────────────> UploadSession                 │
+│          owner_id (FK)              用户的上传会话列表            │
 │                                                                   │
 └───────────────────────────────────────────────────────────────────┘
 ```
@@ -693,7 +799,10 @@ class User(UserBase, UUIDTableBaseMixin):  # 不需要再写 SQLModelBase
 | **User** | Task | `user_id` | 用户的任务 |
 | **User** | WebDAV | `user_id` | 用户的 WebDAV 账户 |
 | **User** | UserAuthn | `user_id` | 用户的 WebAuthn 凭证 |
+| **User** | UploadSession | `owner_id` | 用户的上传会话 |
 | **Policy** | Object | `policy_id` | 存储策略下的对象 |
+| **Policy** | PhysicalFile | `policy_id` | 存储策略下的物理文件 |
+| **PhysicalFile** | Object | `physical_file_id` | 物理文件被多个逻辑对象引用（文件去重） |
 | **Object** | Object | `parent_id` | 目录的子文件/子目录（自引用） |
 | **Object** | SourceLink | `object_id` | 文件的源链接 |
 | **Object** | Share | `object_id` | 对象的分享 |
@@ -811,6 +920,36 @@ class PolicyType(StrEnum):
     S3 = "s3"        # S3 兼容存储
 ```
 
+### StorageType
+```python
+class StorageType(StrEnum):
+    LOCAL = "local"              # 本地存储
+    QINIU = "qiniu"              # 七牛云
+    TENCENT = "tencent"          # 腾讯云
+    ALIYUN = "aliyun"            # 阿里云
+    ONEDRIVE = "onedrive"        # OneDrive
+    GOOGLE_DRIVE = "google_drive"  # Google Drive
+    DROPBOX = "dropbox"          # Dropbox
+    WEBDAV = "webdav"            # WebDAV
+    REMOTE = "remote"            # 远程存储
+```
+
+### UserStatus
+```python
+class UserStatus(StrEnum):
+    ACTIVE = "active"              # 正常
+    ADMIN_BANNED = "admin_banned"  # 管理员封禁
+    SYSTEM_BANNED = "system_banned"  # 系统封禁
+```
+
+### CaptchaType
+```python
+class CaptchaType(StrEnum):
+    DEFAULT = "default"                      # 默认验证码
+    GCAPTCHA = "gcaptcha"                    # Google reCAPTCHA
+    CLOUD_FLARE_TURNSTILE = "cloudflare turnstile"  # Cloudflare Turnstile
+```
+
 ### ThemeType
 ```python
 class ThemeType(StrEnum):
@@ -893,6 +1032,9 @@ class OrderStatus(StrEnum):
 | `UserSettingResponse` | 用户设置响应 |
 | `WebAuthnInfo` | WebAuthn 信息 |
 | `AuthnResponse` | WebAuthn 响应 |
+| `UserAdminUpdateRequest` | 管理员更新用户请求 |
+| `UserCalibrateResponse` | 用户存储校准响应 |
+| `UserAdminDetailResponse` | 管理员用户详情响应 |
 
 ### 用户组相关
 
@@ -918,14 +1060,38 @@ class OrderStatus(StrEnum):
 | `DirectoryResponse` | 目录响应 |
 | `ObjectMoveRequest` | 移动对象请求 |
 | `ObjectDeleteRequest` | 删除对象请求 |
+| `ObjectCopyRequest` | 复制对象请求 |
+| `ObjectRenameRequest` | 重命名对象请求 |
+| `ObjectPropertyResponse` | 对象基本属性响应 |
+| `ObjectPropertyDetailResponse` | 对象详细属性响应 |
 | `PolicyResponse` | 存储策略响应 |
 
-### 其他
+### 上传相关
+
+| DTO | 说明 |
+|-----|------|
+| `CreateUploadSessionRequest` | 创建上传会话请求 |
+| `UploadSessionResponse` | 上传会话响应 |
+| `UploadChunkResponse` | 上传分片响应 |
+| `CreateFileRequest` | 创建空白文件请求 |
+
+### 管理员文件管理
+
+| DTO | 说明 |
+|-----|------|
+| `AdminFileResponse` | 管理员文件响应 |
+| `FileBanRequest` | 文件封禁请求 |
+| `AdminFileListResponse` | 管理员文件列表响应 |
+
+### 系统设置
 
 | DTO | 说明 |
 |-----|------|
 | `SiteConfigResponse` | 站点配置响应 |
 | `ThemeResponse` | 主题颜色响应 |
+| `SettingItem` | 设置项 |
+| `SettingsUpdateRequest` | 更新设置请求 |
+| `SettingsGetResponse` | 获取设置响应 |
 
 ---
 
