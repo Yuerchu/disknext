@@ -1,1 +1,1 @@
-from .login import Login
+from .login import login

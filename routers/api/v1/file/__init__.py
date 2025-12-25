@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from loguru import logger as l
 
-from middleware.auth import AuthRequired
+from middleware.auth import auth_required
 from middleware.dependencies import SessionDep
 from models import (
     CreateFileRequest,
@@ -35,6 +35,7 @@ from models import (
 )
 from service.storage import LocalStorageService
 from utils.JWT import SECRET_KEY
+from utils import http_exceptions
 
 
 # ==================== 下载令牌管理 ====================
@@ -88,7 +89,7 @@ _upload_router = APIRouter(prefix="/upload")
 )
 async def create_upload_session(
     session: SessionDep,
-    user: Annotated[User, Depends(AuthRequired)],
+    user: Annotated[User, Depends(auth_required)],
     request: CreateUploadSessionRequest,
 ) -> UploadSessionResponse:
     """
@@ -187,7 +188,7 @@ async def create_upload_session(
 )
 async def upload_chunk(
     session: SessionDep,
-    user: Annotated[User, Depends(AuthRequired)],
+    user: Annotated[User, Depends(auth_required)],
     session_id: UUID,
     chunk_index: int,
     file: UploadFile = File(...),
@@ -291,7 +292,7 @@ async def upload_chunk(
 )
 async def delete_upload_session(
     session: SessionDep,
-    user: Annotated[User, Depends(AuthRequired)],
+    user: Annotated[User, Depends(auth_required)],
     session_id: UUID,
 ) -> ResponseBase:
     """删除上传会话端点"""
@@ -320,7 +321,7 @@ async def delete_upload_session(
 )
 async def clear_upload_sessions(
     session: SessionDep,
-    user: Annotated[User, Depends(AuthRequired)],
+    user: Annotated[User, Depends(auth_required)],
 ) -> ResponseBase:
     """清除所有上传会话端点"""
     # 获取所有会话
@@ -368,7 +369,7 @@ _download_router = APIRouter(prefix="/download")
 )
 async def create_download_token(
     session: SessionDep,
-    user: Annotated[User, Depends(AuthRequired)],
+    user: Annotated[User, Depends(auth_required)],
     file_id: UUID,
 ) -> ResponseBase:
     """
@@ -456,7 +457,7 @@ router.include_router(_download_router)
 )
 async def create_empty_file(
     session: SessionDep,
-    user: Annotated[User, Depends(AuthRequired)],
+    user: Annotated[User, Depends(auth_required)],
     request: CreateFileRequest,
 ) -> ResponseBase:
     """创建空白文件端点"""
@@ -564,7 +565,7 @@ async def file_source_redirect(id: str, name: str) -> ResponseBase:
     path='/update/{id}',
     summary='更新文件',
     description='更新文件内容。',
-    dependencies=[Depends(AuthRequired)]
+    dependencies=[Depends(auth_required)]
 )
 async def file_update(id: str) -> ResponseBase:
     """更新文件内容"""
@@ -575,7 +576,7 @@ async def file_update(id: str) -> ResponseBase:
     path='/preview/{id}',
     summary='预览文件',
     description='获取文件预览。',
-    dependencies=[Depends(AuthRequired)]
+    dependencies=[Depends(auth_required)]
 )
 async def file_preview(id: str) -> ResponseBase:
     """预览文件"""
@@ -586,7 +587,7 @@ async def file_preview(id: str) -> ResponseBase:
     path='/content/{id}',
     summary='获取文本文件内容',
     description='获取文本文件内容。',
-    dependencies=[Depends(AuthRequired)]
+    dependencies=[Depends(auth_required)]
 )
 async def file_content(id: str) -> ResponseBase:
     """获取文本文件内容"""
@@ -597,7 +598,7 @@ async def file_content(id: str) -> ResponseBase:
     path='/doc/{id}',
     summary='获取Office文档预览地址',
     description='获取Office文档在线预览地址。',
-    dependencies=[Depends(AuthRequired)]
+    dependencies=[Depends(auth_required)]
 )
 async def file_doc(id: str) -> ResponseBase:
     """获取Office文档预览地址"""
@@ -608,7 +609,7 @@ async def file_doc(id: str) -> ResponseBase:
     path='/thumb/{id}',
     summary='获取文件缩略图',
     description='获取文件缩略图。',
-    dependencies=[Depends(AuthRequired)]
+    dependencies=[Depends(auth_required)]
 )
 async def file_thumb(id: str) -> ResponseBase:
     """获取文件缩略图"""
@@ -619,7 +620,7 @@ async def file_thumb(id: str) -> ResponseBase:
     path='/source/{id}',
     summary='取得文件外链',
     description='获取文件的外链地址。',
-    dependencies=[Depends(AuthRequired)]
+    dependencies=[Depends(auth_required)]
 )
 async def file_source(id: str) -> ResponseBase:
     """获取文件外链"""
@@ -630,7 +631,7 @@ async def file_source(id: str) -> ResponseBase:
     path='/archive',
     summary='打包要下载的文件',
     description='将多个文件打包下载。',
-    dependencies=[Depends(AuthRequired)]
+    dependencies=[Depends(auth_required)]
 )
 async def file_archive() -> ResponseBase:
     """打包文件"""
@@ -641,7 +642,7 @@ async def file_archive() -> ResponseBase:
     path='/compress',
     summary='创建文件压缩任务',
     description='创建文件压缩任务。',
-    dependencies=[Depends(AuthRequired)]
+    dependencies=[Depends(auth_required)]
 )
 async def file_compress() -> ResponseBase:
     """创建压缩任务"""
@@ -652,7 +653,7 @@ async def file_compress() -> ResponseBase:
     path='/decompress',
     summary='创建文件解压任务',
     description='创建文件解压任务。',
-    dependencies=[Depends(AuthRequired)]
+    dependencies=[Depends(auth_required)]
 )
 async def file_decompress() -> ResponseBase:
     """创建解压任务"""
@@ -663,7 +664,7 @@ async def file_decompress() -> ResponseBase:
     path='/relocate',
     summary='创建文件转移任务',
     description='创建文件转移任务。',
-    dependencies=[Depends(AuthRequired)]
+    dependencies=[Depends(auth_required)]
 )
 async def file_relocate() -> ResponseBase:
     """创建转移任务"""
@@ -674,7 +675,7 @@ async def file_relocate() -> ResponseBase:
     path='/search/{type}/{keyword}',
     summary='搜索文件',
     description='按关键字搜索文件。',
-    dependencies=[Depends(AuthRequired)]
+    dependencies=[Depends(auth_required)]
 )
 async def file_search(type: str, keyword: str) -> ResponseBase:
     """搜索文件"""

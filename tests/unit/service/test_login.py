@@ -6,7 +6,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from models.user import User, LoginRequest, TokenResponse
 from models.group import Group
-from service.user.login import Login
+from service.user.login import login
 from utils.password.pwd import Password
 
 
@@ -86,7 +86,7 @@ async def test_login_success(db_session: AsyncSession, setup_user):
         password=user_data["password"]
     )
 
-    result = await Login(db_session, login_request)
+    result = await login(db_session, login_request)
 
     assert isinstance(result, TokenResponse)
     assert result.access_token is not None
@@ -103,7 +103,7 @@ async def test_login_user_not_found(db_session: AsyncSession):
         password="any_password"
     )
 
-    result = await Login(db_session, login_request)
+    result = await login(db_session, login_request)
 
     assert result is None
 
@@ -116,7 +116,7 @@ async def test_login_wrong_password(db_session: AsyncSession, setup_user):
         password="wrong_password"
     )
 
-    result = await Login(db_session, login_request)
+    result = await login(db_session, login_request)
 
     assert result is None
 
@@ -129,7 +129,7 @@ async def test_login_user_banned(db_session: AsyncSession, setup_banned_user):
         password="password"
     )
 
-    result = await Login(db_session, login_request)
+    result = await login(db_session, login_request)
 
     assert result is False
 
@@ -145,7 +145,7 @@ async def test_login_2fa_required(db_session: AsyncSession, setup_2fa_user):
         # 未提供 two_fa_code
     )
 
-    result = await Login(db_session, login_request)
+    result = await login(db_session, login_request)
 
     assert result == "2fa_required"
 
@@ -161,7 +161,7 @@ async def test_login_2fa_invalid(db_session: AsyncSession, setup_2fa_user):
         two_fa_code="000000"  # 错误的验证码
     )
 
-    result = await Login(db_session, login_request)
+    result = await login(db_session, login_request)
 
     assert result == "2fa_invalid"
 
@@ -184,7 +184,7 @@ async def test_login_2fa_success(db_session: AsyncSession, setup_2fa_user):
         two_fa_code=valid_code
     )
 
-    result = await Login(db_session, login_request)
+    result = await login(db_session, login_request)
 
     assert isinstance(result, TokenResponse)
     assert result.access_token is not None
@@ -202,7 +202,7 @@ async def test_login_returns_valid_tokens(db_session: AsyncSession, setup_user):
         password=user_data["password"]
     )
 
-    result = await Login(db_session, login_request)
+    result = await login(db_session, login_request)
 
     assert isinstance(result, TokenResponse)
 
@@ -227,7 +227,7 @@ async def test_login_case_sensitive_username(db_session: AsyncSession, setup_use
         password=user_data["password"]
     )
 
-    result = await Login(db_session, login_request)
+    result = await login(db_session, login_request)
 
     # 应该失败，因为用户名大小写不匹配
     assert result is None

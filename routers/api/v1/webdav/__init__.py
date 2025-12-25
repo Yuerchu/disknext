@@ -1,6 +1,8 @@
-from fastapi import APIRouter, Depends, Request
-from middleware.auth import AuthRequired
+from fastapi import APIRouter, Depends
+
+from middleware.auth import auth_required
 from models import ResponseBase
+from utils import http_exceptions
 
 # WebDAV 管理路由
 webdav_router = APIRouter(
@@ -12,7 +14,7 @@ webdav_router = APIRouter(
     path='/accounts',
     summary='获取账号信息',
     description='Get account information for WebDAV.',
-    dependencies=[Depends(AuthRequired)],
+    dependencies=[Depends(auth_required)],
 )
 def router_webdav_accounts() -> ResponseBase:
     """
@@ -21,13 +23,13 @@ def router_webdav_accounts() -> ResponseBase:
     Returns:
         ResponseBase: A model containing the response data for the account information.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @webdav_router.post(
     path='/accounts',
     summary='新建账号',
     description='Create a new WebDAV account.',
-    dependencies=[Depends(AuthRequired)],
+    dependencies=[Depends(auth_required)],
 )
 def router_webdav_create_account() -> ResponseBase:
     """
@@ -36,13 +38,13 @@ def router_webdav_create_account() -> ResponseBase:
     Returns:
         ResponseBase: A model containing the response data for the created account.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @webdav_router.delete(
     path='/accounts/{id}',
     summary='删除账号',
     description='Delete a WebDAV account by its ID.',
-    dependencies=[Depends(AuthRequired)],
+    dependencies=[Depends(auth_required)],
 )
 def router_webdav_delete_account(id: str) -> ResponseBase:
     """
@@ -54,13 +56,13 @@ def router_webdav_delete_account(id: str) -> ResponseBase:
     Returns:
         ResponseBase: A model containing the response data for the deletion operation.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @webdav_router.post(
     path='/mount',
     summary='新建目录挂载',
     description='Create a new WebDAV mount point.',
-    dependencies=[Depends(AuthRequired)],
+    dependencies=[Depends(auth_required)],
 )
 def router_webdav_create_mount() -> ResponseBase:
     """
@@ -69,13 +71,13 @@ def router_webdav_create_mount() -> ResponseBase:
     Returns:
         ResponseBase: A model containing the response data for the created mount point.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @webdav_router.delete(
     path='/mount/{id}',
     summary='删除目录挂载',
     description='Delete a WebDAV mount point by its ID.',
-    dependencies=[Depends(AuthRequired)],
+    dependencies=[Depends(auth_required)],
 )
 def router_webdav_delete_mount(id: str) -> ResponseBase:
     """
@@ -87,13 +89,13 @@ def router_webdav_delete_mount(id: str) -> ResponseBase:
     Returns:
         ResponseBase: A model containing the response data for the deletion operation.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @webdav_router.patch(
     path='accounts/{id}',
     summary='更新账号信息',
     description='Update WebDAV account information by ID.',
-    dependencies=[Depends(AuthRequired)],
+    dependencies=[Depends(auth_required)],
 )
 def router_webdav_update_account(id: str) -> ResponseBase:
     """
@@ -105,4 +107,4 @@ def router_webdav_update_account(id: str) -> ResponseBase:
     Returns:
         ResponseBase: A model containing the response data for the updated account.
     """
-    pass
+    http_exceptions.raise_not_implemented()

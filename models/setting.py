@@ -20,11 +20,11 @@ class SiteConfigResponse(SQLModelBase):
     title: str = "DiskNext"
     """网站标题"""
 
-    themes: dict[str, str] = {}
-    """网站主题配置"""
+    # themes: dict[str, str] = {}
+    # """网站主题配置"""
 
-    default_theme: dict[str, str] = {}
-    """默认主题RGB色号"""
+    # default_theme: dict[str, str] = {}
+    # """默认主题RGB色号"""
 
     site_notice: str | None = None
     """网站公告"""

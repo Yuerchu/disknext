@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, Query
-from fastapi.responses import PlainTextResponse, RedirectResponse
-from middleware.auth import AuthRequired
+from fastapi import APIRouter, Query
+from fastapi.responses import PlainTextResponse
+
 from models import ResponseBase
 import service.oauth
+from utils import http_exceptions
 
 callback_router = APIRouter(
     prefix='/callback',
@@ -40,7 +41,7 @@ def router_callback_qq() -> ResponseBase:
     Returns:
         ResponseBase: A model containing the response data for the QQ OAuth callback.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @oauth_router.get(
     path='/github',
@@ -86,7 +87,7 @@ def router_callback_alipay() -> ResponseBase:
     Returns:
         ResponseBase: A model containing the response data for the Alipay payment callback.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @pay_router.post(    
     path='/wechat',
@@ -100,7 +101,7 @@ def router_callback_wechat() -> ResponseBase:
     Returns:
         ResponseBase: A model containing the response data for the WeChat Pay payment callback.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @pay_router.post(
     path='/stripe',
@@ -114,7 +115,7 @@ def router_callback_stripe() -> ResponseBase:
     Returns:
         ResponseBase: A model containing the response data for the Stripe payment callback.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @pay_router.get(
     path='/easypay',
@@ -128,7 +129,7 @@ def router_callback_easypay() -> PlainTextResponse:
     Returns:
         PlainTextResponse: A response containing the payment status for the EasyPay payment callback.
     """
-    pass
+    http_exceptions.raise_not_implemented()
     # return PlainTextResponse("success", status_code=200)
 
 @pay_router.get(
@@ -147,7 +148,7 @@ def router_callback_custom(order_no: str, id: str) -> ResponseBase:
     Returns:
         ResponseBase: A model containing the response data for the custom payment callback.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @upload_router.post(
     path='/remote/{session_id}/{key}',
@@ -165,7 +166,7 @@ def router_callback_remote(session_id: str, key: str) -> ResponseBase:
     Returns:
         ResponseBase: A model containing the response data for the remote upload callback.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @upload_router.post(
     path='/qiniu/{session_id}',
@@ -182,7 +183,7 @@ def router_callback_qiniu(session_id: str) -> ResponseBase:
     Returns:
         ResponseBase: A model containing the response data for the Qiniu Cloud upload callback.
     """
-    pass
+    http_exceptions.raise_not_implemented()
     
 @upload_router.post(
     path='/tencent/{session_id}',
@@ -199,7 +200,7 @@ def router_callback_tencent(session_id: str) -> ResponseBase:
     Returns:
         ResponseBase: A model containing the response data for the Tencent Cloud upload callback.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @upload_router.post(    
     path='/aliyun/{session_id}',
@@ -216,7 +217,7 @@ def router_callback_aliyun(session_id: str) -> ResponseBase:
     Returns:
         ResponseBase: A model containing the response data for the Aliyun upload callback.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @upload_router.post(   
     path='/upyun/{session_id}',
@@ -233,7 +234,7 @@ def router_callback_upyun(session_id: str) -> ResponseBase:
     Returns:
         ResponseBase: A model containing the response data for the Upyun upload callback.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @upload_router.post(
     path='/aws/{session_id}',
@@ -250,7 +251,7 @@ def router_callback_aws(session_id: str) -> ResponseBase:
     Returns:
         ResponseBase: A model containing the response data for the AWS S3 upload callback.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @upload_router.post(
     path='/onedrive/finish/{session_id}',
@@ -267,7 +268,7 @@ def router_callback_onedrive_finish(session_id: str) -> ResponseBase:
     Returns:
         ResponseBase: A model containing the response data for the OneDrive upload completion callback.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @upload_router.get(
     path='/ondrive/auth',
@@ -281,7 +282,7 @@ def router_callback_onedrive_auth() -> ResponseBase:
     Returns:
         ResponseBase: A model containing the response data for the OneDrive authorization callback.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @upload_router.get(
     path='/google/auth',
@@ -295,4 +296,4 @@ def router_callback_google_auth() -> ResponseBase:
     Returns:
         ResponseBase: A model containing the response data for the Google OAuth completion callback.
     """
-    pass
+    http_exceptions.raise_not_implemented()

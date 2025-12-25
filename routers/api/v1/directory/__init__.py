@@ -2,7 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from middleware.auth import AuthRequired
+from middleware.auth import auth_required
 from middleware.dependencies import SessionDep
 from models import (
     DirectoryCreateRequest,
@@ -26,7 +26,7 @@ directory_router = APIRouter(
 )
 async def router_directory_get(
         session: SessionDep,
-        user: Annotated[User, Depends(AuthRequired)],
+        user: Annotated[User, Depends(auth_required)],
         path: str
 ) -> DirectoryResponse:
     """
@@ -94,7 +94,7 @@ async def router_directory_get(
 )
 async def router_directory_create(
         session: SessionDep,
-        user: Annotated[User, Depends(AuthRequired)],
+        user: Annotated[User, Depends(auth_required)],
         request: DirectoryCreateRequest
 ) -> ResponseBase:
     """

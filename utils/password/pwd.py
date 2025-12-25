@@ -1,4 +1,5 @@
 import secrets
+
 from loguru import logger
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
@@ -104,10 +105,11 @@ class Password:
     
     @staticmethod
     async def generate_totp(
-        username: str
+        *args, **kwargs
     ) -> TwoFactorResponse:
         """
         生成 TOTP 密钥和对应的 URI，用于两步验证。
+        所有的参数将会给到 `pyotp.totp.TOTP`
 
         :return: 包含 TOTP 密钥和 URI 的元组
         """
@@ -121,8 +123,7 @@ class Password:
             salt="2fa-setup-salt"
         )
 
-        otp_uri = pyotp.totp.TOTP(secret).provisioning_uri(
-            name=username,
+        otp_uri = pyotp.totp.TOTP(secret, *args, **kwargs).provisioning_uri(
             issuer_name=appmeta.APP_NAME
         )
 
@@ -134,17 +135,21 @@ class Password:
     @staticmethod
     def verify_totp(
             secret: str,
-            code: str
+            code: int,
+            *args, **kwargs
     ) -> PasswordStatus:
         """
         验证 TOTP 验证码。
 
         :param secret: TOTP 密钥（Base32 编码）
         :param code: 用户输入的 6 位验证码
+        :param args: 传入 `totp.verify` 的参数
+        :param kwargs: 传入 `totp.verify` 的参数
+        
         :return: 验证是否成功
         """
         totp = pyotp.TOTP(secret)
-        if totp.verify(code):
+        if totp.verify(otp=str(code), *args, **kwargs):
             return PasswordStatus.VALID
         else:
             return PasswordStatus.INVALID

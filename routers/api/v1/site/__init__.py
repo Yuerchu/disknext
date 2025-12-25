@@ -1,33 +1,14 @@
 from fastapi import APIRouter
 from sqlalchemy import and_
-import json
 
 from middleware.dependencies import SessionDep
-from models import ResponseBase
-from models.setting import Setting
+from models import ResponseBase, Setting, SettingsType, SiteConfigResponse
+from utils import http_exceptions
 
 site_router = APIRouter(
     prefix="/site",
     tags=["site"],
 )
-
-
-async def _get_setting(session: SessionDep, type_: str, name: str) -> str | None:
-    """获取设置值"""
-    setting = await Setting.get(session, and_(Setting.type == type_, Setting.name == name))
-    return setting.value if setting else None
-
-
-async def _get_setting_bool(session: SessionDep, type_: str, name: str) -> bool:
-    """获取布尔类型设置值"""
-    value = await _get_setting(session, type_, name)
-    return value == "1" if value else False
-
-async def _get_setting_json(session: SessionDep, type_: str, name: str) -> dict | list | None:
-    """获取 JSON 类型设置值"""
-    value = await _get_setting(session, type_, name)
-    return json.loads(value) if value else None
-
 
 @site_router.get(
     path="/ping",
@@ -35,15 +16,14 @@ async def _get_setting_json(session: SessionDep, type_: str, name: str) -> dict 
     description="A simple endpoint to check if the site is up and running.",
     response_model=ResponseBase,
 )
-def router_site_ping():
+def router_site_ping() -> ResponseBase:
     """
     Ping the site to check if it is up and running.
 
     Returns:
         str: A message indicating the site is running.
     """
-    from utils.conf.appmeta import BackendVersion
-    return ResponseBase(data=BackendVersion)
+    return ResponseBase()
 
 
 @site_router.get(
@@ -59,7 +39,7 @@ def router_site_captcha():
     Returns:
         str: A Base64 encoded string of the captcha image.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 
 @site_router.get(
@@ -68,38 +48,13 @@ def router_site_captcha():
     description='Get the configuration file.',
     response_model=ResponseBase,
 )
-async def router_site_config(session: SessionDep):
+async def router_site_config(session: SessionDep) -> SiteConfigResponse:
     """
     Get the configuration file.
 
     Returns:
         dict: The site configuration.
     """
-    return ResponseBase(
-        data={
-            "title": await _get_setting(session, "basic", "siteName"),
-            "loginCaptcha": await _get_setting_bool(session, "login", "login_captcha"),
-            "regCaptcha": await _get_setting_bool(session, "login", "reg_captcha"),
-            "forgetCaptcha": await _get_setting_bool(session, "login", "forget_captcha"),
-            "emailActive": await _get_setting_bool(session, "login", "email_active"),
-            "QQLogin": None,
-            "themes": await _get_setting_json(session, "basic", "themes"),
-            "defaultTheme": await _get_setting(session, "basic", "defaultTheme"),
-            "score_enabled": None,
-            "share_score_rate": None,
-            "home_view_method": await _get_setting(session, "view", "home_view_method"),
-            "share_view_method": await _get_setting(session, "view", "share_view_method"),
-            "authn": await _get_setting_bool(session, "authn", "authn_enabled"),
-            "user": {},
-            "captcha_type": None,
-            "captcha_ReCaptchaKey": await _get_setting(session, "captcha", "captcha_ReCaptchaKey"),
-            "captcha_CloudflareKey": await _get_setting(session, "captcha", "captcha_CloudflareKey"),
-            "captcha_tcaptcha_appid": None,
-            "site_notice": None,
-            "registerEnabled": await _get_setting_bool(session, "register", "register_enabled"),
-            "app_promotion": None,
-            "wopi_exts": None,
-            "app_feedback": None,
-            "app_forum": None,
-        }
+    return SiteConfigResponse(
+        title=await Setting.get(session, and_(Setting.type == SettingsType.BASIC, Setting.name == "siteName")),
     )

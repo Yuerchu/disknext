@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends
-from middleware.auth import AuthRequired
+
+from middleware.auth import auth_required
 from models import ResponseBase
+from utils import http_exceptions
 
 vas_router = APIRouter(
     prefix="/vas",
@@ -11,7 +13,7 @@ vas_router = APIRouter(
     path='/pack',
     summary='获取容量包及配额信息',
     description='Get information about storage packs and quotas.',
-    dependencies=[Depends(AuthRequired)]
+    dependencies=[Depends(auth_required)]
 )
 def router_vas_pack() -> ResponseBase:
     """
@@ -20,13 +22,13 @@ def router_vas_pack() -> ResponseBase:
     Returns:
         ResponseBase: A model containing the response data for storage packs and quotas.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @vas_router.get(
     path='/product',
     summary='获取商品信息，同时返回支付信息',
     description='Get product information along with payment details.',
-    dependencies=[Depends(AuthRequired)]
+    dependencies=[Depends(auth_required)]
 )
 def router_vas_product() -> ResponseBase:
     """
@@ -35,13 +37,13 @@ def router_vas_product() -> ResponseBase:
     Returns:
         ResponseBase: A model containing the response data for products and payment information.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @vas_router.post(
     path='/order',
     summary='新建支付订单',
     description='Create an order for a product.',
-    dependencies=[Depends(AuthRequired)]
+    dependencies=[Depends(auth_required)]
 )
 def router_vas_order() -> ResponseBase:
     """
@@ -50,13 +52,13 @@ def router_vas_order() -> ResponseBase:
     Returns:
         ResponseBase: A model containing the response data for the created order.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @vas_router.get(
     path='/order/{id}',
     summary='查询订单状态',
     description='Get information about a specific payment order by ID.',
-    dependencies=[Depends(AuthRequired)]
+    dependencies=[Depends(auth_required)]
 )
 def router_vas_order_get(id: str) -> ResponseBase:
     """
@@ -68,13 +70,13 @@ def router_vas_order_get(id: str) -> ResponseBase:
     Returns:
         ResponseBase: A model containing the response data for the specified order.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @vas_router.get(
     path='/redeem',
     summary='获取兑换码信息',
     description='Get information about a specific redemption code.',
-    dependencies=[Depends(AuthRequired)]
+    dependencies=[Depends(auth_required)]
 )
 def router_vas_redeem(code: str) -> ResponseBase:
     """
@@ -86,13 +88,13 @@ def router_vas_redeem(code: str) -> ResponseBase:
     Returns:
         ResponseBase: A model containing the response data for the specified redemption code.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @vas_router.post(
     path='/redeem',
     summary='执行兑换',
     description='Redeem a redemption code for a product or service.',
-    dependencies=[Depends(AuthRequired)]
+    dependencies=[Depends(auth_required)]
 )
 def router_vas_redeem_post() -> ResponseBase:
     """
@@ -101,4 +103,4 @@ def router_vas_redeem_post() -> ResponseBase:
     Returns:
         ResponseBase: A model containing the response data for the redeemed code.
     """
-    pass
+    http_exceptions.raise_not_implemented()

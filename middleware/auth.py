@@ -1,20 +1,14 @@
 from typing import Annotated
 
-from fastapi import Depends, HTTPException
-from jwt import InvalidTokenError
+from fastapi import Depends
 import jwt
 
 from models.user import User
 from utils.JWT import JWT
 from .dependencies import SessionDep
+from utils import http_exceptions
 
-credentials_exception = HTTPException(
-    status_code=401,
-    detail="Could not validate credentials",
-    headers={"WWW-Authenticate": "Bearer"},
-)
-
-async def AuthRequired(
+async def auth_required(
     session: SessionDep,
     token: Annotated[str, Depends(JWT.oauth2_scheme)],
 ) -> User:
@@ -26,28 +20,28 @@ async def AuthRequired(
         username = payload.get("sub")
 
         if username is None:
-            raise credentials_exception
+            http_exceptions.raise_unauthorized("账号或密码错误")
 
         # 从数据库获取用户信息
         user = await User.get(session, User.username == username)
         if not user:
-            raise credentials_exception
+            http_exceptions.raise_unauthorized("账号或密码错误")
 
         return user
 
-    except InvalidTokenError:
-        raise credentials_exception
+    except jwt.InvalidTokenError:
+        http_exceptions.raise_unauthorized("账号或密码错误")
 
-async def AdminRequired(
-    user: Annotated[User, Depends(AuthRequired)],
+async def admin_required(
+    user: Annotated[User, Depends(auth_required)],
 ) -> User:
     """
     验证是否为管理员。
 
     使用方法：
-    >>> APIRouter(dependencies=[Depends(AdminRequired)])
+    >>> APIRouter(dependencies=[Depends(admin_required)])
     """
     group = await user.awaitable_attrs.group
     if group.admin:
         return user
-    raise HTTPException(status_code=403, detail="Admin Required")
+    raise http_exceptions.raise_forbidden("Admin Required")

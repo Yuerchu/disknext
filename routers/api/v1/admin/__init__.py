@@ -8,7 +8,7 @@ from loguru import logger as l
 from sqlalchemy import func, and_
 from sqlmodel import Field
 
-from middleware.auth import AdminRequired
+from middleware.auth import admin_required
 from middleware.dependencies import SessionDep
 from models import (
     Policy, PolicyOptions, PolicyType, User, ResponseBase,
@@ -156,7 +156,7 @@ admin_vas_router = APIRouter(
     path='/summary',
     summary='获取站点概况',
     description='Get site summary information',
-    dependencies=[Depends(AdminRequired)],
+    dependencies=[Depends(admin_required)],
 )
 def router_admin_get_summary() -> ResponseBase:
     """
@@ -165,13 +165,13 @@ def router_admin_get_summary() -> ResponseBase:
     Returns:
         ResponseBase: 包含站点概况信息的响应模型。
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @admin_router.get(
     path='/news',
     summary='获取社区新闻',
     description='Get community news',
-    dependencies=[Depends(AdminRequired)],
+    dependencies=[Depends(admin_required)],
 )
 def router_admin_get_news() -> ResponseBase:
     """
@@ -180,13 +180,13 @@ def router_admin_get_news() -> ResponseBase:
     Returns:
         ResponseBase: 包含社区新闻信息的响应模型。
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @admin_router.patch(
     path='/settings',
     summary='更新设置',
     description='Update settings',
-    dependencies=[Depends(AdminRequired)],
+    dependencies=[Depends(admin_required)],
 )
 async def router_admin_update_settings(
     session: SessionDep,
@@ -225,7 +225,7 @@ async def router_admin_update_settings(
     path='/settings',
     summary='获取设置',
     description='Get settings',
-    dependencies=[Depends(AdminRequired)],
+    dependencies=[Depends(admin_required)],
 )
 async def router_admin_get_settings(session: SessionDep) -> ResponseBase:
     """
@@ -249,7 +249,7 @@ async def router_admin_get_settings(session: SessionDep) -> ResponseBase:
     path='/',
     summary='获取用户组列表',
     description='Get user group list',
-    dependencies=[Depends(AdminRequired)],
+    dependencies=[Depends(admin_required)],
 )
 async def router_admin_get_groups(
     session: SessionDep,
@@ -314,7 +314,7 @@ async def router_admin_get_groups(
     path='/{group_id}',
     summary='获取用户组信息',
     description='Get user group information by ID',
-    dependencies=[Depends(AdminRequired)],
+    dependencies=[Depends(admin_required)],
 )
 async def router_admin_get_group(
     session: SessionDep,
@@ -366,7 +366,7 @@ async def router_admin_get_group(
     path='/list/{group_id}',
     summary='获取用户组成员列表',
     description='Get user group member list by group ID',
-    dependencies=[Depends(AdminRequired)],
+    dependencies=[Depends(admin_required)],
 )
 async def router_admin_get_group_members(
     session: SessionDep,
@@ -410,7 +410,7 @@ async def router_admin_get_group_members(
     path='/',
     summary='创建用户组',
     description='Create a new user group',
-    dependencies=[Depends(AdminRequired)],
+    dependencies=[Depends(admin_required)],
 )
 async def router_admin_create_group(
     session: SessionDep,
@@ -469,7 +469,7 @@ async def router_admin_create_group(
     path='/{group_id}',
     summary='更新用户组信息',
     description='Update user group information by ID',
-    dependencies=[Depends(AdminRequired)],
+    dependencies=[Depends(admin_required)],
 )
 async def router_admin_update_group(
     session: SessionDep,
@@ -539,7 +539,7 @@ async def router_admin_update_group(
     path='/{group_id}',
     summary='删除用户组',
     description='Delete user group by ID',
-    dependencies=[Depends(AdminRequired)],
+    dependencies=[Depends(admin_required)],
 )
 async def router_admin_delete_group(
     session: SessionDep,
@@ -576,7 +576,7 @@ async def router_admin_delete_group(
     path='/info/{user_id}',
     summary='获取用户信息',
     description='Get user information by ID',
-    dependencies=[Depends(AdminRequired)],
+    dependencies=[Depends(admin_required)],
 )
 async def router_admin_get_user(session: SessionDep, user_id: int) -> ResponseBase:
     """
@@ -596,7 +596,7 @@ async def router_admin_get_user(session: SessionDep, user_id: int) -> ResponseBa
     path='/list',
     summary='获取用户列表',
     description='Get user list',
-    dependencies=[Depends(AdminRequired)],
+    dependencies=[Depends(admin_required)],
 )
 async def router_admin_get_users(
     session: SessionDep,
@@ -630,7 +630,7 @@ async def router_admin_get_users(
     path='/create',
     summary='创建用户',
     description='Create a new user',
-    dependencies=[Depends(AdminRequired)],
+    dependencies=[Depends(admin_required)],
 )
 async def router_admin_create_user(
     session: SessionDep,
@@ -655,7 +655,7 @@ async def router_admin_create_user(
     path='/{user_id}',
     summary='更新用户信息',
     description='Update user information by ID',
-    dependencies=[Depends(AdminRequired)],
+    dependencies=[Depends(admin_required)],
 )
 async def router_admin_update_user(
     session: SessionDep,
@@ -700,7 +700,7 @@ async def router_admin_update_user(
     path='/{user_id}',
     summary='删除用户',
     description='Delete user by ID',
-    dependencies=[Depends(AdminRequired)],
+    dependencies=[Depends(admin_required)],
 )
 async def router_admin_delete_user(
     session: SessionDep,
@@ -730,7 +730,7 @@ async def router_admin_delete_user(
     path='/calibrate/{user_id}',
     summary='校准用户存储容量',
     description='Calibrate the user storage.',
-    dependencies=[Depends(AdminRequired)]
+    dependencies=[Depends(admin_required)]
 )
 async def router_admin_calibrate_storage(
     session: SessionDep,
@@ -784,7 +784,7 @@ async def router_admin_calibrate_storage(
     path='/list',
     summary='获取文件列表',
     description='Get file list',
-    dependencies=[Depends(AdminRequired)],
+    dependencies=[Depends(admin_required)],
 )
 async def router_admin_get_file_list(
     session: SessionDep,
@@ -858,7 +858,7 @@ async def router_admin_get_file_list(
     path='/preview/{file_id}',
     summary='预览文件',
     description='Preview file by ID',
-    dependencies=[Depends(AdminRequired)],
+    dependencies=[Depends(admin_required)],
 )
 async def router_admin_preview_file(
     session: SessionDep,
@@ -904,13 +904,13 @@ async def router_admin_preview_file(
     path='/ban/{file_id}',
     summary='封禁/解禁文件',
     description='Ban the file, user can\'t open, copy, move, download or share this file if administrator ban.',
-    dependencies=[Depends(AdminRequired)],
+    dependencies=[Depends(admin_required)],
 )
 async def router_admin_ban_file(
     session: SessionDep,
     file_id: UUID,
     request: FileBanRequest,
-    admin: Annotated[User, Depends(AdminRequired)],
+    admin: Annotated[User, Depends(admin_required)],
 ) -> ResponseBase:
     """
     封禁或解禁文件。封禁后用户无法访问该文件。
@@ -949,7 +949,7 @@ async def router_admin_ban_file(
     path='/{file_id}',
     summary='删除文件',
     description='Delete file by ID',
-    dependencies=[Depends(AdminRequired)],
+    dependencies=[Depends(admin_required)],
 )
 async def router_admin_delete_file(
     session: SessionDep,
@@ -1002,7 +1002,7 @@ async def router_admin_delete_file(
     path='/test',
     summary='测试 Aria2 连接',
     description='Test Aria2 RPC connection',
-    dependencies=[Depends(AdminRequired)]
+    dependencies=[Depends(admin_required)]
 )
 async def router_admin_aira2_test(
     request: Aria2TestRequest,
@@ -1050,7 +1050,7 @@ async def router_admin_aira2_test(
     path='/list',
     summary='列出存储策略',
     description='List all storage policies',
-    dependencies=[Depends(AdminRequired)]
+    dependencies=[Depends(admin_required)]
 )
 async def router_policy_list(
     session: SessionDep,
@@ -1097,7 +1097,7 @@ async def router_policy_list(
     path='/test/path',
     summary='测试本地路径可用性',
     description='Test local path availability',
-    dependencies=[Depends(AdminRequired)]
+    dependencies=[Depends(admin_required)]
 )
 async def router_policy_test_path(
     request: PolicyTestPathRequest,
@@ -1139,7 +1139,7 @@ async def router_policy_test_path(
     path='/test/slave',
     summary='测试从机通信',
     description='Test slave node communication',
-    dependencies=[Depends(AdminRequired)]
+    dependencies=[Depends(admin_required)]
 )
 async def router_policy_test_slave(
     request: PolicyTestSlaveRequest,
@@ -1173,7 +1173,7 @@ async def router_policy_test_slave(
     path='/',
     summary='创建存储策略',
     description='创建新的存储策略。对于本地存储策略，会自动创建物理目录。',
-    dependencies=[Depends(AdminRequired)]
+    dependencies=[Depends(admin_required)]
 )
 async def router_policy_add_policy(
     session: SessionDep,
@@ -1243,7 +1243,7 @@ async def router_policy_add_policy(
     path='/cors',
     summary='创建跨域策略',
     description='Create CORS policy for S3 storage',
-    dependencies=[Depends(AdminRequired)]
+    dependencies=[Depends(admin_required)]
 )
 async def router_policy_add_cors() -> ResponseBase:
     """
@@ -1259,7 +1259,7 @@ async def router_policy_add_cors() -> ResponseBase:
     path='/scf',
     summary='创建COS回调函数',
     description='Create COS callback function',
-    dependencies=[Depends(AdminRequired)]
+    dependencies=[Depends(admin_required)]
 )
 async def router_policy_add_scf() -> ResponseBase:
     """
@@ -1275,7 +1275,7 @@ async def router_policy_add_scf() -> ResponseBase:
     path='/{policy_id}/oauth',
     summary='获取 OneDrive OAuth URL',
     description='Get OneDrive OAuth URL',
-    dependencies=[Depends(AdminRequired)]
+    dependencies=[Depends(admin_required)]
 )
 async def router_policy_onddrive_oauth(
     session: SessionDep,
@@ -1300,7 +1300,7 @@ async def router_policy_onddrive_oauth(
     path='/{policy_id}',
     summary='获取存储策略',
     description='Get storage policy by ID',
-    dependencies=[Depends(AdminRequired)]
+    dependencies=[Depends(admin_required)]
 )
 async def router_policy_get_policy(
     session: SessionDep,
@@ -1346,7 +1346,7 @@ async def router_policy_get_policy(
     path='/{policy_id}',
     summary='删除存储策略',
     description='Delete storage policy by ID',
-    dependencies=[Depends(AdminRequired)]
+    dependencies=[Depends(admin_required)]
 )
 async def router_policy_delete_policy(
     session: SessionDep,
@@ -1386,7 +1386,7 @@ async def router_policy_delete_policy(
     path='/list',
     summary='获取分享列表',
     description='Get share list',
-    dependencies=[Depends(AdminRequired)]
+    dependencies=[Depends(admin_required)]
 )
 async def router_admin_get_share_list(
     session: SessionDep,
@@ -1443,7 +1443,7 @@ async def router_admin_get_share_list(
     path='/{share_id}',
     summary='获取分享详情',
     description='Get share detail by ID',
-    dependencies=[Depends(AdminRequired)]
+    dependencies=[Depends(admin_required)]
 )
 async def router_admin_get_share(
     session: SessionDep,
@@ -1489,7 +1489,7 @@ async def router_admin_get_share(
     path='/{share_id}',
     summary='删除分享',
     description='Delete share by ID',
-    dependencies=[Depends(AdminRequired)]
+    dependencies=[Depends(admin_required)]
 )
 async def router_admin_delete_share(
     session: SessionDep,
@@ -1518,7 +1518,7 @@ async def router_admin_delete_share(
     path='/list',
     summary='获取任务列表',
     description='Get task list',
-    dependencies=[Depends(AdminRequired)]
+    dependencies=[Depends(admin_required)]
 )
 async def router_admin_get_task_list(
     session: SessionDep,
@@ -1580,7 +1580,7 @@ async def router_admin_get_task_list(
     path='/{task_id}',
     summary='获取任务详情',
     description='Get task detail by ID',
-    dependencies=[Depends(AdminRequired)]
+    dependencies=[Depends(admin_required)]
 )
 async def router_admin_get_task(
     session: SessionDep,
@@ -1618,7 +1618,7 @@ async def router_admin_get_task(
     path='/{task_id}',
     summary='删除任务',
     description='Delete task by ID',
-    dependencies=[Depends(AdminRequired)]
+    dependencies=[Depends(admin_required)]
 )
 async def router_admin_delete_task(
     session: SessionDep,
@@ -1647,7 +1647,7 @@ async def router_admin_delete_task(
     path='/list',
     summary='获取增值服务列表',
     description='Get VAS list (orders and storage packs)',
-    dependencies=[Depends(AdminRequired)]
+    dependencies=[Depends(admin_required)]
 )
 async def router_admin_get_vas_list(
     session: SessionDep,
@@ -1673,7 +1673,7 @@ async def router_admin_get_vas_list(
     path='/{vas_id}',
     summary='获取增值服务详情',
     description='Get VAS detail by ID',
-    dependencies=[Depends(AdminRequired)]
+    dependencies=[Depends(admin_required)]
 )
 async def router_admin_get_vas(
     session: SessionDep,
@@ -1694,7 +1694,7 @@ async def router_admin_get_vas(
     path='/{vas_id}',
     summary='删除增值服务',
     description='Delete VAS by ID',
-    dependencies=[Depends(AdminRequired)]
+    dependencies=[Depends(admin_required)]
 )
 async def router_admin_delete_vas(
     session: SessionDep,

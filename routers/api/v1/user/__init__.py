@@ -7,13 +7,14 @@ from sqlalchemy import and_
 from webauthn import generate_registration_options
 from webauthn.helpers import options_to_json_dict
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+from loguru import logger
 
 import models
 import service
-from middleware.auth import AuthRequired
+from middleware.auth import auth_required
 from middleware.dependencies import SessionDep
 from utils.JWT.JWT import SECRET_KEY
-from utils import Password
+from utils import Password, http_exceptions
 
 user_router = APIRouter(
     prefix="/user",
@@ -23,7 +24,7 @@ user_router = APIRouter(
 user_settings_router = APIRouter(
     prefix='/user/settings',
     tags=["user", "user_settings"],
-    dependencies=[Depends(AuthRequired)],
+    dependencies=[Depends(auth_required)],
 )
 
 @user_router.post(
@@ -42,11 +43,6 @@ async def router_user_session(
     当用户启用两步验证时，需要在表单中传入 otp 参数（通过 scopes 字段传递）。
 
     OAuth2 scopes 字段格式: "otp:123456" 或直接传入验证码
-
-    :raises HTTPException 401: 用户名或密码错误
-    :raises HTTPException 403: 用户账号被封禁或未完成注册
-    :raises HTTPException 428: 需要两步验证但未提供验证码
-    :raises HTTPException 400: 两步验证码无效
     """
     username = form_data.username
     password = form_data.password
@@ -62,7 +58,7 @@ async def router_user_session(
             otp_code = scope
             break
 
-    result = await service.user.Login(
+    result = await service.user.login(
         session,
         models.LoginRequest(
             username=username,
@@ -71,22 +67,7 @@ async def router_user_session(
         ),
     )
 
-    if isinstance(result, models.TokenResponse):
-        return result
-    elif result is None:
-        raise HTTPException(status_code=401, detail="Invalid username or password")
-    elif result is False:
-        raise HTTPException(status_code=403, detail="User account is banned or not fully registered")
-    elif result == "2fa_required":
-        raise HTTPException(
-            status_code=428,
-            detail="Two-factor authentication required",
-            headers={"X-2FA-Required": "true"},
-        )
-    elif result == "2fa_invalid":
-        raise HTTPException(status_code=400, detail="Invalid two-factor authentication code")
-    else:
-        raise HTTPException(status_code=500, detail="Internal server error during login")
+    return result
 
 @user_router.post(
     path='/session/refresh',
@@ -97,7 +78,7 @@ async def router_user_session_refresh(
     session: SessionDep,
     request, # RefreshTokenRequest
 ) -> models.TokenResponse:
-    ...
+    http_exceptions.raise_not_implemented()
 
 @user_router.post(
     path='/',
@@ -137,12 +118,14 @@ async def router_user_register(
         and_(models.Setting.type == models.SettingsType.REGISTER, models.Setting.name == "default_group")
     )
     if default_group_setting is None or not default_group_setting.value:
-        raise HTTPException(status_code=500, detail="默认用户组设置不存在")
+        logger.error("默认用户组不存在")
+        http_exceptions.raise_internal_error()
 
     default_group_id = UUID(default_group_setting.value)
     default_group = await models.Group.get(session, models.Group.id == default_group_id)
     if not default_group:
-        raise HTTPException(status_code=500, detail="默认用户组不存在")
+        logger.error("默认用户组不存在")
+        http_exceptions.raise_internal_error()
 
     # 3. 创建用户
     hashed_password = Password.hash(request.password)
@@ -158,7 +141,8 @@ async def router_user_register(
     # 4. 创建以用户名命名的根目录
     default_policy = await models.Policy.get(session, models.Policy.name == "本地存储")
     if not default_policy:
-        raise HTTPException(status_code=500, detail="默认存储策略不存在")
+        logger.error("默认存储策略不存在")
+        http_exceptions.raise_internal_error()
 
     await models.Object(
         name=new_user_username,
@@ -190,7 +174,7 @@ def router_user_email_code(
     Returns:
         dict: A dictionary containing information about the password reset email.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @user_router.get(
     path='/qq',
@@ -204,7 +188,7 @@ def router_user_qq() -> models.ResponseBase:
     Returns:
         dict: A dictionary containing QQ login initialization information.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @user_router.get(
     path='authn/{username}',
@@ -213,7 +197,7 @@ def router_user_qq() -> models.ResponseBase:
 )
 async def router_user_authn(username: str) -> models.ResponseBase:
     
-    pass
+    http_exceptions.raise_not_implemented()
 
 @user_router.post(
     path='authn/finish/{username}',
@@ -230,7 +214,7 @@ def router_user_authn_finish(username: str) -> models.ResponseBase:
     Returns:
         dict: A dictionary containing WebAuthn login information.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @user_router.get(
     path='/profile/{id}',
@@ -247,7 +231,7 @@ def router_user_profile(id: str) -> models.ResponseBase:
     Returns:
         dict: A dictionary containing user profile information.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @user_router.get(
     path='/avatar/{id}/{size}',
@@ -265,7 +249,7 @@ def router_user_avatar(id: str, size: int = 128) -> models.ResponseBase:
     Returns:
         str: A Base64 encoded string of the user avatar image.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 #####################
 # 需要登录的接口
@@ -275,12 +259,12 @@ def router_user_avatar(id: str, size: int = 128) -> models.ResponseBase:
     path='/me',
     summary='获取用户信息',
     description='Get user information.',
-    dependencies=[Depends(dependency=AuthRequired)],
+    dependencies=[Depends(dependency=auth_required)],
     response_model=models.ResponseBase,
 )
 async def router_user_me(
     session: SessionDep,
-    user: Annotated[models.User, Depends(AuthRequired)],
+    user: Annotated[models.User, Depends(auth_required)],
 ) -> models.ResponseBase:
     """
     获取用户信息.
@@ -319,11 +303,11 @@ async def router_user_me(
     path='/storage',
     summary='存储信息',
     description='Get user storage information.',
-    dependencies=[Depends(AuthRequired)],
+    dependencies=[Depends(auth_required)],
 )
 async def router_user_storage(
     session: SessionDep,
-    user: Annotated[models.user.User, Depends(AuthRequired)],
+    user: Annotated[models.user.User, Depends(auth_required)],
 ) -> models.ResponseBase:
     """
     获取用户存储空间信息。
@@ -353,11 +337,11 @@ async def router_user_storage(
     path='/authn/start',
     summary='WebAuthn登录初始化',
     description='Initialize WebAuthn login for a user.',
-    dependencies=[Depends(AuthRequired)],
+    dependencies=[Depends(auth_required)],
 )
 async def router_user_authn_start(
     session: SessionDep,
-    user: Annotated[models.user.User, Depends(AuthRequired)],
+    user: Annotated[models.user.User, Depends(auth_required)],
 ) -> models.ResponseBase:
     """
     Initialize WebAuthn login for a user.
@@ -395,7 +379,7 @@ async def router_user_authn_start(
     path='/authn/finish',
     summary='WebAuthn登录',
     description='Finish WebAuthn login for a user.',
-    dependencies=[Depends(AuthRequired)],
+    dependencies=[Depends(auth_required)],
 )
 def router_user_authn_finish() -> models.ResponseBase:
     """
@@ -404,7 +388,7 @@ def router_user_authn_finish() -> models.ResponseBase:
     Returns:
         dict: A dictionary containing WebAuthn login information.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @user_settings_router.get(
     path='/policies',
@@ -418,13 +402,13 @@ def router_user_settings_policies() -> models.ResponseBase:
     Returns:
         dict: A dictionary containing available storage policies for the user.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @user_settings_router.get(
     path='/nodes',
     summary='获取用户可选节点',
     description='Get user selectable nodes.',
-    dependencies=[Depends(AuthRequired)],
+    dependencies=[Depends(auth_required)],
 )
 def router_user_settings_nodes() -> models.ResponseBase:
     """
@@ -433,13 +417,13 @@ def router_user_settings_nodes() -> models.ResponseBase:
     Returns:
         dict: A dictionary containing available nodes for the user.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @user_settings_router.get(
     path='/tasks',
     summary='任务队列',
     description='Get user task queue.',
-    dependencies=[Depends(AuthRequired)],
+    dependencies=[Depends(auth_required)],
 )
 def router_user_settings_tasks() -> models.ResponseBase:
     """
@@ -448,13 +432,13 @@ def router_user_settings_tasks() -> models.ResponseBase:
     Returns:
         dict: A dictionary containing the user's task queue information.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @user_settings_router.get(
     path='/',
     summary='获取当前用户设定',
     description='Get current user settings.',
-    dependencies=[Depends(AuthRequired)],
+    dependencies=[Depends(auth_required)],
 )
 def router_user_settings() -> models.ResponseBase:
     """
@@ -469,7 +453,7 @@ def router_user_settings() -> models.ResponseBase:
     path='/avatar',
     summary='从文件上传头像',
     description='Upload user avatar from file.',
-    dependencies=[Depends(AuthRequired)],
+    dependencies=[Depends(auth_required)],
 )
 def router_user_settings_avatar() -> models.ResponseBase:
     """
@@ -478,13 +462,13 @@ def router_user_settings_avatar() -> models.ResponseBase:
     Returns:
         dict: A dictionary containing the result of the avatar upload.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @user_settings_router.put(
     path='/avatar',
     summary='设定为Gravatar头像',
     description='Set user avatar to Gravatar.',
-    dependencies=[Depends(AuthRequired)],
+    dependencies=[Depends(auth_required)],
 )
 def router_user_settings_avatar_gravatar() -> models.ResponseBase:
     """
@@ -493,13 +477,13 @@ def router_user_settings_avatar_gravatar() -> models.ResponseBase:
     Returns:
         dict: A dictionary containing the result of setting the Gravatar avatar.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @user_settings_router.patch(
     path='/{option}',
     summary='更新用户设定',
     description='Update user settings.',
-    dependencies=[Depends(AuthRequired)],
+    dependencies=[Depends(auth_required)],
 )
 def router_user_settings_patch(option: str) -> models.ResponseBase:
     """
@@ -511,16 +495,16 @@ def router_user_settings_patch(option: str) -> models.ResponseBase:
     Returns:
         dict: A dictionary containing the result of the settings update.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @user_settings_router.get(
     path='/2fa',
     summary='获取两步验证初始化信息',
     description='Get two-factor authentication initialization information.',
-    dependencies=[Depends(AuthRequired)],
+    dependencies=[Depends(auth_required)],
 )
 async def router_user_settings_2fa(
-    user: Annotated[models.user.User, Depends(AuthRequired)],
+    user: Annotated[models.user.User, Depends(auth_required)],
 ) -> models.ResponseBase:
     """
     Get two-factor authentication initialization information.
@@ -537,11 +521,11 @@ async def router_user_settings_2fa(
     path='/2fa',
     summary='启用两步验证',
     description='Enable two-factor authentication.',
-    dependencies=[Depends(AuthRequired)],
+    dependencies=[Depends(auth_required)],
 )
 async def router_user_settings_2fa_enable(
     session: SessionDep,
-    user: Annotated[models.user.User, Depends(AuthRequired)],
+    user: Annotated[models.user.User, Depends(auth_required)],
     setup_token: str,
     code: str,
 ) -> models.ResponseBase:

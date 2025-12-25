@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends
-from middleware.auth import AuthRequired
+
+from middleware.auth import auth_required
 from models import ResponseBase
+from utils import http_exceptions
 
 share_router = APIRouter(
     prefix='/share',
@@ -23,7 +25,7 @@ def router_share_get(info: str, id: str) -> ResponseBase:
     Returns:
         dict: A dictionary containing shared content information.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @share_router.put(
     path='/download/{id}',
@@ -40,7 +42,7 @@ def router_share_download(id: str) -> ResponseBase:
     Returns:
         dict: A dictionary containing download session information.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @share_router.get(
     path='preview/{id}',
@@ -57,7 +59,7 @@ def router_share_preview(id: str) -> ResponseBase:
     Returns:
         dict: A dictionary containing preview information.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @share_router.get(
     path='/doc/{id}',
@@ -74,7 +76,7 @@ def router_share_doc(id: str) -> ResponseBase:
     Returns:
         dict: A dictionary containing the document preview URL.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @share_router.get(
     path='/content/{id}',
@@ -91,7 +93,7 @@ def router_share_content(id: str) -> ResponseBase:
     Returns:
         str: The content of the text file.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @share_router.get(
     path='/list/{id}/{path:path}',
@@ -109,7 +111,7 @@ def router_share_list(id: str, path: str = '') -> ResponseBase:
     Returns:
         dict: A dictionary containing directory listing information.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @share_router.get(
     path='/search/{id}/{type}/{keywords}',
@@ -128,7 +130,7 @@ def router_share_search(id: str, type: str, keywords: str) -> ResponseBase:
     Returns:
         dict: A dictionary containing search results.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @share_router.post(
     path='/archive/{id}',
@@ -145,7 +147,7 @@ def router_share_archive(id: str) -> ResponseBase:
     Returns:
         dict: A dictionary containing archive download information.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @share_router.get(
     path='/readme/{id}',
@@ -162,7 +164,7 @@ def router_share_readme(id: str) -> ResponseBase:
     Returns:
         str: The content of the README file.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @share_router.get(
     path='/thumb/{id}/{file}',
@@ -180,7 +182,7 @@ def router_share_thumb(id: str, file: str) -> ResponseBase:
     Returns:
         str: A Base64 encoded string of the thumbnail image.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @share_router.post(
     path='/report/{id}',
@@ -197,7 +199,7 @@ def router_share_report(id: str) -> ResponseBase:
     Returns:
         dict: A dictionary containing report submission information.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @share_router.get(
     path='/search',
@@ -215,7 +217,7 @@ def router_share_search_public(keywords: str, type: str = 'all') -> ResponseBase
     Returns:
         dict: A dictionary containing search results for public shares.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 #####################
 # 需要登录的接口
@@ -225,7 +227,7 @@ def router_share_search_public(keywords: str, type: str = 'all') -> ResponseBase
     path='/',
     summary='创建新分享',
     description='Create a new share endpoint.',
-    dependencies=[Depends(AuthRequired)]
+    dependencies=[Depends(auth_required)]
 )
 def router_share_create() -> ResponseBase:
     """
@@ -234,13 +236,13 @@ def router_share_create() -> ResponseBase:
     Returns:
         ResponseBase: A model containing the response data for the new share creation.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @share_router.get(
     path='/',
     summary='列出我的分享',
     description='Get a list of shares.',
-    dependencies=[Depends(AuthRequired)]
+    dependencies=[Depends(auth_required)]
 )
 def router_share_list() -> ResponseBase:
     """
@@ -249,13 +251,13 @@ def router_share_list() -> ResponseBase:
     Returns:
         ResponseBase: A model containing the response data for the list of shares.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @share_router.post(
     path='/save/{id}',
     summary='转存他人分享',
     description='Save another user\'s share by ID.',
-    dependencies=[Depends(AuthRequired)]
+    dependencies=[Depends(auth_required)]
 )
 def router_share_save(id: str) -> ResponseBase:
     """
@@ -267,13 +269,13 @@ def router_share_save(id: str) -> ResponseBase:
     Returns:
         ResponseBase: A model containing the response data for the saved share.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @share_router.patch(
     path='/{id}',
     summary='更新分享信息',
     description='Update share information by ID.',
-    dependencies=[Depends(AuthRequired)]
+    dependencies=[Depends(auth_required)]
 )
 def router_share_update(id: str) -> ResponseBase:
     """
@@ -285,13 +287,13 @@ def router_share_update(id: str) -> ResponseBase:
     Returns:
         ResponseBase: A model containing the response data for the updated share.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @share_router.delete(
     path='/{id}',
     summary='删除分享',
     description='Delete a share by ID.',
-    dependencies=[Depends(AuthRequired)]
+    dependencies=[Depends(auth_required)]
 )
 def router_share_delete(id: str) -> ResponseBase:
     """
@@ -303,4 +305,4 @@ def router_share_delete(id: str) -> ResponseBase:
     Returns:
         ResponseBase: A model containing the response data for the deleted share.
     """
-    pass
+    http_exceptions.raise_not_implemented()

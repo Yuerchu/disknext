@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger as l
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from middleware.auth import AuthRequired
+from middleware.auth import auth_required
 from middleware.dependencies import SessionDep
 from models import (
     Object,
@@ -171,7 +171,7 @@ async def _copy_object_recursive(
 )
 async def router_object_delete(
     session: SessionDep,
-    user: Annotated[User, Depends(AuthRequired)],
+    user: Annotated[User, Depends(auth_required)],
     request: ObjectDeleteRequest,
 ) -> ResponseBase:
     """
@@ -224,7 +224,7 @@ async def router_object_delete(
 )
 async def router_object_move(
     session: SessionDep,
-    user: Annotated[User, Depends(AuthRequired)],
+    user: Annotated[User, Depends(auth_required)],
     request: ObjectMoveRequest,
 ) -> ResponseBase:
     """
@@ -302,7 +302,7 @@ async def router_object_move(
 )
 async def router_object_copy(
     session: SessionDep,
-    user: Annotated[User, Depends(AuthRequired)],
+    user: Annotated[User, Depends(auth_required)],
     request: ObjectCopyRequest,
 ) -> ResponseBase:
     """
@@ -394,7 +394,7 @@ async def router_object_copy(
 )
 async def router_object_rename(
     session: SessionDep,
-    user: Annotated[User, Depends(AuthRequired)],
+    user: Annotated[User, Depends(auth_required)],
     request: ObjectRenameRequest,
 ) -> ResponseBase:
     """
@@ -465,7 +465,7 @@ async def router_object_rename(
 )
 async def router_object_property(
     session: SessionDep,
-    user: Annotated[User, Depends(AuthRequired)],
+    user: Annotated[User, Depends(auth_required)],
     id: UUID,
 ) -> ObjectPropertyResponse:
     """
@@ -501,7 +501,7 @@ async def router_object_property(
 )
 async def router_object_property_detail(
     session: SessionDep,
-    user: Annotated[User, Depends(AuthRequired)],
+    user: Annotated[User, Depends(auth_required)],
     id: UUID,
 ) -> ObjectPropertyDetailResponse:
     """

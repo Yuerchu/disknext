@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends
 from fastapi.responses import FileResponse
-from middleware.auth import AuthRequired
+
+from middleware.auth import auth_required
 from models import ResponseBase
+from utils import http_exceptions
 
 slave_router = APIRouter(
     prefix="/slave",
@@ -32,7 +34,7 @@ def router_slave_ping() -> ResponseBase:
     path='/post',
     summary='上传',
     description='Upload data to the server.',
-    dependencies=[Depends(AuthRequired)],
+    dependencies=[Depends(auth_required)],
 )
 def router_slave_post(data: str) -> ResponseBase:
     """
@@ -44,7 +46,7 @@ def router_slave_post(data: str) -> ResponseBase:
     Returns:
         ResponseBase: A response model indicating success.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @slave_router.get(
     path='/get/{speed}/{path}/{name}',
@@ -62,13 +64,13 @@ def router_slave_download(speed: int, path: str, name: str) -> ResponseBase:
     Returns:
         ResponseBase: A response model containing download information.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @slave_router.get(
     path='/download/{sign}',
     summary='根据签名下载文件',
     description='Download a file based on its signature.',
-    dependencies=[Depends(AuthRequired)],
+    dependencies=[Depends(auth_required)],
 )
 def router_slave_download_by_sign(sign: str) -> FileResponse:
     """
@@ -80,13 +82,13 @@ def router_slave_download_by_sign(sign: str) -> FileResponse:
     Returns:
         FileResponse: A response containing the file to be downloaded.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @slave_router.get(
     path='/source/{speed}/{path}/{name}',
     summary='获取文件外链',
     description='Get the external link for a file based on its signature.',
-    dependencies=[Depends(AuthRequired)],
+    dependencies=[Depends(auth_required)],
 )
 def router_slave_source(speed: int, path: str, name: str) -> ResponseBase:
     """
@@ -100,13 +102,13 @@ def router_slave_source(speed: int, path: str, name: str) -> ResponseBase:
     Returns:
         ResponseBase: A response model containing the external link for the file.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @slave_router.get(
     path='/source/{sign}',
     summary='根据签名获取文件',
     description='Get a file based on its signature.',
-    dependencies=[Depends(AuthRequired)],
+    dependencies=[Depends(auth_required)],
 )
 def router_slave_source_by_sign(sign: str) -> FileResponse:
     """
@@ -118,13 +120,13 @@ def router_slave_source_by_sign(sign: str) -> FileResponse:
     Returns:
         FileResponse: A response containing the file to be retrieved.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @slave_router.get(
     path='/thumb/{id}',
     summary='获取缩略图',
     description='Get a thumbnail image based on its ID.',
-    dependencies=[Depends(AuthRequired)],
+    dependencies=[Depends(auth_required)],
 )
 def router_slave_thumb(id: str) -> ResponseBase:
     """
@@ -136,13 +138,13 @@ def router_slave_thumb(id: str) -> ResponseBase:
     Returns:
         ResponseBase: A response model containing the Base64 encoded thumbnail image.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @slave_router.delete(
     path='/delete',
     summary='删除文件',
     description='Delete a file from the server.',
-    dependencies=[Depends(AuthRequired)],
+    dependencies=[Depends(auth_required)],
 )
 def router_slave_delete(path: str) -> ResponseBase:
     """
@@ -154,25 +156,25 @@ def router_slave_delete(path: str) -> ResponseBase:
     Returns:
         ResponseBase: A response model indicating success or failure of the deletion.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @slave_aria2_router.post(
     path='/test',
     summary='测试从机连接Aria2服务',
     description='Test the connection to the Aria2 service from the slave.',
-    dependencies=[Depends(AuthRequired)],
+    dependencies=[Depends(auth_required)],
 )
 def router_slave_aria2_test() -> ResponseBase:
     """
     Test the connection to the Aria2 service from the slave.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @slave_aria2_router.get(
     path='/get/{gid}',
     summary='获取Aria2任务信息',
     description='Get information about an Aria2 task by its GID.',
-    dependencies=[Depends(AuthRequired)],
+    dependencies=[Depends(auth_required)],
 )
 def router_slave_aria2_get(gid: str = None) -> ResponseBase:
     """
@@ -184,13 +186,13 @@ def router_slave_aria2_get(gid: str = None) -> ResponseBase:
     Returns:
         ResponseBase: A response model containing the task information.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @slave_aria2_router.post(
     path='/add',
     summary='添加Aria2任务',
     description='Add a new Aria2 task.',
-    dependencies=[Depends(AuthRequired)],
+    dependencies=[Depends(auth_required)],
 )
 def router_slave_aria2_add(gid: str, url: str, options: dict = None) -> ResponseBase:
     """
@@ -204,13 +206,13 @@ def router_slave_aria2_add(gid: str, url: str, options: dict = None) -> Response
     Returns:
         ResponseBase: A response model indicating success or failure of the task addition.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @slave_aria2_router.delete(
     path='/remove/{gid}',
     summary='删除Aria2任务',
     description='Remove an Aria2 task by its GID.',
-    dependencies=[Depends(AuthRequired)],
+    dependencies=[Depends(auth_required)],
 )
 def router_slave_aria2_remove(gid: str) -> ResponseBase:
     """
@@ -222,4 +224,4 @@ def router_slave_aria2_remove(gid: str) -> ResponseBase:
     Returns:
         ResponseBase: A response model indicating success or failure of the task removal.
     """
-    pass
+    http_exceptions.raise_not_implemented()

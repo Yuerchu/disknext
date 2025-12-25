@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends
-from middleware.auth import AuthRequired
+
+from middleware.auth import auth_required
 from models import ResponseBase
+from utils import http_exceptions
 
 download_router = APIRouter(
     prefix="/download",
@@ -18,7 +20,7 @@ download_router.include_router(aria2_router)
     path='/url',
     summary='创建URL下载任务',
     description='Create a URL download task endpoint.',
-    dependencies=[Depends(AuthRequired)]
+    dependencies=[Depends(auth_required)]
 )
 def router_aria2_url() -> ResponseBase:
     """
@@ -27,13 +29,13 @@ def router_aria2_url() -> ResponseBase:
     Returns:
         ResponseBase: A model containing the response data for the URL download task.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @aria2_router.post(
     path='/torrent/{id}',
     summary='创建种子下载任务',
     description='Create a torrent download task endpoint.',
-    dependencies=[Depends(AuthRequired)]
+    dependencies=[Depends(auth_required)]
 )
 def router_aria2_torrent(id: str) -> ResponseBase:
     """
@@ -45,13 +47,13 @@ def router_aria2_torrent(id: str) -> ResponseBase:
     Returns:
         ResponseBase: A model containing the response data for the torrent download task.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @aria2_router.put(
     path='/select/{gid}',
     summary='重新选择要下载的文件',
     description='Re-select files to download endpoint.',
-    dependencies=[Depends(AuthRequired)]
+    dependencies=[Depends(auth_required)]
 )
 def router_aria2_select(gid: str) -> ResponseBase:
     """
@@ -63,13 +65,13 @@ def router_aria2_select(gid: str) -> ResponseBase:
     Returns:
         ResponseBase: A model containing the response data for the re-selection of files.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @aria2_router.delete(
     path='/task/{gid}',
     summary='取消或删除下载任务',
     description='Delete a download task endpoint.',
-    dependencies=[Depends(AuthRequired)]
+    dependencies=[Depends(auth_required)]
 )
 def router_aria2_delete(gid: str) -> ResponseBase:
     """
@@ -81,13 +83,13 @@ def router_aria2_delete(gid: str) -> ResponseBase:
     Returns:
         ResponseBase: A model containing the response data for the deletion of the download task.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @aria2_router.get(
     '/downloading',
     summary='获取正在下载中的任务',
     description='Get currently downloading tasks endpoint.',
-    dependencies=[Depends(AuthRequired)]
+    dependencies=[Depends(auth_required)]
 )
 def router_aria2_downloading() -> ResponseBase:
     """
@@ -96,13 +98,13 @@ def router_aria2_downloading() -> ResponseBase:
     Returns:
         ResponseBase: A model containing the response data for currently downloading tasks.
     """
-    pass
+    http_exceptions.raise_not_implemented()
 
 @aria2_router.get(
     path='/finished',
     summary='获取已完成的任务',
     description='Get finished tasks endpoint.',
-    dependencies=[Depends(AuthRequired)]
+    dependencies=[Depends(auth_required)]
 )
 def router_aria2_finished() -> ResponseBase:
     """
@@ -111,4 +113,4 @@ def router_aria2_finished() -> ResponseBase:
     Returns:
         ResponseBase: A model containing the response data for finished tasks.
     """
-    pass
+    http_exceptions.raise_not_implemented()
