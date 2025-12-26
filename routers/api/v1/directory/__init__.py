@@ -32,7 +32,8 @@ async def router_directory_get(
     """
     获取目录内容
 
-    路径必须以用户名开头，如 /api/directory/admin 或 /api/directory/admin/docs
+    路径必须以用户名或 `.crash` 开头，如 /api/directory/admin 或 /api/directory/admin/docs
+    `.crash` 代表回收站，也就意味着用户名禁止为 `.crash`
 
     :param session: 数据库会话
     :param user: 当前登录用户

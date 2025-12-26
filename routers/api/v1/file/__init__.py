@@ -33,6 +33,7 @@ from models import (
     User,
 )
 from service.storage import LocalStorageService
+from service.redis.token_store import TokenStore
 from utils.JWT import create_download_token, DOWNLOAD_TOKEN_TTL
 from utils import http_exceptions
 
@@ -370,7 +371,7 @@ async def create_download_token_endpoint(
 @_download_router.get(
     path='/{token}',
     summary='下载文件',
-    description='使用下载令牌下载文件。',
+    description='使用下载令牌下载文件（一次性令牌，仅可使用一次）。',
 )
 async def download_file(
     session: SessionDep,
@@ -380,13 +381,19 @@ async def download_file(
     下载文件端点
 
     验证 JWT 令牌后返回文件内容。
+    令牌为一次性使用，下载后即失效。
     """
     # 验证令牌
     result = verify_download_token(token)
     if not result:
         raise HTTPException(status_code=401, detail="下载令牌无效或已过期")
 
-    file_id, owner_id = result
+    jti, file_id, owner_id = result
+
+    # 检查并标记令牌已使用（原子操作）
+    is_first_use = await TokenStore.mark_used(jti, DOWNLOAD_TOKEN_TTL)
+    if not is_first_use:
+        raise HTTPException(status_code=404)
 
     # 获取文件对象
     file_obj = await Object.get(session, Object.id == file_id)

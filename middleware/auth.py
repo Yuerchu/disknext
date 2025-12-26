@@ -50,17 +50,20 @@ async def admin_required(
     raise http_exceptions.raise_forbidden("Admin Required")
 
 
-def verify_download_token(token: str) -> tuple[UUID, UUID] | None:
+def verify_download_token(token: str) -> tuple[str, UUID, UUID] | None:
     """
-    验证下载令牌并返回 (file_id, owner_id)。
+    验证下载令牌并返回 (jti, file_id, owner_id)。
 
     :param token: JWT 令牌字符串
-    :return: (file_id, owner_id) 或 None（验证失败）
+    :return: (jti, file_id, owner_id) 或 None（验证失败）
     """
     try:
         payload = jwt.decode(token, JWT.SECRET_KEY, algorithms=["HS256"])
         if payload.get("type") != "download":
             return None
-        return UUID(payload["file_id"]), UUID(payload["owner_id"])
+        jti = payload.get("jti")
+        if not jti:
+            return None
+        return jti, UUID(payload["file_id"]), UUID(payload["owner_id"])
     except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
         return None

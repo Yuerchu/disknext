@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import jwt
 from fastapi.security import OAuth2PasswordBearer
@@ -108,13 +108,14 @@ DOWNLOAD_TOKEN_TTL = timedelta(hours=1)
 
 def create_download_token(file_id: UUID, owner_id: UUID) -> str:
     """
-    创建文件下载令牌。
+    创建一次性文件下载令牌。
 
     :param file_id: 文件 ID
     :param owner_id: 文件所有者 ID
     :return: JWT 令牌字符串
     """
     payload = {
+        "jti": str(uuid4()),
         "file_id": str(file_id),
         "owner_id": str(owner_id),
         "exp": datetime.now(timezone.utc) + DOWNLOAD_TOKEN_TTL,

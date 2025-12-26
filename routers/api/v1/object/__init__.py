@@ -193,7 +193,10 @@ async def router_object_delete(
     user_id = user.id
     deleted_count = 0
 
-    for obj_id in request.ids:
+    # 处理单个 UUID 或 UUID 列表
+    ids = request.ids if isinstance(request.ids, list) else [request.ids]
+
+    for obj_id in ids:
         obj = await Object.get(session, Object.id == obj_id)
         if not obj or obj.owner_id != user_id:
             continue
@@ -212,7 +215,7 @@ async def router_object_delete(
     return ResponseBase(
         data={
             "deleted": deleted_count,
-            "total": len(request.ids),
+            "total": len(ids),
         }
     )
 
@@ -248,7 +251,10 @@ async def router_object_move(
 
     moved_count = 0
 
-    for src_id in request.src_ids:
+    # 处理单个 UUID 或 UUID 列表
+    src_ids = request.src_ids if isinstance(request.src_ids, list) else [request.src_ids]
+
+    for src_id in src_ids:
         src = await Object.get(session, Object.id == src_id)
         if not src or src.owner_id != user_id:
             continue
@@ -290,7 +296,7 @@ async def router_object_move(
     return ResponseBase(
         data={
             "moved": moved_count,
-            "total": len(request.src_ids),
+            "total": len(src_ids),
         }
     )
 

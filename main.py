@@ -9,12 +9,17 @@ from models.database import init_db
 from models.migration import migration
 from utils import JWT
 from routers import router
+from service.redis import RedisManager
 from loguru import logger as l
 
 # 添加初始化数据库启动项
 lifespan.add_startup(init_db)
 lifespan.add_startup(migration)
 lifespan.add_startup(JWT.load_secret_key)
+lifespan.add_startup(RedisManager.connect)
+
+# 添加关闭项
+lifespan.add_shutdown(RedisManager.disconnect)
 
 # 创建应用实例并设置元数据
 app = FastAPI(
