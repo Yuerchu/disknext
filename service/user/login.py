@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 from loguru import logger
 
 from middleware.dependencies import SessionDep
@@ -57,12 +59,18 @@ async def login(
             http_exceptions.raise_unauthorized("Invalid 2FA code")
 
     # 创建令牌
-    access_token, access_expire = create_access_token(data={'sub': current_user.username})
-    refresh_token, refresh_expire = create_refresh_token(data={'sub': current_user.username})
+    access_token = create_access_token(data={
+        'sub': str(current_user.id), 
+        'jti': str(uuid4())
+    })
+    refresh_token = create_refresh_token(data={
+        'sub': str(current_user.id),
+        'jti': str(uuid4())
+    })
 
     return TokenResponse(
-        access_token=access_token,
-        access_expires=access_expire,
-        refresh_token=refresh_token,
-        refresh_expires=refresh_expire,
+        access_token=access_token.access_token,
+        access_expires=access_token.access_expires,
+        refresh_token=refresh_token.refresh_token,
+        refresh_expires=refresh_token.refresh_expires,
     )

@@ -4,6 +4,7 @@ from typing import Literal, TYPE_CHECKING
 from uuid import UUID
 
 from sqlmodel import Field, Relationship
+from pydantic import BaseModel
 
 from .base import SQLModelBase
 from .model_base import ResponseBase
@@ -110,8 +111,7 @@ class WebAuthnInfo(SQLModelBase):
     transports: list[str]
     """支持的传输方式"""
 
-
-class TokenResponse(ResponseBase):
+class AccessTokenBase(BaseModel):
     """访问令牌响应 DTO"""
 
     access_expires: datetime
@@ -120,11 +120,18 @@ class TokenResponse(ResponseBase):
     access_token: str
     """访问令牌"""
 
+class RefreshTokenBase(BaseModel):
+    """刷新令牌响应DTO"""
+
     refresh_expires: datetime
     """刷新令牌过期时间"""
 
     refresh_token: str
     """刷新令牌"""
+
+
+class TokenResponse(ResponseBase, AccessTokenBase, RefreshTokenBase):
+    """令牌响应 DTO"""
 
 
 class UserResponse(ResponseBase):
