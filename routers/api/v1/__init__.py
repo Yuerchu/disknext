@@ -1,5 +1,7 @@
 from fastapi import APIRouter
 
+from utils.conf import appmeta
+
 from .admin import admin_router
 from .admin import admin_aria2_router
 from .admin import admin_file_router
@@ -26,17 +28,19 @@ router = APIRouter(prefix="/v1")
 
 # [TODO] 如果是主机，导入下面的路由
 
-router.include_router(admin_router)
-router.include_router(callback_router)
-router.include_router(directory_router)
-router.include_router(download_router)
-router.include_router(file_router)
-router.include_router(object_router)
-router.include_router(share_router)
-router.include_router(site_router)
-router.include_router(user_router)
-router.include_router(vas_router)
-router.include_router(webdav_router)
-
-# [TODO] 如果是从机，导入下面的路由
-router.include_router(slave_router)
+if appmeta.mode == "master":
+    router.include_router(admin_router)
+    router.include_router(callback_router)
+    router.include_router(directory_router)
+    router.include_router(download_router)
+    router.include_router(file_router)
+    router.include_router(object_router)
+    router.include_router(share_router)
+    router.include_router(site_router)
+    router.include_router(user_router)
+    router.include_router(vas_router)
+    router.include_router(webdav_router)
+elif appmeta.mode == "slave":
+    router.include_router(slave_router)
+else:
+    raise ValueError("Config `mode` must in ['master', 'slave']")

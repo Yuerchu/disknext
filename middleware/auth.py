@@ -1,4 +1,5 @@
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import Depends
 import jwt
@@ -17,13 +18,15 @@ async def auth_required(
     """
     try:
         payload = jwt.decode(token, JWT.SECRET_KEY, algorithms=["HS256"])
-        username = payload.get("sub")
+        user_id = payload.get("sub")
 
-        if username is None:
+        if user_id is None:
             http_exceptions.raise_unauthorized("账号或密码错误")
 
+        user_id = UUID(user_id)
+
         # 从数据库获取用户信息
-        user = await User.get(session, User.username == username)
+        user = await User.get(session, User.id == user_id)
         if not user:
             http_exceptions.raise_unauthorized("账号或密码错误")
 

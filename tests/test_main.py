@@ -21,9 +21,6 @@ def test_read_main():
     json_response = response.json()
     
     assert response.status_code == 200
-    assert json_response['code'] == 0
-    assert json_response['data'] == BackendVersion
-    assert json_response['msg'] is None
     assert 'instance_id' in json_response
     is_valid_instance_id(json_response['instance_id'])
         

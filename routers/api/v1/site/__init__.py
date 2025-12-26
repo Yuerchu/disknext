@@ -41,7 +41,6 @@ def router_site_captcha():
     """
     http_exceptions.raise_not_implemented()
 
-
 @site_router.get(
     path='/config',
     summary='站点全局配置',

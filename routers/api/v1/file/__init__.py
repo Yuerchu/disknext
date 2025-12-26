@@ -362,7 +362,7 @@ async def download_archive(session_id: str) -> ResponseBase:
 _download_router = APIRouter(prefix="/download")
 
 
-@_download_router.put(
+@_download_router.post(
     path='/{file_id}',
     summary='创建下载令牌',
     description='为指定文件创建下载令牌（JWT），有效期1小时。',

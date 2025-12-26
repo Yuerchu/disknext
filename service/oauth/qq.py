@@ -3,4 +3,5 @@ import aiohttp
 
 async def get_access_token(
     code: str
-)
+):
+    ...

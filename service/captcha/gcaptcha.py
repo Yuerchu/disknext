@@ -6,11 +6,6 @@ async def verify_captcha(request: CaptchaRequestBase) -> bool:
     """
     验证 Google reCAPTCHA v2/v3 的 token 是否有效。
     
-    :param token: 用户提交的 reCAPTCHA token
-    :type token: str
-    :param secret_key: Google reCAPTCHA 的密钥
-    :type secret_key: str
-    
     :return: 如果验证成功返回 True，否则返回 False
     :rtype: bool
     """

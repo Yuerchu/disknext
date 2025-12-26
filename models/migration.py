@@ -275,6 +275,7 @@ async def init_default_user() -> None:
                 policy_id=default_policy_id,
             ).save(session)
 
+            log.warning('请注意，账号密码仅显示一次，请妥善保管')
             log.info(f'初始管理员账号: admin')
             log.info(f'初始管理员密码: {admin_password}')
 

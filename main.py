@@ -22,16 +22,16 @@ app = FastAPI(
     summary=appmeta.summary,
     description=appmeta.description,
     version=appmeta.BackendVersion,
-    openapi_tags=appmeta.tags_meta,
     license_info=appmeta.license_info,
     lifespan=lifespan.lifespan,
     debug=appmeta.debug,
+    openapi_url="/openapi.json" if appmeta.debug else None,
 )
 
 @app.exception_handler(Exception)
 async def handle_unexpected_exceptions(request: Request, exc: Exception) -> NoReturn:
     """
-    捕获所有未经处理的fastapi异常,防止敏感信息泄露。
+    捕获所有未经处理的 FastAPI 异常,防止敏感信息泄露。
     """
     l.exception(exc)
     l.error(f"An unhandled exception occurred for request: {request.method} {request.url.path}")
