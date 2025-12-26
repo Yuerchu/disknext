@@ -34,7 +34,7 @@ class Tag(SQLModelBase, TableBaseMixin):
     color: str | None = Field(default=None, max_length=255)
     """标签颜色"""
 
-    type: TagType = Field(default=TagType.MANUAL, sa_column_kwargs={"server_default": "'manual'"})
+    type: TagType = Field(default=TagType.MANUAL)
     """标签类型"""
     expression: str | None = Field(default=None, description="自动标签的匹配表达式")
     

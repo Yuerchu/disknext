@@ -70,13 +70,13 @@ class Task(SQLModelBase, TableBaseMixin):
         Index("ix_task_user_status", "user_id", "status"),
     )
 
-    status: TaskStatus = Field(default=TaskStatus.QUEUED, sa_column_kwargs={"server_default": "'queued'"})
+    status: TaskStatus = Field(default=TaskStatus.QUEUED)
     """任务状态"""
 
-    type: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
+    type: int = Field(default=0)
     """任务类型 [TODO] 待定义枚举"""
 
-    progress: int = Field(default=0, sa_column_kwargs={"server_default": "0"}, ge=0, le=100)
+    progress: int = Field(default=0, ge=0, le=100)
     """任务进度（0-100）"""
 
     error: str | None = Field(default=None)

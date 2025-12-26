@@ -14,6 +14,8 @@ if TYPE_CHECKING:
 
 class DownloadStatus(StrEnum):
     """下载状态枚举"""
+    PREPARING = "preparing"
+    """准备中"""
     RUNNING = "running"
     """进行中"""
     COMPLETED = "completed"
@@ -119,25 +121,25 @@ class Download(DownloadBase, UUIDTableBaseMixin):
         Index("ix_download_user_status", "user_id", "status"),
     )
 
-    status: DownloadStatus = Field(default=DownloadStatus.RUNNING, sa_column_kwargs={"server_default": "'running'"}, index=True)
+    status: DownloadStatus = Field(default=DownloadStatus.PREPARING, index=True)
     """下载状态"""
 
-    type: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
+    type: int = Field(default=0)
     """任务类型 [TODO] 待定义枚举"""
 
     source: str
     """来源URL或标识"""
 
-    total_size: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
+    total_size: int = Field(default=0)
     """总大小（字节）"""
 
-    downloaded_size: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
+    downloaded_size: int = Field(default=0)
     """已下载大小（字节）"""
 
     g_id: str | None = Field(default=None, index=True)
     """Aria2 GID"""
 
-    speed: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
+    speed: int = Field(default=0)
     """下载速度（bytes/s）"""
 
     parent: str | None = Field(default=None, max_length=255)

@@ -51,7 +51,7 @@ class Order(SQLModelBase, TableBaseMixin):
     price: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
     """订单价格（分）"""
 
-    status: OrderStatus = Field(default=OrderStatus.PENDING, sa_column_kwargs={"server_default": "'pending'"})
+    status: OrderStatus = Field(default=OrderStatus.PENDING)
     """订单状态"""
     
     # 外键

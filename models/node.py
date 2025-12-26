@@ -68,7 +68,7 @@ class Node(SQLModelBase, TableBaseMixin):
         Index("ix_node_status", "status"),
     )
 
-    status: NodeStatus = Field(default=NodeStatus.ONLINE, sa_column_kwargs={"server_default": "'online'"})
+    status: NodeStatus = Field(default=NodeStatus.ONLINE)
     """节点状态"""
 
     name: str = Field(max_length=255, unique=True)
@@ -86,10 +86,10 @@ class Node(SQLModelBase, TableBaseMixin):
     master_key: str | None = Field(default=None, max_length=255)
     """主机通讯密钥"""
 
-    aria2_enabled: bool = Field(default=False, sa_column_kwargs={"server_default": text("false")})
+    aria2_enabled: bool = False
     """是否启用Aria2"""
 
-    rank: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
+    rank: int = 0
     """节点排序权重"""
 
     # 关系

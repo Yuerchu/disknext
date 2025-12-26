@@ -313,13 +313,13 @@ class User(UserBase, UUIDTableBaseMixin):
     """当前用户组过期时间"""
 
     # Option 相关字段
-    theme: ThemeType = Field(default=ThemeType.SYSTEM, sa_column_kwargs={"server_default": "system"})
-    """主题类型: light/dark/system"""
+    # theme: ThemeType = Field(default=ThemeType.SYSTEM)
+    # """主题类型: light/dark/system"""
 
-    language: str = Field(default="zh-CN", max_length=5, sa_column_kwargs={"server_default": "zh-CN"})
+    language: str = Field(default="zh-CN", max_length=5)
     """语言偏好"""
 
-    timezone: int = Field(default=8, ge=-12, le=12, sa_column_kwargs={"server_default": "8"})
+    timezone: int = Field(default=8, ge=-12, le=12)
     """时区，UTC 偏移小时数"""
 
     # 外键

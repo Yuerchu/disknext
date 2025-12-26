@@ -12,7 +12,7 @@ engine: AsyncEngine = create_async_engine(
     echo=appmeta.debug,
     connect_args={
         "check_same_thread": False
-    } if ASYNC_DATABASE_URL.startswith("sqlite") else None,
+    } if ASYNC_DATABASE_URL.startswith("sqlite") else {},
     future=True,
     # pool_size=POOL_SIZE,
     # max_overflow=64,
