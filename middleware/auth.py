@@ -5,7 +5,7 @@ from fastapi import Depends
 import jwt
 
 from models.user import User
-from utils.JWT import JWT
+from utils import JWT
 from .dependencies import SessionDep
 from utils import http_exceptions
 
@@ -48,3 +48,19 @@ async def admin_required(
     if group.admin:
         return user
     raise http_exceptions.raise_forbidden("Admin Required")
+
+
+def verify_download_token(token: str) -> tuple[UUID, UUID] | None:
+    """
+    验证下载令牌并返回 (file_id, owner_id)。
+
+    :param token: JWT 令牌字符串
+    :return: (file_id, owner_id) 或 None（验证失败）
+    """
+    try:
+        payload = jwt.decode(token, JWT.SECRET_KEY, algorithms=["HS256"])
+        if payload.get("type") != "download":
+            return None
+        return UUID(payload["file_id"]), UUID(payload["owner_id"])
+    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
+        return None

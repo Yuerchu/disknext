@@ -8,16 +8,15 @@
 - /file/upload - 上传相关操作
 - /file/download - 下载相关操作
 """
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Annotated
 from uuid import UUID
 
-import jwt
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from loguru import logger as l
 
-from middleware.auth import auth_required
+from middleware.auth import auth_required, verify_download_token
 from middleware.dependencies import SessionDep
 from models import (
     CreateFileRequest,
@@ -34,43 +33,20 @@ from models import (
     User,
 )
 from service.storage import LocalStorageService
-from utils.JWT import SECRET_KEY
+from utils.JWT import create_download_token, DOWNLOAD_TOKEN_TTL
 from utils import http_exceptions
 
 
-# ==================== 下载令牌管理 ====================
+# DTO
 
-class DownloadTokenManager:
-    """下载令牌管理器（JWT 无状态）"""
-
-    _ttl: timedelta = timedelta(hours=1)
-
-    @classmethod
-    def create(cls, file_id: UUID, owner_id: int) -> str:
-        """创建下载令牌"""
-        payload = {
-            "file_id": str(file_id),
-            "owner_id": owner_id,
-            "exp": datetime.now(timezone.utc) + cls._ttl,
-            "type": "download",
-        }
-        return jwt.encode(payload, SECRET_KEY, algorithm="HS256")
-
-    @classmethod
-    def verify(cls, token: str) -> tuple[UUID, int] | None:
-        """
-        验证令牌并返回 (file_id, owner_id)
-
-        :return: (file_id, owner_id) 或 None（验证失败）
-        """
-        try:
-            payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-            if payload.get("type") != "download":
-                return None
-            return UUID(payload["file_id"]), payload["owner_id"]
-        except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
-            return None
-
+class DownloadTokenModel(ResponseBase):
+    """下载Token响应模型"""
+    
+    access_token: str
+    """JWT 令牌"""
+    
+    expires_in: int
+    """过期时间（秒）"""
 
 # ==================== 主路由 ====================
 
@@ -367,11 +343,11 @@ _download_router = APIRouter(prefix="/download")
     summary='创建下载令牌',
     description='为指定文件创建下载令牌（JWT），有效期1小时。',
 )
-async def create_download_token(
+async def create_download_token_endpoint(
     session: SessionDep,
     user: Annotated[User, Depends(auth_required)],
     file_id: UUID,
-) -> ResponseBase:
+) -> DownloadTokenModel:
     """
     创建下载令牌端点
 
@@ -384,11 +360,11 @@ async def create_download_token(
     if not file_obj.is_file:
         raise HTTPException(status_code=400, detail="对象不是文件")
 
-    token = DownloadTokenManager.create(file_id, user.id)
+    token = create_download_token(file_id, user.id)
 
     l.debug(f"创建下载令牌: file_id={file_id}, user_id={user.id}")
 
-    return ResponseBase(data={"token": token, "expires_in": 3600})
+    return DownloadTokenModel(access_token=token, expires_in=int(DOWNLOAD_TOKEN_TTL.total_seconds()))
 
 
 @_download_router.get(
@@ -406,7 +382,7 @@ async def download_file(
     验证 JWT 令牌后返回文件内容。
     """
     # 验证令牌
-    result = DownloadTokenManager.verify(token)
+    result = verify_download_token(token)
     if not result:
         raise HTTPException(status_code=401, detail="下载令牌无效或已过期")
 
@@ -420,8 +396,12 @@ async def download_file(
     if not file_obj.is_file:
         raise HTTPException(status_code=400, detail="对象不是文件")
 
-    if not file_obj.source_name:
+    # 预加载 physical_file 关系以获取存储路径
+    physical_file = await file_obj.awaitable_attrs.physical_file
+    if not physical_file or not physical_file.storage_path:
         raise HTTPException(status_code=500, detail="文件存储路径丢失")
+
+    storage_path = physical_file.storage_path
 
     # 获取策略
     policy = await Policy.get(session, Policy.id == file_obj.policy_id)
@@ -430,11 +410,11 @@ async def download_file(
 
     if policy.type == PolicyType.LOCAL:
         storage_service = LocalStorageService(policy)
-        if not await storage_service.file_exists(file_obj.source_name):
+        if not await storage_service.file_exists(storage_path):
             raise HTTPException(status_code=404, detail="物理文件不存在")
 
         return FileResponse(
-            path=file_obj.source_name,
+            path=storage_path,
             filename=file_obj.name,
             media_type="application/octet-stream",
         )

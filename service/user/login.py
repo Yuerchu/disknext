@@ -5,7 +5,7 @@ from loguru import logger
 from middleware.dependencies import SessionDep
 from models import LoginRequest, TokenResponse, User
 from utils import http_exceptions
-from utils.JWT.JWT import create_access_token, create_refresh_token
+from utils.JWT import create_access_token, create_refresh_token
 from utils.password.pwd import Password, PasswordStatus
 
 

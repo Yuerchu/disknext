@@ -7,7 +7,7 @@ from utils.http.http_exceptions import raise_internal_error
 from utils.lifespan import lifespan
 from models.database import init_db
 from models.migration import migration
-from utils.JWT import JWT
+from utils import JWT
 from routers import router
 from loguru import logger as l
 

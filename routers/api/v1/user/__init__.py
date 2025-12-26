@@ -13,7 +13,7 @@ import models
 import service
 from middleware.auth import auth_required
 from middleware.dependencies import SessionDep
-from utils.JWT.JWT import SECRET_KEY
+from utils.JWT import SECRET_KEY
 from utils import Password, http_exceptions
 
 user_router = APIRouter(

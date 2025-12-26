@@ -8,7 +8,7 @@ import pyotp
 from itsdangerous import URLSafeTimedSerializer
 from pydantic import BaseModel, Field
 
-from utils.JWT.JWT import SECRET_KEY
+from utils.JWT import SECRET_KEY
 from utils.conf import appmeta
 
 _ph = PasswordHasher()
