@@ -3,14 +3,6 @@ from fastapi import APIRouter
 from utils.conf import appmeta
 
 from .admin import admin_router
-from .admin import admin_aria2_router
-from .admin import admin_file_router
-from .admin import admin_group_router
-from .admin import admin_policy_router
-from .admin import admin_share_router
-from .admin import admin_task_router
-from .admin import admin_user_router
-from .admin import admin_vas_router
 
 from .callback import callback_router
 from .directory import directory_router
