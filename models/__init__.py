@@ -34,7 +34,7 @@ from .node import (
     NodeType,
 )
 from .group import (
-    Group, GroupBase, GroupOptions, GroupOptionsBase, GroupResponse,
+    Group, GroupBase, GroupOptions, GroupOptionsBase, GroupAllOptionsBase, GroupResponse,
     # 管理员DTO
     GroupCreateRequest, GroupUpdateRequest, GroupDetailResponse, GroupListResponse,
 )
@@ -67,7 +67,7 @@ from .object import (
 )
 from .physical_file import PhysicalFile, PhysicalFileBase
 from .order import Order, OrderStatus, OrderType
-from .policy import Policy, PolicyOptions, PolicyOptionsBase, PolicyType
+from .policy import Policy, PolicyBase, PolicyOptions, PolicyOptionsBase, PolicyType
 from .redeem import Redeem, RedeemType
 from .report import Report, ReportReason
 from .setting import (
@@ -75,7 +75,7 @@ from .setting import (
     # 管理员DTO
     SettingItem, SettingsListResponse, SettingsUpdateRequest, SettingsUpdateResponse,
 )
-from .share import Share
+from .share import Share, ShareBase, ShareCreateRequest, ShareResponse
 from .source_link import SourceLink
 from .storage_pack import StoragePack
 from .tag import Tag, TagType

@@ -65,3 +65,7 @@ node_modules/
 
 # 文件
 data/
+
+# JB 的运行配置（换设备用不了）
+.run/
+.xml

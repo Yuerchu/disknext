@@ -14,6 +14,32 @@ if TYPE_CHECKING:
     from .object import Object
 
 
+# ==================== Base 模型 ====================
+
+class ShareBase(SQLModelBase):
+    """分享基础字段，供 DTO 和数据库模型共享"""
+
+    object_id: UUID
+    """关联的对象UUID"""
+
+    password: str | None = None
+    """分享密码"""
+
+    expires: datetime | None = None
+    """过期时间（NULL为永不过期）"""
+
+    remain_downloads: int | None = None
+    """剩余下载次数（NULL为不限制）"""
+
+    preview_enabled: bool = True
+    """是否允许预览"""
+
+    score: int = 0
+    """兑换此分享所需的积分"""
+
+
+# ==================== 数据库模型 ====================
+
 class Share(SQLModelBase, TableBaseMixin):
     """分享模型"""
 
@@ -88,26 +114,9 @@ class Share(SQLModelBase, TableBaseMixin):
 
 # ==================== DTO 模型 ====================
 
-class ShareCreateRequest(SQLModelBase):
-    """创建分享请求 DTO"""
-
-    object_id: UUID
-    """要分享的对象UUID"""
-
-    password: str | None = None
-    """分享密码（可选）"""
-
-    expires: datetime | None = None
-    """过期时间（可选，NULL为永不过期）"""
-
-    remain_downloads: int | None = None
-    """剩余下载次数（可选，NULL为不限制）"""
-
-    preview_enabled: bool = True
-    """是否允许预览"""
-
-    score: int = 0
-    """兑换此分享所需的积分"""
+class ShareCreateRequest(ShareBase):
+    """创建分享请求 DTO，继承 ShareBase 中的所有字段"""
+    pass
 
 
 class ShareResponse(SQLModelBase):

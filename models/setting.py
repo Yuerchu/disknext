@@ -120,16 +120,10 @@ class SettingsType(StrEnum):
     WOPI = "wopi"
 
 # 数据库模型
-class Setting(SQLModelBase, TableBaseMixin):
-    """设置模型"""
+class Setting(SettingItem, TableBaseMixin):
+    """设置模型，继承 SettingItem 中的 name 和 value 字段"""
 
     __table_args__ = (UniqueConstraint("type", "name", name="uq_setting_type_name"),)
 
     type: SettingsType
-    """设置类型/分组"""
-
-    name: str
-    """设置项名称"""
-
-    value: str | None
-    """设置值"""
+    """设置类型/分组（覆盖基类的 str 类型为枚举类型）"""

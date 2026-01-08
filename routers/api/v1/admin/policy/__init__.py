@@ -7,7 +7,7 @@ from sqlmodel import Field
 from middleware.auth import admin_required
 from middleware.dependencies import SessionDep
 from models import (
-    Policy, PolicyType, ResponseBase,
+    Policy, PolicyBase, PolicyType, ResponseBase,
     Object, )
 from models.base import SQLModelBase
 from service.storage import DirectoryCreationError, LocalStorageService
@@ -33,47 +33,9 @@ class PolicyTestSlaveRequest(SQLModelBase):
     secret: str
     """从机通信密钥"""
 
-class PolicyCreateRequest(SQLModelBase):
-    """创建存储策略请求 DTO"""
-
-    name: str = Field(max_length=255)
-    """策略名称"""
-
-    type: PolicyType
-    """策略类型"""
-
-    server: str | None = Field(default=None, max_length=255)
-    """服务器地址/本地路径（本地存储必填）"""
-
-    bucket_name: str | None = Field(default=None, max_length=255)
-    """存储桶名称（S3必填）"""
-
-    is_private: bool = True
-    """是否为私有空间"""
-
-    base_url: str | None = Field(default=None, max_length=255)
-    """访问文件的基础URL"""
-
-    access_key: str | None = None
-    """Access Key"""
-
-    secret_key: str | None = None
-    """Secret Key"""
-
-    max_size: int = Field(default=0, ge=0)
-    """允许上传的最大文件尺寸（字节），0表示不限制"""
-
-    auto_rename: bool = False
-    """是否自动重命名"""
-
-    dir_name_rule: str | None = Field(default=None, max_length=255)
-    """目录命名规则"""
-
-    file_name_rule: str | None = Field(default=None, max_length=255)
-    """文件命名规则"""
-
-    is_origin_link_enable: bool = False
-    """是否开启源链接访问"""
+class PolicyCreateRequest(PolicyBase):
+    """创建存储策略请求 DTO，继承 PolicyBase 中的所有字段"""
+    pass
 
 @admin_policy_router.get(
     path='/list',

@@ -35,6 +35,49 @@ class PolicyType(StrEnum):
     S3 = "s3"
 
 
+class PolicyBase(SQLModelBase):
+    """存储策略基础字段，供 DTO 和数据库模型共享"""
+
+    name: str = Field(max_length=255)
+    """策略名称"""
+
+    type: PolicyType
+    """存储策略类型"""
+
+    server: str | None = Field(default=None, max_length=255)
+    """服务器地址（本地策略为绝对路径）"""
+
+    bucket_name: str | None = Field(default=None, max_length=255)
+    """存储桶名称"""
+
+    is_private: bool = True
+    """是否为私有空间"""
+
+    base_url: str | None = Field(default=None, max_length=255)
+    """访问文件的基础URL"""
+
+    access_key: str | None = None
+    """Access Key"""
+
+    secret_key: str | None = None
+    """Secret Key"""
+
+    max_size: int = Field(default=0, ge=0)
+    """允许上传的最大文件尺寸（字节）"""
+
+    auto_rename: bool = False
+    """是否自动重命名"""
+
+    dir_name_rule: str | None = Field(default=None, max_length=255)
+    """目录命名规则"""
+
+    file_name_rule: str | None = Field(default=None, max_length=255)
+    """文件命名规则"""
+
+    is_origin_link_enable: bool = False
+    """是否开启源链接访问"""
+
+
 class PolicyOptionsBase(SQLModelBase):
     """存储策略选项的基础模型"""
 
@@ -72,44 +115,21 @@ class PolicyOptions(PolicyOptionsBase, UUIDTableBaseMixin):
     """关联的策略"""
 
 
-class Policy(SQLModelBase, UUIDTableBaseMixin):
+class Policy(PolicyBase, UUIDTableBaseMixin):
     """存储策略模型"""
 
+    # 覆盖基类字段以添加数据库专有配置
     name: str = Field(max_length=255, unique=True)
     """策略名称"""
 
-    type: PolicyType
-    """存储策略类型"""
-
-    server: str | None = Field(default=None, max_length=255)
-    """服务器地址（本地策略为绝对路径）"""
-
-    bucket_name: str | None = Field(default=None, max_length=255)
-    """存储桶名称"""
-
     is_private: bool = Field(default=True, sa_column_kwargs={"server_default": text("true")})
     """是否为私有空间"""
-
-    base_url: str | None = Field(default=None, max_length=255)
-    """访问文件的基础URL"""
-
-    access_key: str | None = Field(default=None)
-    """Access Key"""
-
-    secret_key: str | None = Field(default=None)
-    """Secret Key"""
 
     max_size: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
     """允许上传的最大文件尺寸（字节）"""
 
     auto_rename: bool = Field(default=False, sa_column_kwargs={"server_default": text("false")})
     """是否自动重命名"""
-
-    dir_name_rule: str | None = Field(default=None, max_length=255)
-    """目录命名规则"""
-
-    file_name_rule: str | None = Field(default=None, max_length=255)
-    """文件命名规则"""
 
     is_origin_link_enable: bool = Field(default=False, sa_column_kwargs={"server_default": text("false")})
     """是否开启源链接访问"""
