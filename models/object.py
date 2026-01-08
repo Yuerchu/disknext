@@ -695,6 +695,32 @@ class AdminFileResponse(ObjectResponse):
     ban_reason: str | None = None
     """封禁原因"""
 
+    @classmethod
+    def from_object(
+        cls,
+        obj: "Object",
+        owner: "User | None",
+        policy: "Policy | None",
+    ) -> "AdminFileResponse":
+        """从 Object ORM 对象构建"""
+        return cls(
+            # ObjectBase 字段
+            **ObjectBase.model_validate(obj, from_attributes=True).model_dump(),
+            # ObjectResponse 字段
+            id=obj.id,
+            thumb=False,
+            date=obj.updated_at,
+            create_date=obj.created_at,
+            source_enabled=False,
+            # AdminFileResponse 字段
+            owner_id=obj.owner_id,
+            owner_username=owner.username if owner else "unknown",
+            policy_name=policy.name if policy else "unknown",
+            is_banned=obj.is_banned,
+            banned_at=obj.banned_at,
+            ban_reason=obj.ban_reason,
+        )
+
 
 class FileBanRequest(SQLModelBase):
     """文件封禁请求 DTO"""

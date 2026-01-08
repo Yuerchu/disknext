@@ -5,9 +5,9 @@ from loguru import logger as l
 from sqlalchemy import func, and_
 
 from middleware.auth import admin_required
-from middleware.dependencies import SessionDep
+from middleware.dependencies import SessionDep, TableViewRequestDep
 from models import (
-    User, ResponseBase,
+    User, ResponseBase, UserPublic, ListResponse,
     Group, Object, ObjectType, )
 from models.user import (
     UserAdminUpdateRequest, UserCalibrateResponse,
@@ -49,30 +49,19 @@ async def router_admin_get_user(session: SessionDep, user_id: int) -> ResponseBa
 )
 async def router_admin_get_users(
     session: SessionDep,
-    page: int = 1,
-    page_size: int = 20
-) -> ResponseBase:
+    table_view: TableViewRequestDep,
+) -> ListResponse[UserPublic]:
     """
-    获取用户列表，支持分页。
+    获取用户列表，支持分页、排序和时间筛选。
 
-    Args:
-        session: 数据库会话依赖项。
-        page (int): 页码，默认为1。
-        page_size (int): 每页显示的用户数量，默认为20。
-
-    Returns:
-        ResponseBase: 包含用户列表的响应模型。
+    :param session: 数据库会话依赖项
+    :param table_view: 分页排序参数依赖
+    :return: 分页用户列表
     """
-    offset = (page - 1) * page_size
-    users: list[User] = await User.get(
-        session,
-        None,
-        fetch_mode="all",
-        offset=offset,
-        limit=page_size
-    )
-    return ResponseBase(
-        data=[user.to_public().model_dump() for user in users]
+    result = await User.get_with_count(session, table_view=table_view)
+    return ListResponse(
+        items=[user.to_public() for user in result.items],
+        count=result.count,
     )
 
 

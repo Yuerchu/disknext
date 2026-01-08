@@ -160,3 +160,61 @@ class ShareResponse(SQLModelBase):
 
     has_password: bool
     """是否有密码"""
+
+
+class ShareListItemBase(SQLModelBase):
+    """分享列表项基础字段"""
+
+    id: int
+    """分享ID"""
+
+    code: str
+    """分享码"""
+
+    views: int
+    """浏览次数"""
+
+    downloads: int
+    """下载次数"""
+
+    remain_downloads: int | None
+    """剩余下载次数"""
+
+    expires: datetime | None
+    """过期时间"""
+
+    preview_enabled: bool
+    """是否允许预览"""
+
+    score: int
+    """积分"""
+
+    user_id: UUID
+    """用户UUID"""
+
+    created_at: datetime
+    """创建时间"""
+
+
+class AdminShareListItem(ShareListItemBase):
+    """管理员分享列表项 DTO，添加关联字段"""
+
+    username: str | None
+    """用户名"""
+
+    object_name: str | None
+    """对象名称"""
+
+    @classmethod
+    def from_share(
+        cls,
+        share: "Share",
+        user: "User | None",
+        obj: "Object | None",
+    ) -> "AdminShareListItem":
+        """从 Share ORM 对象构建"""
+        return cls(
+            **ShareListItemBase.model_validate(share, from_attributes=True).model_dump(),
+            username=user.username if user else None,
+            object_name=obj.name if obj else None,
+        )

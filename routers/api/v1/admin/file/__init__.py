@@ -8,11 +8,10 @@ from loguru import logger as l
 from sqlalchemy import and_
 
 from middleware.auth import admin_required
-from middleware.dependencies import SessionDep
+from middleware.dependencies import SessionDep, TableViewRequestDep
 from models import (
-    Policy, PolicyType, User, ResponseBase,
-    Object, ObjectType, )
-from models.object import AdminFileResponse, FileBanRequest
+    Policy, PolicyType, User, ResponseBase, ListResponse,
+    Object, ObjectType, AdminFileResponse, FileBanRequest, )
 from service.storage import LocalStorageService
 
 admin_file_router = APIRouter(
@@ -28,25 +27,21 @@ admin_file_router = APIRouter(
 )
 async def router_admin_get_file_list(
     session: SessionDep,
+    table_view: TableViewRequestDep,
     user_id: UUID | None = None,
     is_banned: bool | None = None,
     keyword: str | None = None,
-    page: int = 1,
-    page_size: int = 20,
-) -> ResponseBase:
+) -> ListResponse[AdminFileResponse]:
     """
     获取系统中的文件列表，支持筛选。
 
     :param session: 数据库会话
+    :param table_view: 分页排序参数依赖
     :param user_id: 按用户筛选
     :param is_banned: 按封禁状态筛选
     :param keyword: 按文件名搜索
-    :param page: 页码
-    :param page_size: 每页数量
-    :return: 文件列表
+    :return: 分页文件列表
     """
-    offset = (page - 1) * page_size
-
     # 构建查询条件
     conditions = [Object.type == ObjectType.FILE]
     if user_id:
@@ -56,42 +51,17 @@ async def router_admin_get_file_list(
     if keyword:
         conditions.append(Object.name.ilike(f"%{keyword}%"))
 
-    combined_condition = and_(*conditions) if len(conditions) > 1 else conditions[0]
-
-    files = await Object.get(
-        session,
-        combined_condition,
-        fetch_mode="all",
-        offset=offset,
-        limit=page_size,
-        load=Object.owner,
-    )
-
-    total = await Object.count(session, combined_condition)
+    condition = and_(*conditions) if len(conditions) > 1 else conditions[0]
+    result = await Object.get_with_count(session, condition, table_view=table_view, load=Object.owner)
 
     # 构建响应
-    file_list = []
-    for f in files:
+    items: list[AdminFileResponse] = []
+    for f in result.items:
         owner = await f.awaitable_attrs.owner
         policy = await f.awaitable_attrs.policy
-        file_list.append(AdminFileResponse(
-            id=f.id,
-            name=f.name,
-            type=f.type,
-            size=f.size,
-            thumb=False,
-            date=f.updated_at,
-            create_date=f.created_at,
-            source_enabled=False,
-            owner_id=f.owner_id,
-            owner_username=owner.username if owner else "unknown",
-            policy_name=policy.name if policy else "unknown",
-            is_banned=f.is_banned,
-            banned_at=f.banned_at,
-            ban_reason=f.ban_reason,
-        ).model_dump())
+        items.append(AdminFileResponse.from_object(f, owner, policy))
 
-    return ResponseBase(data={"files": file_list, "total": total})
+    return ListResponse(items=items, count=result.count)
 
 
 @admin_file_router.get(

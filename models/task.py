@@ -9,8 +9,8 @@ from .base import SQLModelBase
 from .mixin import TableBaseMixin
 
 if TYPE_CHECKING:
-    from .user import User
     from .download import Download
+    from .user import User
 
 
 class TaskStatus(StrEnum):
@@ -29,6 +29,55 @@ class TaskType(StrEnum):
     """任务类型枚举"""
     # [TODO] 补充具体任务类型
     pass
+
+
+# ==================== DTO 模型 ====================
+
+
+class TaskSummaryBase(SQLModelBase):
+    """任务摘要基础字段"""
+
+    id: int
+    """任务ID"""
+
+    type: int
+    """任务类型"""
+
+    status: TaskStatus
+    """任务状态"""
+
+    progress: int
+    """进度（0-100）"""
+
+    error: str | None
+    """错误信息"""
+
+    user_id: UUID
+    """用户UUID"""
+
+    created_at: datetime
+    """创建时间"""
+
+    updated_at: datetime
+    """更新时间"""
+
+
+class TaskSummary(TaskSummaryBase):
+    """任务摘要，用于管理员列表展示"""
+
+    username: str | None
+    """用户名"""
+
+    @classmethod
+    def from_task(cls, task: "Task", user: "User | None") -> "TaskSummary":
+        """从 Task ORM 对象构建"""
+        return cls(
+            **TaskSummaryBase.model_validate(task, from_attributes=True).model_dump(),
+            username=user.username if user else None,
+        )
+
+
+# ==================== 数据库模型 ====================
 
 
 class TaskPropsBase(SQLModelBase):

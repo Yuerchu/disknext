@@ -124,8 +124,8 @@ class GroupUpdateRequest(SQLModelBase):
     """关联的存储策略UUID列表"""
 
 
-class GroupDetailResponse(GroupAllOptionsBase):
-    """用户组详情响应 DTO"""
+class GroupCoreBase(SQLModelBase):
+    """用户组核心字段（从 Group 模型提取）"""
 
     id: UUID
     """用户组UUID"""
@@ -148,11 +148,34 @@ class GroupDetailResponse(GroupAllOptionsBase):
     speed_limit: int = 0
     """速度限制 (KB/s)"""
 
+
+class GroupDetailResponse(GroupCoreBase, GroupAllOptionsBase):
+    """用户组详情响应 DTO"""
+
     user_count: int = 0
     """用户数量"""
 
     policy_ids: list[UUID] = []
     """关联的存储策略UUID列表"""
+
+    @classmethod
+    def from_group(
+        cls,
+        group: "Group",
+        user_count: int,
+        policies: list["Policy"],
+    ) -> "GroupDetailResponse":
+        """从 Group ORM 对象构建"""
+        opts = group.options
+        return cls(
+            # GroupCoreBase 字段（从 Group 模型提取）
+            **GroupCoreBase.model_validate(group, from_attributes=True).model_dump(),
+            # GroupAllOptionsBase 字段（从 GroupOptions 提取）
+            **(GroupAllOptionsBase.model_validate(opts, from_attributes=True).model_dump() if opts else {}),
+            # 计算字段
+            user_count=user_count,
+            policy_ids=[p.id for p in policies],
+        )
 
 
 class GroupListResponse(SQLModelBase):

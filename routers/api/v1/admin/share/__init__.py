@@ -4,10 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger as l
 
 from middleware.auth import admin_required
-from middleware.dependencies import SessionDep
+from middleware.dependencies import SessionDep, TableViewRequestDep
 from models import (
-    ResponseBase,
-    Share, )
+    ResponseBase, ListResponse,
+    Share, AdminShareListItem, )
 
 admin_share_router = APIRouter(
     prefix='/share',
@@ -22,53 +22,27 @@ admin_share_router = APIRouter(
 )
 async def router_admin_get_share_list(
     session: SessionDep,
+    table_view: TableViewRequestDep,
     user_id: UUID | None = None,
-    page: int = 1,
-    page_size: int = 20,
-) -> ResponseBase:
+) -> ListResponse[AdminShareListItem]:
     """
     获取分享列表。
 
     :param session: 数据库会话
+    :param table_view: 分页排序参数依赖
     :param user_id: 按用户筛选
-    :param page: 页码
-    :param page_size: 每页数量
-    :return: 分享列表
+    :return: 分页分享列表
     """
-    offset = (page - 1) * page_size
     condition = Share.user_id == user_id if user_id else None
+    result = await Share.get_with_count(session, condition, table_view=table_view, load=Share.user)
 
-    shares = await Share.get(
-        session,
-        condition,
-        fetch_mode="all",
-        offset=offset,
-        limit=page_size,
-        load=Share.user,
-    )
-
-    total = await Share.count(session, condition)
-
-    share_list = []
-    for s in shares:
+    items: list[AdminShareListItem] = []
+    for s in result.items:
         user = await s.awaitable_attrs.user
         obj = await s.awaitable_attrs.object
-        share_list.append({
-            "id": s.id,
-            "code": s.code,
-            "views": s.views,
-            "downloads": s.downloads,
-            "remain_downloads": s.remain_downloads,
-            "expires": s.expires.isoformat() if s.expires else None,
-            "preview_enabled": s.preview_enabled,
-            "score": s.score,
-            "user_id": str(s.user_id),
-            "username": user.username if user else None,
-            "object_name": obj.name if obj else None,
-            "created_at": s.created_at.isoformat(),
-        })
+        items.append(AdminShareListItem.from_share(s, user, obj))
 
-    return ResponseBase(data={"shares": share_list, "total": total})
+    return ListResponse(items=items, count=result.count)
 
 
 @admin_share_router.get(

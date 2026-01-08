@@ -78,6 +78,34 @@ class PolicyBase(SQLModelBase):
     """是否开启源链接访问"""
 
 
+# ==================== DTO 模型 ====================
+
+
+class PolicySummary(SQLModelBase):
+    """策略摘要，用于列表展示"""
+
+    id: UUID
+    """策略UUID"""
+
+    name: str
+    """策略名称"""
+
+    type: PolicyType
+    """策略类型"""
+
+    server: str | None
+    """服务器地址"""
+
+    max_size: int
+    """最大文件尺寸"""
+
+    is_private: bool
+    """是否私有"""
+
+
+# ==================== 数据库模型 ====================
+
+
 class PolicyOptionsBase(SQLModelBase):
     """存储策略选项的基础模型"""
 

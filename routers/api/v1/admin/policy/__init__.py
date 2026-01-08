@@ -5,10 +5,10 @@ from loguru import logger as l
 from sqlmodel import Field
 
 from middleware.auth import admin_required
-from middleware.dependencies import SessionDep
+from middleware.dependencies import SessionDep, TableViewRequestDep
 from models import (
-    Policy, PolicyBase, PolicyType, ResponseBase,
-    Object, )
+    Policy, PolicyBase, PolicyType, PolicySummary, ResponseBase,
+    ListResponse, Object, )
 from models.base import SQLModelBase
 from service.storage import DirectoryCreationError, LocalStorageService
 
@@ -45,43 +45,21 @@ class PolicyCreateRequest(PolicyBase):
 )
 async def router_policy_list(
     session: SessionDep,
-    page: int = 1,
-    page_size: int = 20,
-) -> ResponseBase:
+    table_view: TableViewRequestDep,
+) -> ListResponse[PolicySummary]:
     """
     获取所有存储策略列表。
 
     :param session: 数据库会话
-    :param page: 页码
-    :param page_size: 每页数量
-    :return: 策略列表
+    :param table_view: 分页排序参数依赖
+    :return: 分页策略列表
     """
-    offset = (page - 1) * page_size
+    result = await Policy.get_with_count(session, table_view=table_view)
 
-    policies = await Policy.get(
-        session,
-        None,
-        fetch_mode="all",
-        offset=offset,
-        limit=page_size,
+    return ListResponse(
+        items=[PolicySummary.model_validate(p, from_attributes=True) for p in result.items],
+        count=result.count,
     )
-
-    total = await Policy.count(session, None)
-
-    return ResponseBase(data={
-        "policies": [
-            {
-                "id": str(p.id),
-                "name": p.name,
-                "type": p.type.value,
-                "server": p.server,
-                "max_size": p.max_size,
-                "is_private": p.is_private,
-            }
-            for p in policies
-        ],
-        "total": total,
-    })
 
 
 @admin_policy_router.post(

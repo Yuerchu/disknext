@@ -4,9 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger as l
 
 from middleware.auth import admin_required
-from middleware.dependencies import SessionDep
+from middleware.dependencies import SessionDep, TableViewRequestDep
 from models import (
-    User, ResponseBase,
+    User, ResponseBase, UserPublic, ListResponse,
     Group, GroupOptions, )
 from models.group import (
     GroupCreateRequest, GroupUpdateRequest, GroupDetailResponse, )
@@ -25,61 +25,25 @@ admin_group_router = APIRouter(
 )
 async def router_admin_get_groups(
     session: SessionDep,
-    page: int = 1,
-    page_size: int = 20,
-) -> ResponseBase:
+    table_view: TableViewRequestDep,
+) -> ListResponse[GroupDetailResponse]:
     """
-    获取用户组列表，支持分页。
+    获取用户组列表，支持分页、排序和时间筛选。
 
     :param session: 数据库会话
-    :param page: 页码
-    :param page_size: 每页数量
-    :return: 用户组列表
+    :param table_view: 分页排序参数依赖
+    :return: 分页用户组列表
     """
-    offset = (page - 1) * page_size
-
-    groups = await Group.get(
-        session,
-        None,
-        fetch_mode="all",
-        offset=offset,
-        limit=page_size,
-        load=Group.options,
-    )
-
-    total = await Group.count(session, None)
+    result = await Group.get_with_count(session, table_view=table_view, load=Group.options)
 
     # 构建响应
-    group_list = []
-    for g in groups:
-        opts = g.options
+    items: list[GroupDetailResponse] = []
+    for g in result.items:
         policies = await g.awaitable_attrs.policies
         user_count = await User.count(session, User.group_id == g.id)
+        items.append(GroupDetailResponse.from_group(g, user_count, policies))
 
-        group_list.append(GroupDetailResponse(
-            id=g.id,
-            name=g.name,
-            max_storage=g.max_storage,
-            share_enabled=g.share_enabled,
-            web_dav_enabled=g.web_dav_enabled,
-            admin=g.admin,
-            speed_limit=g.speed_limit,
-            user_count=user_count,
-            policy_ids=[p.id for p in policies],
-            share_download=opts.share_download if opts else False,
-            share_free=opts.share_free if opts else False,
-            relocate=opts.relocate if opts else False,
-            source_batch=opts.source_batch if opts else 0,
-            select_node=opts.select_node if opts else False,
-            advance_delete=opts.advance_delete if opts else False,
-            archive_download=opts.archive_download if opts else False,
-            archive_task=opts.archive_task if opts else False,
-            webdav_proxy=opts.webdav_proxy if opts else False,
-            aria2=opts.aria2 if opts else False,
-            redirected_source=opts.redirected_source if opts else False,
-        ).model_dump())
-
-    return ResponseBase(data={"groups": group_list, "total": total})
+    return ListResponse(items=items, count=result.count)
 
 
 @admin_group_router.get(
@@ -104,32 +68,9 @@ async def router_admin_get_group(
     if not group:
         raise HTTPException(status_code=404, detail="用户组不存在")
 
-    opts = group.options
     policies = await group.awaitable_attrs.policies
     user_count = await User.count(session, User.group_id == group_id)
-
-    response = GroupDetailResponse(
-        id=group.id,
-        name=group.name,
-        max_storage=group.max_storage,
-        share_enabled=group.share_enabled,
-        web_dav_enabled=group.web_dav_enabled,
-        admin=group.admin,
-        speed_limit=group.speed_limit,
-        user_count=user_count,
-        policy_ids=[p.id for p in policies],
-        share_download=opts.share_download if opts else False,
-        share_free=opts.share_free if opts else False,
-        relocate=opts.relocate if opts else False,
-        source_batch=opts.source_batch if opts else 0,
-        select_node=opts.select_node if opts else False,
-        advance_delete=opts.advance_delete if opts else False,
-        archive_download=opts.archive_download if opts else False,
-        archive_task=opts.archive_task if opts else False,
-        webdav_proxy=opts.webdav_proxy if opts else False,
-        aria2=opts.aria2 if opts else False,
-        redirected_source=opts.redirected_source if opts else False,
-    )
+    response = GroupDetailResponse.from_group(group, user_count, policies)
 
     return ResponseBase(data=response.model_dump())
 
@@ -143,39 +84,27 @@ async def router_admin_get_group(
 async def router_admin_get_group_members(
     session: SessionDep,
     group_id: UUID,
-    page: int = 1,
-    page_size: int = 20,
-) -> ResponseBase:
+    table_view: TableViewRequestDep,
+) -> ListResponse[UserPublic]:
     """
     根据用户组ID获取用户组成员列表。
 
     :param session: 数据库会话
     :param group_id: 用户组UUID
-    :param page: 页码
-    :param page_size: 每页数量
-    :return: 成员列表
+    :param table_view: 分页排序参数依赖
+    :return: 分页成员列表
     """
     # 验证组存在
     group = await Group.get(session, Group.id == group_id)
     if not group:
         raise HTTPException(status_code=404, detail="用户组不存在")
 
-    offset = (page - 1) * page_size
+    result = await User.get_with_count(session, User.group_id == group_id, table_view=table_view)
 
-    users = await User.get(
-        session,
-        User.group_id == group_id,
-        fetch_mode="all",
-        offset=offset,
-        limit=page_size,
+    return ListResponse(
+        items=[u.to_public() for u in result.items],
+        count=result.count,
     )
-
-    total = await User.count(session, User.group_id == group_id)
-
-    return ResponseBase(data={
-        "members": [u.to_public().model_dump() for u in users],
-        "total": total,
-    })
 
 
 @admin_group_router.post(

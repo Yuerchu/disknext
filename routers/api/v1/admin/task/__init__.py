@@ -5,10 +5,10 @@ from loguru import logger as l
 from sqlalchemy import and_
 
 from middleware.auth import admin_required
-from middleware.dependencies import SessionDep
+from middleware.dependencies import SessionDep, TableViewRequestDep
 from models import (
-    ResponseBase,
-    Task,
+    ResponseBase, ListResponse,
+    Task, TaskSummary,
 )
 
 admin_task_router = APIRouter(
@@ -24,23 +24,19 @@ admin_task_router = APIRouter(
 )
 async def router_admin_get_task_list(
     session: SessionDep,
+    table_view: TableViewRequestDep,
     user_id: UUID | None = None,
     status: str | None = None,
-    page: int = 1,
-    page_size: int = 20,
-) -> ResponseBase:
+) -> ListResponse[TaskSummary]:
     """
     获取任务列表。
 
     :param session: 数据库会话
+    :param table_view: 分页排序参数依赖
     :param user_id: 按用户筛选
     :param status: 按状态筛选
-    :param page: 页码
-    :param page_size: 每页数量
-    :return: 任务列表
+    :return: 分页任务列表
     """
-    offset = (page - 1) * page_size
-
     conditions = []
     if user_id:
         conditions.append(Task.user_id == user_id)
@@ -48,34 +44,14 @@ async def router_admin_get_task_list(
         conditions.append(Task.status == status)
 
     condition = and_(*conditions) if conditions else None
+    result = await Task.get_with_count(session, condition, table_view=table_view, load=Task.user)
 
-    tasks = await Task.get(
-        session,
-        condition,
-        fetch_mode="all",
-        offset=offset,
-        limit=page_size,
-        load=Task.user,
-    )
-
-    total = await Task.count(session, condition)
-
-    task_list = []
-    for t in tasks:
+    items: list[TaskSummary] = []
+    for t in result.items:
         user = await t.awaitable_attrs.user
-        task_list.append({
-            "id": t.id,
-            "status": t.status,
-            "type": t.type,
-            "progress": t.progress,
-            "error": t.error,
-            "user_id": str(t.user_id),
-            "username": user.username if user else None,
-            "created_at": t.created_at.isoformat(),
-            "updated_at": t.updated_at.isoformat(),
-        })
+        items.append(TaskSummary.from_task(t, user))
 
-    return ResponseBase(data={"tasks": task_list, "total": total})
+    return ListResponse(items=items, count=result.count)
 
 
 @admin_task_router.get(
