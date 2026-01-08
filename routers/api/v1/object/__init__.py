@@ -128,6 +128,10 @@ async def _copy_object_recursive(
     copied_count = 0
     new_ids: list[UUID] = []
 
+    # 在 save() 之前保存需要的属性值，避免 commit 后对象过期导致懒加载失败
+    src_is_folder = src.is_folder
+    src_id = src.id
+
     # 创建新的 Object 记录
     new_obj = Object(
         name=src.name,
@@ -152,8 +156,8 @@ async def _copy_object_recursive(
     new_ids.append(new_obj.id)
 
     # 如果是目录，递归复制子对象
-    if src.is_folder:
-        children = await Object.get_children(session, user_id, src.id)
+    if src_is_folder:
+        children = await Object.get_children(session, user_id, src_id)
         for child in children:
             child_count, child_ids = await _copy_object_recursive(
                 session, child, new_obj.id, user_id

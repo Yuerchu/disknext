@@ -84,3 +84,70 @@ class Share(SQLModelBase, TableBaseMixin):
         """是否为目录分享（向后兼容属性）"""
         from .object import ObjectType
         return self.object.type == ObjectType.FOLDER if self.object else False
+
+
+# ==================== DTO 模型 ====================
+
+class ShareCreateRequest(SQLModelBase):
+    """创建分享请求 DTO"""
+
+    object_id: UUID
+    """要分享的对象UUID"""
+
+    password: str | None = None
+    """分享密码（可选）"""
+
+    expires: datetime | None = None
+    """过期时间（可选，NULL为永不过期）"""
+
+    remain_downloads: int | None = None
+    """剩余下载次数（可选，NULL为不限制）"""
+
+    preview_enabled: bool = True
+    """是否允许预览"""
+
+    score: int = 0
+    """兑换此分享所需的积分"""
+
+
+class ShareResponse(SQLModelBase):
+    """分享响应 DTO"""
+
+    id: int
+    """分享ID"""
+
+    code: str
+    """分享码"""
+
+    object_id: UUID
+    """关联对象UUID"""
+
+    source_name: str | None
+    """源名称"""
+
+    views: int
+    """浏览次数"""
+
+    downloads: int
+    """下载次数"""
+
+    remain_downloads: int | None
+    """剩余下载次数"""
+
+    expires: datetime | None
+    """过期时间"""
+
+    preview_enabled: bool
+    """是否允许预览"""
+
+    score: int
+    """积分"""
+
+    created_at: datetime
+    """创建时间"""
+
+    is_expired: bool
+    """是否已过期"""
+
+    has_password: bool
+    """是否有密码"""

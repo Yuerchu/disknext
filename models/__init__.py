@@ -90,4 +90,10 @@ from .model_base import (
     MCPRequestBase,
     MCPResponseBase,
     ResponseBase,
+    # Admin Summary DTO
+    MetricsSummary,
+    LicenseInfo,
+    VersionInfo,
+    AdminSummaryData,
+    AdminSummaryResponse,
 )

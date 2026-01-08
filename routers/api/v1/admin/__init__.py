@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Annotated
 from uuid import UUID
 
@@ -13,7 +13,10 @@ from middleware.dependencies import SessionDep
 from models import (
     Policy, PolicyOptions, PolicyType, User, ResponseBase,
     Group, GroupOptions, Setting, Object, ObjectType, Share, Task,
+    AdminSummaryResponse, MetricsSummary, LicenseInfo, VersionInfo, AdminSummaryData,
 )
+from models.setting import SettingsType
+from utils.conf import appmeta
 from models.base import SQLModelBase
 from models.group import (
     GroupCreateRequest, GroupUpdateRequest, GroupDetailResponse, GroupListResponse,
@@ -25,7 +28,7 @@ from models.setting import SettingsUpdateRequest, SettingsGetResponse
 from models.object import AdminFileResponse, AdminFileListResponse, FileBanRequest
 from models.policy import GroupPolicyLink
 from service.storage import DirectoryCreationError, LocalStorageService
-from utils import Password
+from utils import Password, http_exceptions
 
 
 class PolicyTestPathRequest(SQLModelBase):
@@ -158,14 +161,108 @@ admin_vas_router = APIRouter(
     description='Get site summary information',
     dependencies=[Depends(admin_required)],
 )
-def router_admin_get_summary() -> ResponseBase:
+async def router_admin_get_summary(session: SessionDep) -> AdminSummaryResponse:
     """
-    获取站点概况信息，包括用户数、分享数、文件数等。
-    
+    获取站点概况信息，包括用户数、分享数、文件数等统计指标。
+
+    响应数据结构：
+    - metrics_summary: 统计摘要（日期列表、每日增量、总计）
+    - site_urls: 站点URL列表
+    - license: 许可证信息（过期时间、签发时间、域名配置）
+    - version: 版本信息（版本号、是否Pro、提交哈希）
+
     Returns:
-        ResponseBase: 包含站点概况信息的响应模型。
+        AdminSummaryResponse: 包含站点概况信息的响应模型。
     """
-    http_exceptions.raise_not_implemented()
+    # 统计最近 12 天的数据
+    days_count = 12
+    now = datetime.now()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    dates: list[datetime] = []
+    files: list[int] = []
+    users: list[int] = []
+    shares: list[int] = []
+
+    # 从 11 天前到今天
+    for i in range(days_count - 1, -1, -1):
+        day_start = today_start - timedelta(days=i)
+        day_end = day_start + timedelta(days=1)
+        dates.append(day_start)
+
+        # 统计每日新增
+        file_count = await Object.count(
+            session,
+            Object.type == ObjectType.FILE,
+            created_after_datetime=day_start,
+            created_before_datetime=day_end,
+        )
+        user_count = await User.count(
+            session,
+            created_after_datetime=day_start,
+            created_before_datetime=day_end,
+        )
+        share_count = await Share.count(
+            session,
+            created_after_datetime=day_start,
+            created_before_datetime=day_end,
+        )
+
+        files.append(file_count)
+        users.append(user_count)
+        shares.append(share_count)
+
+    # 统计总数
+    file_total = await Object.count(session, Object.type == ObjectType.FILE)
+    user_total = await User.count(session)
+    share_total = await Share.count(session)
+    entities_total = await Object.count(session)
+
+    metrics_summary = MetricsSummary(
+        dates=dates,
+        files=files,
+        users=users,
+        shares=shares,
+        file_total=file_total,
+        user_total=user_total,
+        share_total=share_total,
+        entities_total=entities_total,
+        generated_at=now,
+    )
+
+    # 获取站点 URL（从设置读取）
+    site_urls: list[str] = []
+    site_url_setting = await Setting.get(
+        session,
+        and_(Setting.type == SettingsType.BASIC, Setting.name == "siteURL"),
+    )
+    if site_url_setting and site_url_setting.value:
+        site_urls.append(site_url_setting.value)
+
+    # 许可证信息（从设置读取或使用默认值）
+    license_info = LicenseInfo(
+        expired_at=now + timedelta(days=365),
+        signed_at=now,
+        root_domains=[],
+        domains=[],
+        vol_domains=[],
+    )
+
+    # 版本信息
+    version_info = VersionInfo(
+        version=appmeta.BackendVersion,
+        pro=appmeta.IsPro,
+        commit="dev",
+    )
+
+    data = AdminSummaryData(
+        metrics_summary=metrics_summary,
+        site_urls=site_urls,
+        license=license_info,
+        version=version_info,
+    )
+
+    return AdminSummaryResponse(data=data)
 
 @admin_router.get(
     path='/news',

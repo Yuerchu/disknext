@@ -1,8 +1,19 @@
-from fastapi import APIRouter, Depends
+from typing import Annotated, Literal
+from uuid import uuid4
+from datetime import datetime
+
+from fastapi import APIRouter, Depends, Query, HTTPException
+from loguru import logger as l
 
 from middleware.auth import auth_required
+from middleware.dependencies import SessionDep
 from models import ResponseBase
+from models.user import User
+from models.share import Share, ShareCreateRequest, ShareResponse
+from models.object import Object
+from models.mixin import ListResponse, TableViewRequest
 from utils import http_exceptions
+from utils.password.pwd import Password
 
 share_router = APIRouter(
     prefix='/share',
@@ -10,7 +21,7 @@ share_router = APIRouter(
 )
 
 @share_router.get(
-    path='/{info}/{id}',
+    path='/{id}',
     summary='获取分享',
     description='Get shared content by info type and ID.',
 )
@@ -227,31 +238,147 @@ def router_share_search_public(keywords: str, type: str = 'all') -> ResponseBase
     path='/',
     summary='创建新分享',
     description='Create a new share endpoint.',
-    dependencies=[Depends(auth_required)]
 )
-def router_share_create() -> ResponseBase:
+async def router_share_create(
+    session: SessionDep,
+    user: Annotated[User, Depends(auth_required)],
+    request: ShareCreateRequest,
+) -> ShareResponse:
     """
-    Create a new share endpoint.
-    
-    Returns:
-        ResponseBase: A model containing the response data for the new share creation.
+    创建新分享
+
+    认证：需要 JWT token
+
+    流程：
+    1. 验证对象存在且属于当前用户
+    2. 生成随机分享码（uuid4）
+    3. 如果有密码则加密存储
+    4. 创建 Share 记录并保存
+    5. 返回分享信息
     """
-    http_exceptions.raise_not_implemented()
+    # 验证对象存在且属于当前用户
+    obj = await Object.get(session, Object.id == request.object_id)
+    if not obj or obj.owner_id != user.id:
+        raise HTTPException(status_code=404, detail="对象不存在或无权限")
+
+    # 生成分享码
+    code = str(uuid4())
+
+    # 密码加密处理（如果有）
+    hashed_password = None
+    if request.password:
+        hashed_password = Password.hash(request.password)
+
+    # 创建分享记录
+    share = Share(
+        code=code,
+        password=hashed_password,
+        object_id=request.object_id,
+        user_id=user.id,
+        expires=request.expires,
+        remain_downloads=request.remain_downloads,
+        preview_enabled=request.preview_enabled,
+        score=request.score,
+        source_name=obj.name,
+    )
+    share = await share.save(session)
+
+    l.info(f"用户 {user.id} 创建分享: {share.code}")
+
+    # 返回响应
+    return ShareResponse(
+        id=share.id,
+        code=share.code,
+        object_id=share.object_id,
+        source_name=share.source_name,
+        views=share.views,
+        downloads=share.downloads,
+        remain_downloads=share.remain_downloads,
+        expires=share.expires,
+        preview_enabled=share.preview_enabled,
+        score=share.score,
+        created_at=share.created_at,
+        is_expired=share.expires is not None and share.expires < datetime.now(),
+        has_password=share.password is not None,
+    )
 
 @share_router.get(
     path='/',
     summary='列出我的分享',
     description='Get a list of shares.',
-    dependencies=[Depends(auth_required)]
 )
-def router_share_list() -> ResponseBase:
+async def router_share_list(
+    session: SessionDep,
+    user: Annotated[User, Depends(auth_required)],
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, le=100),
+    desc: bool = Query(default=True),
+    order: Literal["created_at", "updated_at"] = Query(default="created_at"),
+    keyword: str | None = Query(default=None),
+    expired: bool | None = Query(default=None),
+) -> ListResponse[ShareResponse]:
     """
-    Get a list of shares.
-    
-    Returns:
-        ResponseBase: A model containing the response data for the list of shares.
+    列出我的分享
+
+    认证：需要 JWT token
+
+    支持：
+    - 分页和排序
+    - 关键字搜索（搜索 source_name）
+    - 过期状态筛选
     """
-    http_exceptions.raise_not_implemented()
+    # 构建基础条件
+    condition = Share.user_id == user.id
+
+    # 关键字搜索
+    if keyword:
+        condition = condition & Share.source_name.ilike(f"%{keyword}%")
+
+    # 过期状态筛选
+    now = datetime.now()
+    if expired is True:
+        # 已过期：expires 不为 NULL 且 < 当前时间
+        condition = condition & (Share.expires != None) & (Share.expires < now)
+    elif expired is False:
+        # 未过期：expires 为 NULL 或 >= 当前时间
+        condition = condition & ((Share.expires == None) | (Share.expires >= now))
+
+    # 构建 table_view
+    table_view = TableViewRequest(
+        offset=offset,
+        limit=limit,
+        desc=desc,
+        order=order,
+    )
+
+    # 使用 get_with_count 获取分页数据
+    result = await Share.get_with_count(
+        session,
+        condition,
+        table_view=table_view,
+    )
+
+    # 转换为响应模型
+    items = [
+        ShareResponse(
+            id=share.id,
+            code=share.code,
+            object_id=share.object_id,
+            source_name=share.source_name,
+            views=share.views,
+            downloads=share.downloads,
+            remain_downloads=share.remain_downloads,
+            expires=share.expires,
+            preview_enabled=share.preview_enabled,
+            score=share.score,
+            created_at=share.created_at,
+            is_expired=share.expires is not None and share.expires < now,
+            has_password=share.password is not None,
+        )
+        for share in result.items
+    ]
+
+    return ListResponse(count=result.count, items=items)
 
 @share_router.post(
     path='/save/{id}',
