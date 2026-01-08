@@ -48,7 +48,10 @@ class SiteConfigResponse(SQLModelBase):
 # ==================== 管理员设置 DTO ====================
 
 class SettingItem(SQLModelBase):
-    """设置项 DTO"""
+    """单个设置项 DTO"""
+
+    type: str
+    """设置类型"""
 
     name: str
     """设置项名称"""
@@ -57,18 +60,31 @@ class SettingItem(SQLModelBase):
     """设置值"""
 
 
+class SettingsListResponse(SQLModelBase):
+    """获取设置列表响应 DTO"""
+
+    settings: list[SettingItem]
+    """设置项列表"""
+
+    total: int
+    """总数"""
+
+
 class SettingsUpdateRequest(SQLModelBase):
     """更新设置请求 DTO"""
 
-    settings: dict[str, dict[str, str | None]]
-    """按类型分组的设置项，格式: {"basic": {"siteName": "xxx", ...}, ...}"""
+    settings: list[SettingItem]
+    """要更新的设置项列表"""
 
 
-class SettingsGetResponse(SQLModelBase):
-    """获取设置响应 DTO"""
+class SettingsUpdateResponse(SQLModelBase):
+    """更新设置响应 DTO"""
 
-    settings: dict[str, dict[str, str | None]] = {}
-    """按类型分组的设置项"""
+    updated: int
+    """更新的设置项数量"""
+
+    created: int
+    """新建的设置项数量"""
 
 
 # ==================== 数据库模型 ====================

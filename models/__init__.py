@@ -73,7 +73,7 @@ from .report import Report, ReportReason
 from .setting import (
     Setting, SettingsType, SiteConfigResponse,
     # 管理员DTO
-    SettingItem, SettingsUpdateRequest, SettingsGetResponse,
+    SettingItem, SettingsListResponse, SettingsUpdateRequest, SettingsUpdateResponse,
 )
 from .share import Share
 from .source_link import SourceLink

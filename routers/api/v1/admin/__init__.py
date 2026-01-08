@@ -24,7 +24,9 @@ from models.group import (
 from models.user import (
     UserPublic, UserAdminUpdateRequest, UserCalibrateResponse,
 )
-from models.setting import SettingsUpdateRequest, SettingsGetResponse
+from models.setting import (
+    SettingItem, SettingsListResponse, SettingsUpdateRequest, SettingsUpdateResponse,
+)
 from models.object import AdminFileResponse, AdminFileListResponse, FileBanRequest
 from models.policy import GroupPolicyLink
 from service.storage import DirectoryCreationError, LocalStorageService
@@ -288,34 +290,34 @@ def router_admin_get_news() -> ResponseBase:
 async def router_admin_update_settings(
     session: SessionDep,
     request: SettingsUpdateRequest,
-) -> ResponseBase:
+) -> SettingsUpdateResponse:
     """
     批量更新站点设置。
 
     :param session: 数据库会话
-    :param request: 更新请求，按类型分组的设置项
+    :param request: 更新请求，设置项列表
     :return: 更新结果
     """
     updated_count = 0
+    created_count = 0
 
-    for setting_type, items in request.settings.items():
-        for name, value in items.items():
-            existing = await Setting.get(
-                session,
-                and_(Setting.type == setting_type, Setting.name == name)
-            )
+    for item in request.settings:
+        existing = await Setting.get(
+            session,
+            and_(Setting.type == item.type, Setting.name == item.name)
+        )
 
-            if existing:
-                existing.value = value
-                await existing.save(session)
-            else:
-                new_setting = Setting(type=setting_type, name=name, value=value)
-                await new_setting.save(session)
-
+        if existing:
+            existing.value = item.value
+            await existing.save(session)
             updated_count += 1
+        else:
+            new_setting = Setting(type=item.type, name=item.name, value=item.value)
+            await new_setting.save(session)
+            created_count += 1
 
-    l.info(f"管理员更新了 {updated_count} 个设置项")
-    return ResponseBase(data={"updated": updated_count})
+    l.info(f"管理员更新了 {updated_count} 个设置项，新建了 {created_count} 个设置项")
+    return SettingsUpdateResponse(updated=updated_count, created=created_count)
 
 
 @admin_router.get(
@@ -324,23 +326,37 @@ async def router_admin_update_settings(
     description='Get settings',
     dependencies=[Depends(admin_required)],
 )
-async def router_admin_get_settings(session: SessionDep) -> ResponseBase:
+async def router_admin_get_settings(
+    session: SessionDep,
+    type: str | None = None,
+    name: str | None = None,
+) -> SettingsListResponse:
     """
-    获取所有站点设置，按类型分组返回。
+    获取站点设置，支持按类型和名称筛选。
 
     :param session: 数据库会话
-    :return: 按类型分组的设置项
+    :param type: 设置类型（可选筛选条件）
+    :param name: 设置名称（可选筛选条件）
+    :return: 设置项列表
     """
-    settings = await Setting.get(session, None, fetch_mode="all")
+    # 构建查询条件
+    conditions = []
+    if type:
+        conditions.append(Setting.type == type)
+    if name:
+        conditions.append(Setting.name == name)
 
-    # 按 type 分组
-    grouped: dict[str, dict[str, str | None]] = {}
-    for setting in settings:
-        if setting.type not in grouped:
-            grouped[setting.type] = {}
-        grouped[setting.type][setting.name] = setting.value
+    condition = and_(*conditions) if conditions else None
 
-    return ResponseBase(data=grouped)
+    settings = await Setting.get(session, condition, fetch_mode="all")
+
+    # 转换为 DTO
+    setting_items = [
+        SettingItem(type=s.type, name=s.name, value=s.value)
+        for s in settings
+    ]
+
+    return SettingsListResponse(settings=setting_items, total=len(setting_items))
 
 @admin_group_router.get(
     path='/',
