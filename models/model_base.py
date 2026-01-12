@@ -79,9 +79,8 @@ class VersionInfo(SQLModelBase):
     commit: str
     """提交哈希"""
 
-
-class AdminSummaryData(SQLModelBase):
-    """管理员概况数据"""
+class AdminSummaryResponse(ResponseBase):
+    """管理员概况响应"""
 
     metrics_summary: MetricsSummary
     """统计摘要"""
@@ -94,13 +93,6 @@ class AdminSummaryData(SQLModelBase):
 
     version: VersionInfo
     """版本信息"""
-
-
-class AdminSummaryResponse(ResponseBase):
-    """管理员概况响应"""
-
-    data: AdminSummaryData | None = None
-    """响应数据"""
 
 class MCPMethod(StrEnum):
     """MCP 方法枚举"""

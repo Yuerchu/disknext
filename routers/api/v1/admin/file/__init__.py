@@ -5,7 +5,6 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from loguru import logger as l
-from sqlalchemy import and_
 
 from middleware.auth import admin_required
 from middleware.dependencies import SessionDep, TableViewRequestDep
@@ -51,7 +50,12 @@ async def router_admin_get_file_list(
     if keyword:
         conditions.append(Object.name.ilike(f"%{keyword}%"))
 
-    condition = and_(*conditions) if len(conditions) > 1 else conditions[0]
+    if len(conditions) > 1:
+        condition = conditions[0]
+        for c in conditions[1:]:
+            condition = condition & c
+    else:
+        condition = conditions[0]
     result = await Object.get_with_count(session, condition, table_view=table_view, load=Object.owner)
 
     # 构建响应
@@ -197,13 +201,15 @@ async def router_admin_delete_file(
                 except Exception as e:
                     l.warning(f"删除物理文件失败: {e}")
 
-    # 更新用户存储量
-    owner = await User.get(session, User.id == owner_id)
-    if owner:
-        owner.storage = max(0, owner.storage - file_size)
-        await owner.save(session)
+    # 更新用户存储量（使用 SQL UPDATE 直接更新，无需加载实例）
+    from sqlmodel import update as sql_update
+    stmt = sql_update(User).where(User.id == owner_id).values(
+        storage=max(0, User.storage - file_size)
+    )
+    await session.exec(stmt)
 
-    await Object.delete(session, file_obj)
+    # 使用条件删除
+    await Object.delete(session, condition=Object.id == file_obj.id)
 
     l.info(f"管理员删除了文件: {file_name}")
     return ResponseBase(data={"deleted": True})

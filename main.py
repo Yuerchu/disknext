@@ -33,8 +33,22 @@ app = FastAPI(
     openapi_url="/openapi.json" if appmeta.debug else None,
 )
 
+# 添加跨域 CORS 中间件,仅在调试模式下启用,以允许所有来源访问 API
+if appmeta.debug:
+    from fastapi.middleware.cors import CORSMiddleware
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
 @app.exception_handler(Exception)
-async def handle_unexpected_exceptions(request: Request, exc: Exception) -> NoReturn:
+async def handle_unexpected_exceptions(
+    request: Request, 
+    exc: Exception
+) -> NoReturn:
     """
     捕获所有未经处理的 FastAPI 异常,防止敏感信息泄露。
     """

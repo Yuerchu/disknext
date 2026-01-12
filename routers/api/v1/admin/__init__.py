@@ -2,14 +2,12 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends
 from loguru import logger as l
-from sqlalchemy import and_
 
 from middleware.auth import admin_required
 from middleware.dependencies import SessionDep
 from models import (
     User, ResponseBase,
     Setting, Object, ObjectType, Share, AdminSummaryResponse, MetricsSummary, LicenseInfo, VersionInfo,
-    AdminSummaryData,
 )
 from models.base import SQLModelBase
 from models.setting import (
@@ -75,8 +73,8 @@ async def router_admin_get_summary(session: SessionDep) -> AdminSummaryResponse:
     Returns:
         AdminSummaryResponse: 包含站点概况信息的响应模型。
     """
-    # 统计最近 12 天的数据
-    days_count = 12
+    # 统计最近 14 天的数据
+    days_count = 14
     now = datetime.now()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
@@ -135,7 +133,7 @@ async def router_admin_get_summary(session: SessionDep) -> AdminSummaryResponse:
     site_urls: list[str] = []
     site_url_setting = await Setting.get(
         session,
-        and_(Setting.type == SettingsType.BASIC, Setting.name == "siteURL"),
+        (Setting.type == SettingsType.BASIC) & (Setting.name == "siteURL"),
     )
     if site_url_setting and site_url_setting.value:
         site_urls.append(site_url_setting.value)
@@ -156,14 +154,12 @@ async def router_admin_get_summary(session: SessionDep) -> AdminSummaryResponse:
         commit="dev",
     )
 
-    data = AdminSummaryData(
+    return AdminSummaryResponse(
         metrics_summary=metrics_summary,
         site_urls=site_urls,
         license=license_info,
         version=version_info,
     )
-
-    return AdminSummaryResponse(data=data)
 
 @admin_router.get(
     path='/news',
@@ -203,7 +199,7 @@ async def router_admin_update_settings(
     for item in request.settings:
         existing = await Setting.get(
             session,
-            and_(Setting.type == item.type, Setting.name == item.name)
+            (Setting.type == item.type) & (Setting.name == item.name)
         )
 
         if existing:
@@ -245,7 +241,12 @@ async def router_admin_get_settings(
     if name:
         conditions.append(Setting.name == name)
 
-    condition = and_(*conditions) if conditions else None
+    if conditions:
+        condition = conditions[0]
+        for c in conditions[1:]:
+            condition = condition & c
+    else:
+        condition = None
 
     settings = await Setting.get(session, condition, fetch_mode="all")
 

@@ -2,7 +2,6 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger as l
-from sqlalchemy import and_
 
 from middleware.auth import admin_required
 from middleware.dependencies import SessionDep, TableViewRequestDep
@@ -43,7 +42,12 @@ async def router_admin_get_task_list(
     if status:
         conditions.append(Task.status == status)
 
-    condition = and_(*conditions) if conditions else None
+    if conditions:
+        condition = conditions[0]
+        for c in conditions[1:]:
+            condition = condition & c
+    else:
+        condition = None
     result = await Task.get_with_count(session, condition, table_view=table_view, load=Task.user)
 
     items: list[TaskSummary] = []

@@ -60,10 +60,10 @@ def verify_download_token(token: str) -> tuple[str, UUID, UUID] | None:
     try:
         payload = jwt.decode(token, JWT.SECRET_KEY, algorithms=["HS256"])
         if payload.get("type") != "download":
-            return None
+            http_exceptions.raise_unauthorized("Download token required")
         jti = payload.get("jti")
         if not jti:
-            return None
+            http_exceptions.raise_unauthorized("Download token required")
         return jti, UUID(payload["file_id"]), UUID(payload["owner_id"])
-    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
-        return None
+    except jwt.InvalidTokenError:
+        http_exceptions.raise_unauthorized("Download token required")

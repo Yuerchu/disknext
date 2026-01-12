@@ -42,10 +42,9 @@ class GroupFactory:
             speed_limit=kwargs.get("speed_limit", 0),
         )
 
-        group = await group.save(session)
-
         # 如果提供了选项参数，创建 GroupOptions
         if kwargs.get("create_options", False):
+            group = await group.save(session, commit=False)
             options = GroupOptions(
                 group_id=group.id,
                 share_download=kwargs.get("share_download", True),
@@ -55,7 +54,10 @@ class GroupFactory:
                 select_node=kwargs.get("select_node", False),
                 advance_delete=kwargs.get("advance_delete", False),
             )
-            await options.save(session)
+            await options.save(session, commit=False)
+            await session.commit()
+        else:
+            group = await group.save(session)
 
         return group
 
@@ -88,7 +90,7 @@ class GroupFactory:
             speed_limit=0,
         )
 
-        admin_group = await admin_group.save(session)
+        admin_group = await admin_group.save(session, commit=False)
 
         # 创建管理员组选项
         admin_options = GroupOptions(
@@ -105,7 +107,8 @@ class GroupFactory:
             aria2=True,
             redirected_source=True,
         )
-        await admin_options.save(session)
+        await admin_options.save(session, commit=False)
+        await session.commit()
 
         return admin_group
 
@@ -140,7 +143,7 @@ class GroupFactory:
             speed_limit=1024,  # 1MB/s
         )
 
-        limited_group = await limited_group.save(session)
+        limited_group = await limited_group.save(session, commit=False)
 
         # 创建限制组选项
         limited_options = GroupOptions(
@@ -152,7 +155,8 @@ class GroupFactory:
             select_node=False,
             advance_delete=False,
         )
-        await limited_options.save(session)
+        await limited_options.save(session, commit=False)
+        await session.commit()
 
         return limited_group
 
@@ -185,7 +189,7 @@ class GroupFactory:
             speed_limit=512,  # 512KB/s
         )
 
-        free_group = await free_group.save(session)
+        free_group = await free_group.save(session, commit=False)
 
         # 创建免费组选项
         free_options = GroupOptions(
@@ -197,6 +201,7 @@ class GroupFactory:
             select_node=False,
             advance_delete=False,
         )
-        await free_options.save(session)
+        await free_options.save(session, commit=False)
+        await session.commit()
 
         return free_group

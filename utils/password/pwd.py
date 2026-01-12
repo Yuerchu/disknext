@@ -1,4 +1,5 @@
 import secrets
+from typing import Literal
 
 from loguru import logger
 from argon2 import PasswordHasher
@@ -11,7 +12,23 @@ from pydantic import BaseModel, Field
 from utils.JWT import SECRET_KEY
 from utils.conf import appmeta
 
-_ph = PasswordHasher()
+# FIRST RECOMMENDED option per RFC 9106.
+_ph_lowmem = PasswordHasher(
+    salt_len=16,
+    hash_len=32,
+    time_cost=3,
+    memory_cost=65536,  # 64 MiB
+    parallelism=4,
+)
+
+# SECOND RECOMMENDED option per RFC 9106.
+_ph_highmem = PasswordHasher(
+    salt_len=16,
+    hash_len=32,
+    time_cost=1,
+    memory_cost=2097152,  # 2 GiB
+    parallelism=4,
+)
 
 class PasswordStatus(StrEnum):
     """密码校验状态枚举"""
@@ -48,7 +65,8 @@ class Password:
 
     @staticmethod
     def generate(
-            length: int = 8
+            length: int = 8,
+            url_safe: bool = False
     ) -> str:
         """
         生成指定长度的随机密码。
@@ -58,7 +76,16 @@ class Password:
         :return: 随机密码
         :rtype: str
         """
-        return secrets.token_hex(length)
+        if url_safe:
+            return secrets.token_urlsafe(length)
+        else:
+            return secrets.token_hex(length)
+    
+    @staticmethod
+    def generate_hex(
+        length: int = 8
+    ) -> bytes:
+        return secrets.token_bytes(length)
 
     @staticmethod
     def hash(
@@ -72,7 +99,7 @@ class Password:
         :param password: 需要哈希的原始密码
         :return: Argon2 哈希字符串
         """
-        return _ph.hash(password)
+        return _ph_lowmem.hash(password)
 
     @staticmethod
     def verify(
@@ -87,21 +114,16 @@ class Password:
         :return: 如果密码匹配返回 True, 否则返回 False
         """
         try:
-            # verify 函数会自动解析 stored_password 中的盐和参数
-            _ph.verify(hash, password)
+            _ph_lowmem.verify(hash, password)
 
-            # 检查哈希参数是否已过时。如果返回True，
-            # 意味着你应该使用新的参数重新哈希密码并更新存储。
-            # 这是一个很好的实践，可以随着时间推移增强安全性。
-            if _ph.check_needs_rehash(hash):
+            # 检查哈希参数是否已过时
+            if _ph_lowmem.check_needs_rehash(hash):
                 logger.warning("密码哈希参数已过时，建议重新哈希并更新。")
                 return PasswordStatus.EXPIRED
 
             return PasswordStatus.VALID
         except VerifyMismatchError:
-            # 这是预期的异常，当密码不匹配时触发。
             return PasswordStatus.INVALID
-        # 其他异常（如哈希格式错误）应该传播，让调用方感知系统问题
     
     @staticmethod
     async def generate_totp(
