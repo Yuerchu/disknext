@@ -2,7 +2,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger as l
-from sqlalchemy import func, and_
+from sqlalchemy import func
 
 from middleware.auth import admin_required
 from middleware.dependencies import SessionDep, TableViewRequestDep, UserFilterParamsDep
@@ -209,7 +209,7 @@ async def router_admin_calibrate_storage(
     from sqlmodel import select
     result = await session.execute(
         select(func.sum(Object.size), func.count(Object.id)).where(
-            and_(Object.owner_id == user_id, Object.type == ObjectType.FILE)
+            (Object.owner_id == user_id) & (Object.type == ObjectType.FILE)
         )
     )
     row = result.one()

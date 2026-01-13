@@ -2,7 +2,7 @@
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from sqlmodel import Field, Relationship, UniqueConstraint, text, Column, func, DateTime
+from sqlmodel import Field, Relationship, UniqueConstraint
 
 from .base import SQLModelBase
 from .mixin import TableBaseMixin

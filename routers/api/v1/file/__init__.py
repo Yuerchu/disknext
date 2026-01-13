@@ -233,7 +233,7 @@ async def upload_chunk(
             policy_id=upload_session.policy_id,
             reference_count=1,
         )
-        physical_file = await physical_file.save(session)
+        physical_file = await physical_file.save(session, commit=False)
 
         # 创建 Object 记录
         file_object = Object(
@@ -246,11 +246,18 @@ async def upload_chunk(
             owner_id=user_id,
             policy_id=upload_session.policy_id,
         )
-        file_object = await file_object.save(session)
+        file_object = await file_object.save(session, commit=False)
         file_object_id = file_object.id
 
-        # 删除上传会话
-        await UploadSession.delete(session, upload_session)
+        # 删除上传会话（使用条件删除）
+        await UploadSession.delete(
+            session,
+            condition=UploadSession.id == upload_session.id,
+            commit=False
+        )
+
+        # 统一提交所有更改
+        await session.commit()
 
         l.info(f"文件上传完成: {file_object.name}, size={file_object.size}, id={file_object.id}")
 

@@ -9,4 +9,4 @@
 - `REDIS_PORT`: Redis 端口
 - `REDIS_PASSWORD`: Redis 密码
 - `REDIS_DB`: Redis 数据库
-- `REDIS_PROTOCOL`
+- `REDIS_PROTOCOL`: Redis 协议

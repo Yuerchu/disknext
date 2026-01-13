@@ -13,7 +13,7 @@ oauth2_scheme = OAuth2PasswordBearer(
     refreshUrl="/api/v1/user/session/refresh",
 )
 
-SECRET_KEY = ''
+SECRET_KEY: str = ''
 
 
 async def load_secret_key() -> None:
@@ -26,10 +26,10 @@ async def load_secret_key() -> None:
 
     global SECRET_KEY
     async for session in get_session():
-        setting = await Setting.get(
+        setting: Setting = await Setting.get(
             session,
             (Setting.type == "auth") & (Setting.name == "secret_key")
-        )
+        )   # type: ignore
         if setting:
             SECRET_KEY = setting.value
 
@@ -40,7 +40,14 @@ def build_token_payload(
     algorithm: str,
     expires_delta: timedelta | None = None,
 ) -> tuple[str, datetime]:
-    """构建令牌"""
+    """
+    构建令牌。
+
+    :param data: 需要放进 JWT Payload 的字段
+    :param is_refresh: 是否为刷新令牌
+    :param algorithm: JWT 签名算法
+    :param expires_delta: 过期时间
+    """
 
     to_encode = data.copy()
 
@@ -61,8 +68,11 @@ def build_token_payload(
 
 
 # 访问令牌
-def create_access_token(data: dict, expires_delta: timedelta | None = None,
-                        algorithm: str = "HS256") -> AccessTokenBase:
+def create_access_token(
+    data: dict, 
+    expires_delta: timedelta | None = None,
+    algorithm: str = "HS256"
+) -> AccessTokenBase:
     """
     生成访问令牌，默认有效期 3 小时。
 
@@ -73,7 +83,12 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None,
     :return: 包含密钥本身和过期时间的 `AccessTokenBase`
     """
 
-    access_token, expire_at = build_token_payload(data, False, algorithm, expires_delta)
+    access_token, expire_at = build_token_payload(
+        data, 
+        False, 
+        algorithm, 
+        expires_delta
+    )
     return AccessTokenBase(
         access_token=access_token,
         access_expires=expire_at,
@@ -81,8 +96,11 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None,
 
 
 # 刷新令牌
-def create_refresh_token(data: dict, expires_delta: timedelta | None = None,
-                         algorithm: str = "HS256") -> RefreshTokenBase:
+def create_refresh_token(
+    data: dict, 
+    expires_delta: timedelta | None = None,
+    algorithm: str = "HS256"
+) -> RefreshTokenBase:
     """
     生成刷新令牌，默认有效期 30 天。
 
@@ -93,7 +111,12 @@ def create_refresh_token(data: dict, expires_delta: timedelta | None = None,
     :return: 包含密钥本身和过期时间的 `RefreshTokenBase`
     """
 
-    refresh_token, expire_at = build_token_payload(data, True, algorithm, expires_delta)
+    refresh_token, expire_at = build_token_payload(
+        data, 
+        True, 
+        algorithm, 
+        expires_delta
+    )
     return RefreshTokenBase(
         refresh_token=refresh_token,
         refresh_expires=expire_at,

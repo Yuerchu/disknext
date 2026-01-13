@@ -25,12 +25,12 @@ async def login(
     # TODO: 验证码校验
     # captcha_setting = await Setting.get(
     #     session,
-    #     and_(Setting.type == "auth", Setting.name == "login_captcha")
+    #     (Setting.type == "auth") & (Setting.name == "login_captcha")
     # )
     # is_captcha_required = captcha_setting and captcha_setting.value == "1"
 
     # 获取用户信息
-    current_user = await User.get(session, User.username == login_request.username, fetch_mode="first")
+    current_user: User = await User.get(session, User.username == login_request.username, fetch_mode="first")   #type: ignore
 
     # 验证用户是否存在
     if not current_user:

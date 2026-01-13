@@ -1,5 +1,4 @@
 from fastapi import APIRouter
-from sqlalchemy import and_
 
 from middleware.dependencies import SessionDep
 from models import ResponseBase, Setting, SettingsType, SiteConfigResponse
@@ -55,5 +54,5 @@ async def router_site_config(session: SessionDep) -> SiteConfigResponse:
         dict: The site configuration.
     """
     return SiteConfigResponse(
-        title=await Setting.get(session, and_(Setting.type == SettingsType.BASIC, Setting.name == "siteName")),
+        title=await Setting.get(session, (Setting.type == SettingsType.BASIC) & (Setting.name == "siteName")),
     )

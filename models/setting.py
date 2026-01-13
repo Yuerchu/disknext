@@ -104,6 +104,7 @@ class SettingsType(StrEnum):
     MAIL = "mail"
     MAIL_TEMPLATE = "mail_template"
     MOBILE = "mobile"
+    OAUTH = "oauth"
     PATH = "path"
     PREVIEW = "preview"
     PWA = "pwa"

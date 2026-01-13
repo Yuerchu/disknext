@@ -218,7 +218,7 @@ class TableBaseMixin(AsyncAttrs):
     )
 
     @classmethod
-    async def add(cls: type[T], session: AsyncSession, instances: T | list[T], refresh: bool = True) -> T | list[T]:
+    async def add(cls: type[T], session: AsyncSession, instances: T | list[T], refresh: bool = True, commit: bool = True) -> T | list[T]:
         """
         向数据库中添加一个新的或多个新的记录.
 
@@ -230,6 +230,8 @@ class TableBaseMixin(AsyncAttrs):
             session (AsyncSession): 用于数据库操作的异步会话对象.
             instances (T | list[T]): 要添加的单个模型实例或模型实例列表.
             refresh (bool): 如果为 True, 将在提交后刷新实例以同步数据库状态. 默认为 True.
+            commit (bool): 是否提交事务。设为 False 可在批量操作时减少提交次数，
+                          之后需要手动调用 `session.commit()`。默认为 True.
 
         Returns:
             T | list[T]: 已添加并（可选地）刷新的一个或多个模型实例.
@@ -244,6 +246,11 @@ class TableBaseMixin(AsyncAttrs):
             # 添加单个实例
             item3 = Item(name="Cherry")
             added_item = await Item.add(session, item3)
+
+            # 批量操作，减少提交次数
+            await Item.add(session, [item1, item2], commit=False)
+            await Item.add(session, [item3, item4], commit=False)
+            await session.commit()
         """
         is_list = False
         if isinstance(instances, list):
@@ -252,7 +259,10 @@ class TableBaseMixin(AsyncAttrs):
         else:
             session.add(instances)
 
-        await session.commit()
+        if commit:
+            await session.commit()
+        else:
+            await session.flush()
 
         if refresh:
             if is_list:
@@ -266,15 +276,16 @@ class TableBaseMixin(AsyncAttrs):
     async def save(
             self: T,
             session: AsyncSession,
-            load: RelationshipInfo | None = None,
-            refresh: bool = True
+            load: RelationshipInfo | list[RelationshipInfo] | None = None,
+            refresh: bool = True,
+            commit: bool = True
     ) -> T:
         """
         保存（插入或更新）当前模型实例到数据库.
 
         这是一个实例方法，它将当前对象添加到会话中并提交更改。
         可以用于创建新记录或更新现有记录。还可以选择在保存后
-        预加载（eager load）一个关联关系.
+        预加载（eager load）一个或多个关联关系.
 
         **重要**：调用此方法后，session中的所有对象都会过期（expired）。
         如果需要继续使用该对象，必须使用返回值：
@@ -287,6 +298,14 @@ class TableBaseMixin(AsyncAttrs):
         # ✅ 正确：不需要返回值时，指定 refresh=False 节省性能
         await client.save(session, refresh=False)
 
+        # ✅ 正确：批量操作，减少提交次数
+        await item1.save(session, commit=False)
+        await item2.save(session, commit=False)
+        await session.commit()
+
+        # ✅ 正确：批量操作并预加载多个关联关系
+        user = await user.save(session, load=[User.group, User.tags])
+
         # ❌ 错误：需要返回值但未使用
         await client.save(session)
         return client  # client 对象已过期
@@ -294,16 +313,22 @@ class TableBaseMixin(AsyncAttrs):
 
         Args:
             session (AsyncSession): 用于数据库操作的异步会话对象.
-            load (Relationship | None): 可选的，指定在保存和刷新后要预加载的关联属性.
-                                          例如 `User.posts`.
+            load (Relationship | list[Relationship] | None): 可选的，指定在保存和刷新后要预加载的关联属性.
+                                                         可以是单个关系或关系列表.
+                                                         例如 `User.posts` 或 `[User.group, User.tags]`.
             refresh (bool): 是否在保存后刷新对象。如果不需要使用返回值，
                            设为 False 可节省一次数据库查询。默认为 True.
+            commit (bool): 是否提交事务。设为 False 可在批量操作时减少提交次数，
+                          之后需要手动调用 `session.commit()`。默认为 True.
 
         Returns:
             T: 如果 refresh=True，返回已刷新的模型实例；否则返回未刷新的 self.
         """
         session.add(self)
-        await session.commit()
+        if commit:
+            await session.commit()
+        else:
+            await session.flush()
 
         if not refresh:
             return self
@@ -324,8 +349,9 @@ class TableBaseMixin(AsyncAttrs):
             extra_data: dict[str, Any] | None = None,
             exclude_unset: bool = True,
             exclude: set[str] | None = None,
-            load: RelationshipInfo | None = None,
-            refresh: bool = True
+            load: RelationshipInfo | list[RelationshipInfo] | None = None,
+            refresh: bool = True,
+            commit: bool = True
     ) -> T:
         """
         使用另一个模型实例或字典中的数据来更新当前实例.
@@ -348,6 +374,14 @@ class TableBaseMixin(AsyncAttrs):
         # ✅ 正确：不需要返回值时，指定 refresh=False 节省性能
         await client.update(session, update_data, refresh=False)
 
+        # ✅ 正确：批量操作，减少提交次数
+        await user1.update(session, data1, commit=False)
+        await user2.update(session, data2, commit=False)
+        await session.commit()
+
+        # ✅ 正确：批量操作并预加载多个关联关系
+        user = await user.update(session, data, load=[User.group, User.tags])
+
         # ❌ 错误：需要返回值但未使用
         await client.update(session, update_data)
         return client  # client 对象已过期
@@ -360,10 +394,13 @@ class TableBaseMixin(AsyncAttrs):
             exclude_unset (bool): 如果为 True, `other` 对象中未设置（即值为 None 或未提供）
                                   的字段将被忽略. 默认为 True.
             exclude (set[str] | None): 要从更新中排除的字段名集合。例如 {'permission'}.
-            load (RelationshipInfo | None): 可选的，指定在更新和刷新后要预加载的关联属性.
-                                             例如 `User.permission`.
+            load (Relationship | list[Relationship] | None): 可选的，指定在更新和刷新后要预加载的关联属性.
+                                                        可以是单个关系或关系列表.
+                                                        例如 `User.permission` 或 `[User.group, User.tags]`.
             refresh (bool): 是否在更新后刷新对象。如果不需要使用返回值，
                            设为 False 可节省一次数据库查询。默认为 True.
+            commit (bool): 是否提交事务。设为 False 可在批量操作时减少提交次数，
+                          之后需要手动调用 `session.commit()`。默认为 True.
 
         Returns:
             T: 如果 refresh=True，返回已刷新的模型实例；否则返回未刷新的 self.
@@ -374,7 +411,10 @@ class TableBaseMixin(AsyncAttrs):
         )
 
         session.add(self)
-        await session.commit()
+        if commit:
+            await session.commit()
+        else:
+            await session.flush()
 
         if not refresh:
             return self
@@ -388,33 +428,82 @@ class TableBaseMixin(AsyncAttrs):
             return self
 
     @classmethod
-    async def delete(cls: type[T], session: AsyncSession, instances: T | list[T]) -> None:
+    async def delete(
+        cls: type[T],
+        session: AsyncSession,
+        instances: T | list[T] | None = None,
+        *,
+        condition: BinaryExpression | ClauseElement | None = None,
+        commit: bool = True
+    ) -> int:
         """
-        从数据库中删除一个或多个记录.
+        从数据库中删除记录.
+
+        支持两种删除方式：
+        1. 实例删除：传入 instances 参数，先加载再删除
+        2. 条件删除：传入 condition 参数，直接 SQL 删除（更高效）
 
         Args:
             session (AsyncSession): 用于数据库操作的异步会话对象.
-            instances (T | list[T]): 要删除的单个模型实例或模型实例列表.
+            instances (T | list[T] | None): 要删除的单个模型实例或模型实例列表（可选）.
+            condition (BinaryExpression | ClauseElement | None): 删除条件（可选，与 instances 二选一）.
+            commit (bool): 是否提交事务。设为 False 可在批量操作时减少提交次数，
+                          之后需要手动调用 `session.commit()`。默认为 True.
 
         Returns:
-            None
+            int: 删除的记录数量
 
         Usage:
+            # 实例删除
             item_to_delete = await Item.get(session, Item.id == 1)
             if item_to_delete:
-                await Item.delete(session, item_to_delete)
+                deleted_count = await Item.delete(session, item_to_delete)
 
-            items_to_delete = await Item.get(session, Item.name.in_(["Apple", "Banana"]), fetch_mode="all")
-            if items_to_delete:
-                await Item.delete(session, items_to_delete)
+            # 条件删除（更高效，无需加载实例）
+            deleted_count = await Item.delete(
+                session,
+                condition=(Item.status == "inactive") & (Item.created_at < cutoff_date)
+            )
+
+            # 批量删除后手动提交
+            await Item.delete(session, item1, commit=False)
+            await Item.delete(session, item2, commit=False)
+            await session.commit()
         """
+        # 条件删除模式
+        if condition is not None:
+            from sqlmodel import delete as sql_delete
+
+            if instances is not None:
+                raise ValueError("不能同时指定 instances 和 condition")
+
+            # 执行条件删除
+            stmt = sql_delete(cls).where(condition)
+            result = await session.exec(stmt)
+            deleted_count = result.rowcount
+
+            if commit:
+                await session.commit()
+
+            return deleted_count
+
+        # 实例删除模式（原有逻辑）
+        if instances is None:
+            raise ValueError("必须指定 instances 或 condition")
+
+        deleted_count = 0
         if isinstance(instances, list):
             for instance in instances:
                 await session.delete(instance)
+                deleted_count += 1
         else:
             await session.delete(instances)
+            deleted_count = 1
 
-        await session.commit()
+        if commit:
+            await session.commit()
+
+        return deleted_count
 
     @classmethod
     def _build_time_filters(
@@ -458,7 +547,7 @@ class TableBaseMixin(AsyncAttrs):
             fetch_mode: Literal["one", "first", "all"] = "first",
             join: type[T] | tuple[type[T], _OnClauseArgument] | None = None,
             options: list | None = None,
-            load: RelationshipInfo | None = None,
+            load: RelationshipInfo | list[RelationshipInfo] | None = None,
             order_by: list[ClauseElement] | None = None,
             filter: BinaryExpression | ClauseElement | None = None,
             with_for_update: bool = False,
@@ -491,8 +580,9 @@ class TableBaseMixin(AsyncAttrs):
                 例如 `User` 或 `(Profile, User.id == Profile.user_id)`.
             options (list | None): SQLAlchemy 查询选项列表, 通常用于预加载关联数据,
                                    例如 `[selectinload(User.posts)]`.
-            load (Relationship | None): `selectinload` 的快捷方式，用于预加载单个关联关系.
-                                                例如 `User.profile`.
+            load (Relationship | list[Relationship] | None): `selectinload` 的快捷方式，用于预加载关联关系.
+                                                         可以是单个关系或关系列表.
+                                                         例如 `User.profile` 或 `[User.group, User.tags]`.
             order_by (list[ClauseElement] | None): 用于排序的排序列或表达式的列表.
                                                    例如 `[User.name.asc(), User.created_at.desc()]`.
             filter (BinaryExpression | ClauseElement | None): 附加的过滤条件.
@@ -595,9 +685,15 @@ class TableBaseMixin(AsyncAttrs):
             statement = statement.options(*options)
 
         if load:
+            # 标准化为列表
+            load_list = load if isinstance(load, list) else [load]
+
             # 处理多态加载
             if load_polymorphic is not None:
-                target_class = load.property.mapper.class_
+                # 多态加载只支持单个关系
+                if len(load_list) > 1:
+                    raise ValueError("load_polymorphic 仅支持单个关系")
+                target_class = load_list[0].property.mapper.class_
 
                 # 检查目标类是否继承自 PolymorphicBaseMixin
                 if not issubclass(target_class, PolymorphicBaseMixin):
@@ -609,7 +705,7 @@ class TableBaseMixin(AsyncAttrs):
                 if load_polymorphic == 'all':
                     # 两阶段查询：获取实际关联的多态类型
                     subclasses_to_load = await cls._resolve_polymorphic_subclasses(
-                        session, condition, load, target_class
+                        session, condition, load_list[0], target_class
                     )
                 else:
                     subclasses_to_load = load_polymorphic
@@ -618,12 +714,14 @@ class TableBaseMixin(AsyncAttrs):
                     # 关键：selectin_polymorphic 必须作为 selectinload 的链式子选项
                     # 参考: https://docs.sqlalchemy.org/en/20/orm/queryguide/relationships.html#polymorphic-eager-loading
                     statement = statement.options(
-                        selectinload(load).selectin_polymorphic(subclasses_to_load)
+                        selectinload(load_list[0]).selectin_polymorphic(subclasses_to_load)
                     )
                 else:
-                    statement = statement.options(selectinload(load))
+                    statement = statement.options(selectinload(load_list[0]))
             else:
-                statement = statement.options(selectinload(load))
+                # 为每个关系添加 selectinload
+                for rel in load_list:
+                    statement = statement.options(selectinload(rel))
 
         if order_by is not None:
             statement = statement.order_by(*order_by)
@@ -796,7 +894,7 @@ class TableBaseMixin(AsyncAttrs):
             *,
             join: type[T] | tuple[type[T], _OnClauseArgument] | None = None,
             options: list | None = None,
-            load: RelationshipInfo | None = None,
+            load: RelationshipInfo | list[RelationshipInfo] | None = None,
             order_by: list[ClauseElement] | None = None,
             filter: BinaryExpression | ClauseElement | None = None,
             table_view: TableViewRequest | None = None,
@@ -865,7 +963,7 @@ class TableBaseMixin(AsyncAttrs):
         return ListResponse(count=total_count, items=items)
 
     @classmethod
-    async def get_exist_one(cls: type[T], session: AsyncSession, id: int, load: RelationshipInfo | None = None) -> T:
+    async def get_exist_one(cls: type[T], session: AsyncSession, id: int, load: RelationshipInfo | list[RelationshipInfo] | None = None) -> T:
         """
         根据主键 ID 获取一个存在的记录, 如果不存在则抛出 404 异常.
 
@@ -875,7 +973,8 @@ class TableBaseMixin(AsyncAttrs):
         Args:
             session (AsyncSession): 用于数据库操作的异步会话对象.
             id (int): 要查找的记录的主键 ID.
-            load (Relationship | None): 可选的，用于预加载的关联属性.
+            load (Relationship | list[Relationship] | None): 可选的，用于预加载的关联属性.
+                                                           可以是单个关系或关系列表.
 
         Returns:
             T: 找到的模型实例.
@@ -903,7 +1002,7 @@ class UUIDTableBaseMixin(TableBaseMixin):
 
     @override
     @classmethod
-    async def get_exist_one(cls: type[T], session: AsyncSession, id: uuid.UUID, load: Relationship | None = None) -> T:
+    async def get_exist_one(cls: type[T], session: AsyncSession, id: uuid.UUID, load: Relationship | list[Relationship] | None = None) -> T:
         """
         根据 UUID 主键获取一个存在的记录, 如果不存在则抛出 404 异常.
 
@@ -913,7 +1012,8 @@ class UUIDTableBaseMixin(TableBaseMixin):
         Args:
             session (AsyncSession): 用于数据库操作的异步会话对象.
             id (uuid.UUID): 要查找的记录的 UUID 主键.
-            load (Relationship | None): 可选的，用于预加载的关联属性.
+            load (Relationship | list[Relationship] | None): 可选的，用于预加载的关联属性.
+                                                           可以是单个关系或关系列表.
 
         Returns:
             T: 找到的模型实例.

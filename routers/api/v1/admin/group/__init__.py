@@ -63,12 +63,13 @@ async def router_admin_get_group(
     :param group_id: 用户组UUID
     :return: 用户组详情
     """
-    group = await Group.get(session, Group.id == group_id, load=Group.options)
+    group = await Group.get(session, Group.id == group_id, load=[Group.options, Group.policies])
 
     if not group:
         raise HTTPException(status_code=404, detail="用户组不存在")
 
-    policies = await group.awaitable_attrs.policies
+    # 直接访问已加载的关系，无需额外查询
+    policies = group.policies
     user_count = await User.count(session, User.group_id == group_id)
     response = GroupDetailResponse.from_group(group, user_count, policies)
 

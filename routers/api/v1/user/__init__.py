@@ -3,7 +3,6 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy import and_
 from webauthn import generate_registration_options
 from webauthn.helpers import options_to_json_dict
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
@@ -115,7 +114,7 @@ async def router_user_register(
     # 2. 获取默认用户组（从设置中读取 UUID）
     default_group_setting: models.Setting | None = await models.Setting.get(
         session,
-        and_(models.Setting.type == models.SettingsType.REGISTER, models.Setting.name == "default_group")
+        (models.Setting.type == models.SettingsType.REGISTER) & (models.Setting.name == "default_group")
     )
     if default_group_setting is None or not default_group_setting.value:
         logger.error("默认用户组不存在")
@@ -350,18 +349,18 @@ async def router_user_authn_start(
     # TODO: 检查 WebAuthn 是否开启，用户是否有注册过 WebAuthn 设备等
     authn_setting = await models.Setting.get(
         session,
-        and_(models.Setting.type == "authn", models.Setting.name == "authn_enabled")
+        (models.Setting.type == "authn") & (models.Setting.name == "authn_enabled")
     )
     if not authn_setting or authn_setting.value != "1":
         raise HTTPException(status_code=400, detail="WebAuthn is not enabled")
 
     site_url_setting = await models.Setting.get(
         session,
-        and_(models.Setting.type == "basic", models.Setting.name == "siteURL")
+        (models.Setting.type == "basic") & (models.Setting.name == "siteURL")
     )
     site_title_setting = await models.Setting.get(
         session,
-        and_(models.Setting.type == "basic", models.Setting.name == "siteTitle")
+        (models.Setting.type == "basic") & (models.Setting.name == "siteTitle")
     )
 
     options = generate_registration_options(

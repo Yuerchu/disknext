@@ -120,7 +120,6 @@ Neue',Helvetica,Arial,sans-serif; box-sizing: border-box; font-size: 14px; verti
 async def init_default_settings() -> None:
     from .setting import Setting
     from .database import get_session
-    from sqlalchemy import and_
 
     log.info('初始化设置...')
 
@@ -128,7 +127,7 @@ async def init_default_settings() -> None:
         # 检查是否已经存在版本设置
         ver = await Setting.get(
             session,
-            and_(Setting.type == SettingsType.VERSION, Setting.name == f"db_version_{BackendVersion}")
+            (Setting.type == SettingsType.VERSION) & (Setting.name == f"db_version_{BackendVersion}")
         )
         if ver and ver.value == "installed":
             return
