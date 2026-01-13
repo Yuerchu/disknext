@@ -8,10 +8,10 @@
 models/
 ├── base/                   # 基础模型类
 │   ├── __init__.py         # 导出 SQLModelBase
-│   └── sqlmodel_base.py    # SQLModelBase 基类（元类魔法）
+│   └── sqlmodel_base.py    # SQLModelBase 基类（自定义元类，支持联表继承）
 ├── mixin/                  # Mixin 模块
 │   ├── __init__.py         # 统一导出
-│   ├── table.py            # TableBaseMixin, UUIDTableBaseMixin（CRUD + 时间戳）
+│   ├── table.py            # TableBaseMixin, UUIDTableBaseMixin（CRUD + 时间戳 + 分页）
 │   ├── polymorphic.py      # 联表继承工具（create_subclass_id_mixin 等）
 │   └── info_response.py    # DTO 用的 id/时间戳 Mixin
 ├── user.py                 # 用户模型
@@ -19,7 +19,7 @@ models/
 ├── group.py                # 用户组模型
 ├── policy.py               # 存储策略模型
 ├── physical_file.py        # 物理文件模型（文件去重）
-├── object.py               # 统一对象模型（文件/目录）+ 上传会话
+├── object.py               # 统一对象模型（文件/目录）+ 上传会话 + 文件元数据
 ├── share.py                # 分享模型
 ├── tag.py                  # 标签模型
 ├── download.py             # 离线下载任务
@@ -33,7 +33,8 @@ models/
 ├── storage_pack.py         # 容量包模型
 ├── webdav.py               # WebDAV 账户模型
 ├── color.py                # 主题颜色 DTO
-├── model_base.py           # 响应基类 DTO
+├── model_base.py           # 响应基类 DTO（ResponseBase, MCP 等）
+├── migration.py            # 数据库初始化和迁移
 └── database.py             # 数据库连接配置
 ```
 
@@ -43,9 +44,13 @@ models/
 
 ### SQLModelBase
 
-所有模型的基类，位于 `models.base.sqlmodel_base`，配置了：
+所有模型的基类，位于 `models.base.sqlmodel_base`，使用自定义元类 `__DeclarativeMeta` 实现：
 - `use_attribute_docstrings=True`：使用属性后的 docstring 作为字段描述
 - `validate_by_name=True`：允许按名称验证
+- **自动设置 table=True**：继承 TableBaseMixin 的类自动成为数据库表
+- **联表继承支持**：自动检测并处理 Joined Table Inheritance
+- **多态支持**：支持 `polymorphic_on`, `polymorphic_identity` 等参数
+- **Python 3.14 兼容**：包含针对 PEP 649 的兼容性修复
 
 ### TableBaseMixin
 
@@ -61,13 +66,18 @@ models/
 
 提供的 CRUD 方法：
 - `add()` - 新增记录（类方法）
-- `save()` - 保存实例
-- `update()` - 更新记录
+- `save()` - 保存实例（**必须使用返回值**）
+- `update()` - 更新记录（**必须使用返回值**）
 - `delete()` - 删除记录
-- `get()` - 查询记录（类方法）
-- `get_with_count()` - 分页查询（类方法）
+- `get()` - 查询记录（类方法，支持分页、排序、时间筛选、多态加载）
+- `get_with_count()` - 分页查询并返回总数（类方法，返回 `ListResponse[T]`）
 - `get_exist_one()` - 获取存在的记录（不存在则抛出 404）
-- `count()` - 统计记录数（类方法）
+- `count()` - 统计记录数（类方法，支持时间筛选）
+
+分页排序请求类：
+- `TimeFilterRequest` - 时间筛选参数
+- `PaginationRequest` - 分页排序参数
+- `TableViewRequest` - 组合分页排序和时间筛选
 
 **使用方式**：
 ```python
@@ -104,6 +114,23 @@ class User(UserBase, UUIDTableBaseMixin):  # 不需要再写 SQLModelBase
     password: str
 ```
 
+### ListResponse[T]
+
+泛型分页响应类，用于所有 LIST 端点的标准化响应格式：
+
+```python
+class ListResponse(BaseModel, Generic[ItemT]):
+    count: int      # 符合条件的记录总数
+    items: list[T]  # 当前页的记录列表
+```
+
+**使用示例**：
+```python
+@router.get("", response_model=ListResponse[UserResponse])
+async def list_users(session: SessionDep, table_view: TableViewRequestDep):
+    return await User.get_with_count(session, table_view=table_view)
+```
+
 ---
 
 ## 数据库表模型
@@ -118,10 +145,10 @@ class User(UserBase, UUIDTableBaseMixin):  # 不需要再写 SQLModelBase
 | `id` | `UUID` | 用户 UUID（主键） |
 | `username` | `str` | 用户名，唯一，不可更改 |
 | `nickname` | `str?` | 用户昵称 |
-| `password` | `str` | 密码（加密后） |
+| `password` | `str` | 密码（Argon2 加密） |
 | `status` | `UserStatus` | 用户状态：active/admin_banned/system_banned |
 | `storage` | `int` | 已用存储空间（字节） |
-| `two_factor` | `str?` | 两步验证密钥 |
+| `two_factor` | `str?` | 两步验证密钥（TOTP） |
 | `avatar` | `str` | 头像类型/地址 |
 | `score` | `int` | 用户积分 |
 | `group_expires` | `datetime?` | 当前用户组过期时间 |
@@ -134,6 +161,8 @@ class User(UserBase, UUIDTableBaseMixin):  # 不需要再写 SQLModelBase
 **关系**:
 - `group`: 所属用户组
 - `previous_group`: 之前的用户组（用于过期后恢复）
+- `tags`: 用户的标签列表
+- `authns`: 用户的 WebAuthn 凭证列表
 
 ---
 
@@ -327,11 +356,16 @@ class User(UserBase, UUIDTableBaseMixin):  # 不需要再写 SQLModelBase
 - `children`: 子对象列表（自引用）
 - `source_links`: 源链接列表
 - `shares`: 分享列表
+- `policy`: 存储策略
 
 **业务属性**:
 - `source_name`: 向后兼容属性，返回物理文件的存储路径
 - `is_file`: 是否为文件
 - `is_folder`: 是否为目录
+
+**类方法**:
+- `get_by_path()`: 根据路径获取对象
+- `get_children()`: 获取子对象列表
 
 ---
 
@@ -1026,8 +1060,8 @@ class OrderStatus(StrEnum):
 |-----|------|
 | `LoginRequest` | 登录请求 |
 | `RegisterRequest` | 注册请求 |
-| `TokenResponse` | 访问令牌响应 |
-| `UserResponse` | 用户信息响应 |
+| `TokenResponse` | 访问令牌响应（access_token, refresh_token, expires_in） |
+| `UserResponse` | 用户信息响应（包含 group） |
 | `UserPublic` | 用户公开信息 |
 | `UserSettingResponse` | 用户设置响应 |
 | `WebAuthnInfo` | WebAuthn 信息 |
@@ -1042,37 +1076,44 @@ class OrderStatus(StrEnum):
 |-----|------|
 | `GroupBase` | 用户组基础字段 |
 | `GroupOptionsBase` | 用户组选项基础字段 |
-| `GroupResponse` | 用户组响应 |
+| `GroupAllOptionsBase` | 用户组所有选项基础字段 |
+| `GroupResponse` | 用户组响应（包含 options） |
+| `GroupCreateRequest` | 管理员创建用户组请求 |
+| `GroupUpdateRequest` | 管理员更新用户组请求 |
+| `GroupDetailResponse` | 管理员用户组详情响应 |
+| `GroupListResponse` | 用户组列表响应 |
 
 ### 存储策略相关
 
 | DTO | 说明 |
 |-----|------|
+| `PolicyBase` | 存储策略基础字段 |
 | `PolicyOptionsBase` | 存储策略选项基础字段 |
+| `PolicyResponse` | 存储策略响应（id, name, type, max_size） |
+| `PolicySummary` | 存储策略摘要 |
 
 ### 对象相关
 
 | DTO | 说明 |
 |-----|------|
 | `ObjectBase` | 对象基础字段 |
-| `ObjectResponse` | 对象响应 |
-| `DirectoryCreateRequest` | 创建目录请求 |
-| `DirectoryResponse` | 目录响应 |
-| `ObjectMoveRequest` | 移动对象请求 |
-| `ObjectDeleteRequest` | 删除对象请求 |
-| `ObjectCopyRequest` | 复制对象请求 |
-| `ObjectRenameRequest` | 重命名对象请求 |
+| `ObjectResponse` | 对象响应（目录列表中的单个项） |
+| `DirectoryCreateRequest` | 创建目录请求（parent_id, name, policy_id?） |
+| `DirectoryResponse` | 目录响应（id, parent, objects, policy） |
+| `ObjectMoveRequest` | 移动对象请求（src_ids, dst_id） |
+| `ObjectDeleteRequest` | 删除对象请求（ids） |
+| `ObjectCopyRequest` | 复制对象请求（src_ids, dst_id） |
+| `ObjectRenameRequest` | 重命名对象请求（id, new_name） |
 | `ObjectPropertyResponse` | 对象基本属性响应 |
-| `ObjectPropertyDetailResponse` | 对象详细属性响应 |
-| `PolicyResponse` | 存储策略响应 |
+| `ObjectPropertyDetailResponse` | 对象详细属性响应（含元数据、分享统计） |
 
 ### 上传相关
 
 | DTO | 说明 |
 |-----|------|
-| `CreateUploadSessionRequest` | 创建上传会话请求 |
-| `UploadSessionResponse` | 上传会话响应 |
-| `UploadChunkResponse` | 上传分片响应 |
+| `CreateUploadSessionRequest` | 创建上传会话请求（file_name, file_size, parent_id） |
+| `UploadSessionResponse` | 上传会话响应（id, chunk_size, total_chunks） |
+| `UploadChunkResponse` | 上传分片响应（uploaded_chunks, is_complete） |
 | `CreateFileRequest` | 创建空白文件请求 |
 
 ### 管理员文件管理
@@ -1083,15 +1124,52 @@ class OrderStatus(StrEnum):
 | `FileBanRequest` | 文件封禁请求 |
 | `AdminFileListResponse` | 管理员文件列表响应 |
 
+### 管理员概况
+
+| DTO | 说明 |
+|-----|------|
+| `MetricsSummary` | 统计摘要（日期列表、每日增量、总计） |
+| `LicenseInfo` | 许可证信息 |
+| `VersionInfo` | 版本信息 |
+| `AdminSummaryData` | 管理员概况数据 |
+| `AdminSummaryResponse` | 管理员概况响应 |
+
 ### 系统设置
 
 | DTO | 说明 |
 |-----|------|
 | `SiteConfigResponse` | 站点配置响应 |
 | `ThemeResponse` | 主题颜色响应 |
-| `SettingItem` | 设置项 |
-| `SettingsUpdateRequest` | 更新设置请求 |
-| `SettingsGetResponse` | 获取设置响应 |
+| `SettingItem` | 设置项（type, name, value） |
+| `SettingsListResponse` | 设置列表响应 |
+| `SettingsUpdateRequest` | 更新设置请求（settings[]） |
+| `SettingsUpdateResponse` | 更新设置响应（updated, created） |
+
+### 分享相关
+
+| DTO | 说明 |
+|-----|------|
+| `ShareBase` | 分享基础字段 |
+| `ShareCreateRequest` | 创建分享请求 |
+| `ShareResponse` | 分享响应 |
+| `AdminShareListItem` | 管理员分享列表项 |
+
+### 任务相关
+
+| DTO | 说明 |
+|-----|------|
+| `TaskPropsBase` | 任务属性基础字段 |
+| `TaskSummary` | 任务摘要 |
+
+### 通用响应
+
+| DTO | 说明 |
+|-----|------|
+| `ResponseBase` | 通用响应基类（code, msg, data） |
+| `ListResponse[T]` | 泛型分页响应（count, items） |
+| `MCPBase` | MCP 基类 |
+| `MCPRequestBase` | MCP 请求基类 |
+| `MCPResponseBase` | MCP 响应基类 |
 
 ---
 
@@ -1115,6 +1193,13 @@ objects = await Object.get(
     (Object.owner_id == user_id) & (Object.type == ObjectType.FILE),
     fetch_mode="all"
 )
+
+# 分页查询并返回总数
+from models.mixin import TableViewRequest, ListResponse
+
+table_view = TableViewRequest(offset=0, limit=20, desc=True, order="created_at")
+result: ListResponse[User] = await User.get_with_count(session, table_view=table_view)
+print(f"总数: {result.count}, 当前页: {len(result.items)}")
 ```
 
 ### 创建文件对象
@@ -1126,15 +1211,64 @@ file = Object(
     size=1024,
     owner_id=user.id,
     parent_id=folder.id,
-    policy_id=policy.id
+    policy_id=policy.id,
+    physical_file_id=physical_file.id,
 )
-file = await file.save(session)
+file = await file.save(session)  # 必须使用返回值
 ```
 
 ### 多对多关系操作
 
 ```python
 # 为用户组添加存储策略
-group.policies.append(policy)
-await group.save(session)
+from models import GroupPolicyLink
+
+link = GroupPolicyLink(group_id=group.id, policy_id=policy.id)
+session.add(link)
+await session.commit()
+```
+
+### 文件上传流程
+
+```python
+# 1. 创建上传会话
+upload_session = UploadSession(
+    file_name="large_file.zip",
+    file_size=104857600,  # 100MB
+    chunk_size=52428800,  # 50MB
+    total_chunks=2,
+    owner_id=user.id,
+    parent_id=folder.id,
+    policy_id=policy.id,
+)
+upload_session = await upload_session.save(session)
+
+# 2. 上传分片后更新进度
+upload_session.uploaded_chunks += 1
+upload_session.uploaded_size += chunk_size
+upload_session = await upload_session.save(session)
+
+# 3. 检查是否完成
+if upload_session.is_complete:
+    # 创建 PhysicalFile 和 Object 记录
+    ...
+```
+
+### 文件引用计数（去重）
+
+```python
+# 复制文件时，只增加引用计数，不复制物理文件
+if src.is_file and src.physical_file_id:
+    physical_file = await PhysicalFile.get(session, PhysicalFile.id == src.physical_file_id)
+    physical_file.increment_reference()
+    await physical_file.save(session)
+
+# 删除文件时，减少引用计数
+physical_file.decrement_reference()
+if physical_file.can_be_deleted:
+    # 引用计数为0，可以删除物理文件
+    await storage_service.delete_file(physical_file.storage_path)
+    await PhysicalFile.delete(session, physical_file)
+else:
+    await physical_file.save(session)
 ```

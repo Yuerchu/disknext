@@ -1,14 +1,19 @@
 from datetime import datetime
 from enum import StrEnum
-from typing import Literal, TYPE_CHECKING
+from typing import Literal, TYPE_CHECKING, TypeVar
 from uuid import UUID
 
-from sqlmodel import Field, Relationship
 from pydantic import BaseModel
+from sqlalchemy import BinaryExpression, ClauseElement, and_
+from sqlmodel import Field, Relationship
+from sqlmodel.ext.asyncio.session import AsyncSession
+from sqlmodel.main import RelationshipInfo
 
 from .base import SQLModelBase
 from .model_base import ResponseBase
-from .mixin import UUIDTableBaseMixin
+from .mixin import UUIDTableBaseMixin, TableViewRequest, ListResponse
+
+T = TypeVar("T", bound="User")
 
 if TYPE_CHECKING:
     from .group import Group
@@ -38,10 +43,31 @@ class ThemeType(StrEnum):
 
 class UserStatus(StrEnum):
     """用户状态枚举"""
-    
+
     ACTIVE = "active"
     ADMIN_BANNED = "admin_banned"
     SYSTEM_BANNED = "system_banned"
+
+
+# ==================== 筛选参数 ====================
+
+class UserFilterParams(SQLModelBase):
+    """
+    用户过滤参数
+
+    用于管理员搜索用户列表，支持用户组、用户名、昵称、状态等过滤。
+    """
+    group_id: UUID | None = None
+    """按用户组UUID筛选"""
+
+    username_contains: str | None = Field(default=None, max_length=50)
+    """用户名包含（不区分大小写的模糊搜索）"""
+
+    nickname_contains: str | None = Field(default=None, max_length=50)
+    """昵称包含（不区分大小写的模糊搜索）"""
+
+    status: UserStatus | None = None
+    """按用户状态筛选"""
 
 
 # ==================== Base 模型 ====================
@@ -165,7 +191,7 @@ class UserPublic(UserBase):
     id: UUID | None = None
     """用户UUID"""
 
-    nick: str | None = None
+    nickname: str | None = None
     """昵称"""
 
     storage: int = 0
@@ -179,6 +205,9 @@ class UserPublic(UserBase):
 
     group_id: UUID | None = None
     """所属用户组UUID"""
+
+    two_factor: str | None = None
+    """两步验证密钥（32位字符串，null 表示未启用）"""
 
     created_at: datetime | None = None
     """创建时间"""
@@ -234,6 +263,9 @@ class UserAdminUpdateRequest(SQLModelBase):
 
     group_expires: datetime | None = None
     """用户组过期时间"""
+
+    two_factor: str | None = None
+    """两步验证密钥（32位字符串，传 null 可清除，不传则不修改）"""
 
 
 class UserCalibrateResponse(SQLModelBase):
@@ -396,3 +428,58 @@ class User(UserBase, UUIDTableBaseMixin):
     def to_public(self) -> "UserPublic":
         """转换为公开 DTO，排除敏感字段"""
         return UserPublic.model_validate(self)
+
+    @classmethod
+    async def get_with_count(
+            cls: type[T],
+            session: AsyncSession,
+            condition: BinaryExpression | ClauseElement | None = None,
+            *,
+            filter_params: 'UserFilterParams | None' = None,
+            join: type[T] | tuple[type[T], ClauseElement] | None = None,
+            options: list | None = None,
+            load: RelationshipInfo | None = None,
+            order_by: list[ClauseElement] | None = None,
+            filter: BinaryExpression | ClauseElement | None = None,
+            table_view: TableViewRequest | None = None,
+    ) -> 'ListResponse[T]':
+        """
+        获取分页用户列表及总数，支持用户过滤参数
+
+        :param filter_params: UserFilterParams 过滤参数对象（用户组、用户名、昵称、状态等）
+        :param 其他参数: 继承自 UUIDTableBaseMixin.get_with_count()
+        """
+        # 构建过滤条件
+        merged_condition = condition
+        if filter_params is not None:
+            filter_conditions: list[BinaryExpression] = []
+
+            if filter_params.group_id is not None:
+                filter_conditions.append(cls.group_id == filter_params.group_id)
+
+            if filter_params.username_contains is not None:
+                filter_conditions.append(cls.username.ilike(f"%{filter_params.username_contains}%"))
+
+            if filter_params.nickname_contains is not None:
+                filter_conditions.append(cls.nickname.ilike(f"%{filter_params.nickname_contains}%"))
+
+            if filter_params.status is not None:
+                filter_conditions.append(cls.status == filter_params.status)
+
+            if filter_conditions:
+                combined_filter = and_(*filter_conditions)
+                if merged_condition is not None:
+                    merged_condition = and_(merged_condition, combined_filter)
+                else:
+                    merged_condition = combined_filter
+
+        return await super().get_with_count(
+            session,
+            merged_condition,
+            join=join,
+            options=options,
+            load=load,
+            order_by=order_by,
+            filter=filter,
+            table_view=table_view,
+        )

@@ -25,7 +25,7 @@ default_settings: list[Setting] = [
     Setting(name="siteURL", value="http://localhost", type=SettingsType.BASIC),
     Setting(name="siteName", value="DiskNext", type=SettingsType.BASIC),
     Setting(name="register_enabled", value="1", type=SettingsType.REGISTER),
-    Setting(name="default_group", value="", type=SettingsType.REGISTER),  # UUID 在组创建后更新
+    Setting(name="default_group", value="", type=SettingsType.REGISTER),
     Setting(name="siteKeywords", value="网盘，网盘", type=SettingsType.BASIC),
     Setting(name="siteDes", value="DiskNext", type=SettingsType.BASIC),
     Setting(name="siteTitle", value="云星启智", type=SettingsType.BASIC),

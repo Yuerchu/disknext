@@ -33,7 +33,7 @@ async def auth_required(
         return user
 
     except jwt.InvalidTokenError:
-        http_exceptions.raise_unauthorized("账号或密码错误")
+        http_exceptions.raise_unauthorized("凭据过期或无效")
 
 async def admin_required(
     user: Annotated[User, Depends(auth_required)],

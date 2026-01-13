@@ -5,14 +5,14 @@ from loguru import logger as l
 from sqlalchemy import func, and_
 
 from middleware.auth import admin_required
-from middleware.dependencies import SessionDep, TableViewRequestDep
+from middleware.dependencies import SessionDep, TableViewRequestDep, UserFilterParamsDep
 from models import (
     User, ResponseBase, UserPublic, ListResponse,
     Group, Object, ObjectType, )
 from models.user import (
     UserAdminUpdateRequest, UserCalibrateResponse,
 )
-from utils import Password
+from utils import Password, http_exceptions
 
 admin_user_router = APIRouter(
     prefix="/user",
@@ -50,15 +50,17 @@ async def router_admin_get_user(session: SessionDep, user_id: int) -> ResponseBa
 async def router_admin_get_users(
     session: SessionDep,
     table_view: TableViewRequestDep,
+    filter_params: UserFilterParamsDep,
 ) -> ListResponse[UserPublic]:
     """
-    获取用户列表，支持分页、排序和时间筛选。
+    获取用户列表，支持分页、排序、时间筛选和用户筛选。
 
     :param session: 数据库会话依赖项
     :param table_view: 分页排序参数依赖
+    :param filter_params: 用户筛选参数（用户组、用户名、昵称、状态）
     :return: 分页用户列表
     """
-    result = await User.get_with_count(session, table_view=table_view)
+    result = await User.get_with_count(session, filter_params=filter_params, table_view=table_view)
     return ListResponse(
         items=[user.to_public() for user in result.items],
         count=result.count,
@@ -114,6 +116,10 @@ async def router_admin_update_user(
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
 
+    # 默认管理员（用户名为 admin）不允许更改用户组
+    if request.group_id and user.username == "admin" and request.group_id != user.group_id:
+        http_exceptions.raise_forbidden("默认管理员不允许更改用户组")
+
     # 如果更新用户组，验证新组存在
     if request.group_id:
         group = await Group.get(session, Group.id == request.group_id)
@@ -126,6 +132,11 @@ async def router_admin_update_user(
         update_data['password'] = Password.hash(update_data['password'])
     elif 'password' in update_data:
         del update_data['password']  # 空密码不更新
+
+    # 验证两步验证密钥格式（如果提供了值且不为 None，长度必须为 32）
+    if 'two_factor' in update_data and update_data['two_factor'] is not None:
+        if len(update_data['two_factor']) != 32:
+            raise HTTPException(status_code=400, detail="两步验证密钥必须为32位字符串")
 
     # 更新字段
     for key, value in update_data.items():

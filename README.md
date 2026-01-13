@@ -27,10 +27,12 @@
 - **多存储策略**：支持本地存储、S3 兼容 API、阿里云 OSS、OneDrive 等多种存储后端
 - **远程节点**：可对接从节点分担存储和下载任务
 - **WebDAV 兼容**：提供标准 WebDAV 接口，支持第三方客户端访问
+- **文件去重**：基于 PhysicalFile 引用计数的文件去重机制
 
 ### 文件管理
 
 - **统一对象模型**：文件和目录采用统一的 Object 模型管理
+- **分片上传**：支持大文件分片上传，可断点续传
 - **在线压缩/解压**：支持批量打包下载
 - **离线下载**：内置离线下载服务，也可对接 Aria2/qBittorrent
 
@@ -50,7 +52,7 @@
 ### 分享功能
 
 - **分享链接管理**：可设置密码、过期时间
-- **分享页展示** 自动渲染分享中的 README、在线预览内容
+- **分享页展示**：自动渲染分享中的 README、在线预览内容
 
 ### 增值服务
 
@@ -67,8 +69,10 @@
 | [Python 3.13+](https://www.python.org/) | 编程语言 |
 | [FastAPI](https://fastapi.tiangolo.com/) | 高性能异步 Web 框架 |
 | [SQLModel](https://sqlmodel.tiangolo.com/) | 类型安全的 ORM（SQLAlchemy + Pydantic） |
+| [Redis](https://redis.io/) | 缓存与令牌存储（可选） |
 | [aiohttp](https://docs.aiohttp.org/) | 异步 HTTP 客户端 |
 | [aiosqlite](https://aiosqlite.omnilib.dev/) | 异步 SQLite 驱动 |
+| [asyncpg](https://magicstack.github.io/asyncpg/) | 异步 PostgreSQL 驱动 |
 | [Loguru](https://loguru.readthedocs.io/) | 现代化日志库 |
 | [PyJWT](https://pyjwt.readthedocs.io/) | JWT 令牌处理 |
 | [WebAuthn](https://pypi.org/project/webauthn/) | Passkey 认证支持 |
@@ -81,35 +85,59 @@
 Server/
 ├── main.py              # 应用入口
 ├── models/              # 数据模型
-│   ├── base/            # 基类定义 (SQLModelBase, TableBase)
+│   ├── base/            # 基类定义 (SQLModelBase)
+│   ├── mixin/           # Mixin 模块 (TableBaseMixin, UUIDTableBaseMixin)
 │   ├── user.py          # 用户模型
+│   ├── user_authn.py    # WebAuthn 凭证
 │   ├── group.py         # 用户组模型
-│   ├── object.py        # 文件/目录统一模型
+│   ├── object.py        # 文件/目录统一模型 + 上传会话
+│   ├── physical_file.py # 物理文件模型（文件去重）
 │   ├── policy.py        # 存储策略模型
 │   ├── share.py         # 分享模型
+│   ├── download.py      # 离线下载任务
+│   ├── node.py          # 节点模型
+│   ├── task.py          # 任务模型
 │   └── ...
 ├── routers/             # API 路由
-│   └── api/v1/          # v1 版本 API
-│       ├── user/        # 用户相关接口
-│       ├── directory/   # 目录相关接口
-│       ├── file/        # 文件相关接口
-│       ├── admin/       # 管理员接口
-│       └── ...
+│   ├── api/v1/          # v1 版本 API
+│   │   ├── user/        # 用户相关接口
+│   │   ├── directory/   # 目录相关接口
+│   │   ├── file/        # 文件上传/下载接口
+│   │   ├── object/      # 对象操作接口
+│   │   ├── share/       # 分享接口
+│   │   ├── admin/       # 管理员接口
+│   │   │   ├── user/    # 用户管理
+│   │   │   ├── group/   # 用户组管理
+│   │   │   ├── policy/  # 存储策略管理
+│   │   │   ├── file/    # 文件管理
+│   │   │   ├── share/   # 分享管理
+│   │   │   ├── task/    # 任务管理
+│   │   │   └── vas/     # 增值服务管理
+│   │   └── ...
+│   └── dav/             # WebDAV 路由
 ├── service/             # 业务服务层
-│   ├── user/            # 用户服务
-│   ├── captcha/         # 验证码服务
-│   └── oauth/           # OAuth 服务
+│   ├── user/            # 用户服务（登录）
+│   ├── storage/         # 存储服务（本地存储）
+│   ├── captcha/         # 验证码服务（reCAPTCHA、Turnstile）
+│   ├── oauth/           # OAuth 服务（QQ、GitHub）
+│   └── redis/           # Redis 服务（连接管理、令牌存储）
 ├── middleware/          # 中间件
 │   ├── auth.py          # 认证中间件
 │   └── dependencies.py  # 依赖注入
 ├── utils/               # 工具函数
 │   ├── JWT/             # JWT 处理
-│   ├── password/        # 密码处理
+│   ├── password/        # 密码处理（Argon2、TOTP）
 │   ├── conf/            # 配置管理
+│   ├── http/            # HTTP 异常处理
 │   └── lifespan/        # 生命周期管理
 └── tests/               # 测试用例
     ├── unit/            # 单元测试
+    │   ├── models/      # 模型测试
+    │   ├── service/     # 服务测试
+    │   └── utils/       # 工具测试
     ├── integration/     # 集成测试
+    │   ├── api/         # API 测试
+    │   └── middleware/  # 中间件测试
     └── fixtures/        # 测试夹具
 ```
 
@@ -121,7 +149,7 @@ Server/
 | 用户 | `/api/v1/user` | 用户注册、登录、设置 |
 | 目录 | `/api/v1/directory` | 目录浏览和管理 |
 | 文件 | `/api/v1/file` | 文件上传、下载、管理 |
-| 对象 | `/api/v1/object` | 文件和目录的通用操作 |
+| 对象 | `/api/v1/object` | 文件和目录的通用操作（删除、移动、复制、重命名） |
 | 分享 | `/api/v1/share` | 分享链接管理 |
 | 下载 | `/api/v1/download` | 离线下载管理 |
 | 标签 | `/api/v1/tag` | 用户标签管理 |
@@ -137,6 +165,7 @@ Server/
 
 - Python 3.13 或更高版本
 - uv (推荐) 或 pip
+- Redis (可选，用于令牌存储和缓存)
 
 ### 安装
 
@@ -157,8 +186,17 @@ uv sync
 # 调试模式
 DEBUG=false
 
+# 运行模式: master（主节点）或 slave（从节点）
+MODE=master
+
 # 数据库连接（默认使用 SQLite）
 DATABASE_URL=sqlite+aiosqlite:///disknext.db
+
+# Redis 配置（可选，不配置则使用内存缓存）
+REDIS_URL=localhost
+REDIS_PORT=6379
+REDIS_PASSWORD=
+REDIS_DB=0
 ```
 
 ### 启动
@@ -171,7 +209,9 @@ fastapi dev
 fastapi run
 ```
 
-访问 <http://localhost:8000/docs> 查看 API 文档。
+访问 <http://localhost:8000/docs> 查看 API 文档（仅 DEBUG=true 时可用）。
+
+首次启动会自动初始化数据库并创建默认管理员账户，**请注意控制台输出的初始密码**。
 
 ## 测试
 

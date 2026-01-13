@@ -1,6 +1,7 @@
 from typing import NoReturn
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 
 from utils.conf import appmeta
 from utils.http.http_exceptions import raise_internal_error
@@ -31,6 +32,15 @@ app = FastAPI(
     lifespan=lifespan.lifespan,
     debug=appmeta.debug,
     openapi_url="/openapi.json" if appmeta.debug else None,
+)
+
+# 配置 CORS 中间件
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 开发环境允许所有来源，生产环境应该限制为具体域名
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 @app.exception_handler(Exception)

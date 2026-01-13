@@ -16,21 +16,21 @@ def raise_bad_request(*args, **kwargs) -> NoReturn:
     """Raises an HTTP 400 Bad Request exception."""
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, *args, **kwargs)
 
-def raise_unauthorized(*args, **kwargs) -> NoReturn:
+def raise_unauthorized(detail: str | None = None, *args, **kwargs) -> NoReturn:
     """Raises an HTTP 401 Unauthorized exception."""
-    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, *args, **kwargs)
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=detail, *args, **kwargs)
 
-def raise_insufficient_quota(detail: str = "积分不足，请充值", *args, **kwargs) -> NoReturn:
+def raise_insufficient_quota(detail: str | None = None, *args, **kwargs) -> NoReturn:
     """Raises an HTTP 402 Payment Required exception."""
     raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=detail, *args, **kwargs)
 
-def raise_forbidden(*args, **kwargs) -> NoReturn:
+def raise_forbidden(detail: str | None = None, *args, **kwargs) -> NoReturn:
     """Raises an HTTP 403 Forbidden exception."""
-    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, *args, **kwargs)
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail, *args, **kwargs)
 
-def raise_not_found(*args, **kwargs) -> NoReturn:
+def raise_not_found(detail: str | None = None, *args, **kwargs) -> NoReturn:
     """Raises an HTTP 404 Not Found exception."""
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, *args, **kwargs)
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail, *args, **kwargs)
 
 def raise_conflict(*args, **kwargs) -> NoReturn:
     """Raises an HTTP 409 Conflict exception."""

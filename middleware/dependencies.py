@@ -5,15 +5,18 @@ FastAPI 依赖注入
 - SessionDep: 数据库会话依赖
 - TimeFilterRequestDep: 时间筛选查询依赖（用于 count 等统计接口）
 - TableViewRequestDep: 分页排序查询依赖（包含时间筛选 + 分页排序）
+- UserFilterParamsDep: 用户筛选参数依赖（用于管理员用户列表）
 """
 from datetime import datetime
 from typing import Annotated, Literal, TypeAlias
+from uuid import UUID
 
 from fastapi import Depends, Query
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from models.database import get_session
 from models.mixin import TimeFilterRequest, TableViewRequest
+from models.user import UserFilterParams, UserStatus
 
 
 # --- 数据库会话依赖 ---
@@ -70,3 +73,24 @@ async def _get_table_view_queries(
 
 TableViewRequestDep: TypeAlias = Annotated[TableViewRequest, Depends(_get_table_view_queries)]
 """获取分页排序和时间筛选参数的依赖"""
+
+
+# --- 用户筛选依赖 ---
+
+async def _get_user_filter_params(
+    group_id: Annotated[UUID | None, Query(description="按用户组UUID筛选")] = None,
+    username: Annotated[str | None, Query(max_length=50, description="按用户名模糊搜索")] = None,
+    nickname: Annotated[str | None, Query(max_length=50, description="按昵称模糊搜索")] = None,
+    status: Annotated[UserStatus | None, Query(description="按用户状态筛选")] = None,
+) -> UserFilterParams:
+    """解析用户过滤查询参数"""
+    return UserFilterParams(
+        group_id=group_id,
+        username_contains=username,
+        nickname_contains=nickname,
+        status=status,
+    )
+
+
+UserFilterParamsDep: TypeAlias = Annotated[UserFilterParams, Depends(_get_user_filter_params)]
+"""获取用户筛选参数的依赖（用于管理员用户列表）"""

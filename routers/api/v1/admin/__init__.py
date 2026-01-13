@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, status
 from loguru import logger as l
 from sqlalchemy import and_
 
@@ -55,6 +55,23 @@ admin_aria2_router = APIRouter(
     prefix='/admin/aria2',
     tags=['admin', 'admin_aria2']
 )
+
+@admin_router.get(
+    path='/',
+    summary='自己是否为管理员',
+    dependencies=[Depends(admin_required)],
+    status_code=status.HTTP_204_NO_CONTENT
+)
+async def is_admin() -> None:
+    """
+    检查当前用户是否具有管理员权限。
+
+    如果用户是管理员，则返回 204 No Content 响应；否则返回 403 Forbidden 错误。
+
+    Returns:
+        None: 无内容响应
+    """
+    return None
 
 @admin_router.get(
     path='/summary',

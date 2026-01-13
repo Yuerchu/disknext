@@ -260,7 +260,7 @@ def router_user_avatar(id: str, size: int = 128) -> models.ResponseBase:
     summary='获取用户信息',
     description='Get user information.',
     dependencies=[Depends(dependency=auth_required)],
-    response_model=models.ResponseBase,
+    response_model=models.UserResponse,
 )
 async def router_user_me(
     session: SessionDep,
@@ -285,7 +285,7 @@ async def router_user_me(
     # 异步加载 tags 关系
     user_tags = await user.awaitable_attrs.tags
 
-    user_response = models.UserResponse(
+    return models.UserResponse(
         id=user.id,
         username=user.username,
         status=user.status,
@@ -296,8 +296,6 @@ async def router_user_me(
         group=group_response,
         tags=[tag.name for tag in user_tags] if user_tags else [],
     )
-
-    return models.ResponseBase(data=user_response.model_dump())
 
 @user_router.get(
     path='/storage',
