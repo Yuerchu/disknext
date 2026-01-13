@@ -253,12 +253,13 @@ async def router_object_move(
     if not dst.is_folder:
         raise HTTPException(status_code=400, detail="目标不是有效文件夹")
 
+    # 存储 dst 的属性，避免后续数据库操作导致 dst 过期后无法访问
+    dst_id = dst.id
+    dst_parent_id = dst.parent_id
+
     moved_count = 0
 
-    # 处理单个 UUID 或 UUID 列表
-    src_ids = request.src_ids if isinstance(request.src_ids, list) else [request.src_ids]
-
-    for src_id in src_ids:
+    for src_id in request.src_ids:
         src = await Object.get(session, Object.id == src_id)
         if not src or src.owner_id != user_id:
             continue
@@ -268,18 +269,19 @@ async def router_object_move(
             continue
 
         # 检查是否移动到自身或子目录（防止循环引用）
-        if src.id == dst.id:
+        if src.id == dst_id:
             continue
 
         # 检查是否将目录移动到其子目录中（循环检测）
         if src.is_folder:
-            current = dst
+            current_parent_id = dst_parent_id
             is_cycle = False
-            while current and current.parent_id:
-                if current.parent_id == src.id:
+            while current_parent_id:
+                if current_parent_id == src.id:
                     is_cycle = True
                     break
-                current = await Object.get(session, Object.id == current.parent_id)
+                current = await Object.get(session, Object.id == current_parent_id)
+                current_parent_id = current.parent_id if current else None
             if is_cycle:
                 continue
 
@@ -287,20 +289,23 @@ async def router_object_move(
         existing = await Object.get(
             session,
             (Object.owner_id == user_id) &
-            (Object.parent_id == dst.id) &
+            (Object.parent_id == dst_id) &
             (Object.name == src.name)
         )
         if existing:
             continue  # 跳过重名对象
 
-        src.parent_id = dst.id
-        await src.save(session)
+        src.parent_id = dst_id
+        await src.save(session, commit=False, refresh=False)
         moved_count += 1
+
+    # 统一提交所有更改
+    await session.commit()
 
     return ResponseBase(
         data={
             "moved": moved_count,
-            "total": len(src_ids),
+            "total": len(request.src_ids),
         }
     )
 

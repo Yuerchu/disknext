@@ -94,7 +94,6 @@ from .model_base import (
     MetricsSummary,
     LicenseInfo,
     VersionInfo,
-    AdminSummaryData,
     AdminSummaryResponse,
 )
 

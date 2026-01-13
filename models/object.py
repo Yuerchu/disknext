@@ -93,7 +93,7 @@ class DirectoryCreateRequest(SQLModelBase):
 class ObjectMoveRequest(SQLModelBase):
     """移动对象请求 DTO"""
 
-    src_ids: UUID | list[UUID]
+    src_ids: list[UUID]
     """源对象UUID列表"""
 
     dst_id: UUID
