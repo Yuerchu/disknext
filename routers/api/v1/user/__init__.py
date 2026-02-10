@@ -1,30 +1,26 @@
 from typing import Annotated, Literal
-from uuid import UUID
+from uuid import UUID, uuid4
 
+import jwt
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
+from loguru import logger
 from webauthn import generate_registration_options
 from webauthn.helpers import options_to_json_dict
-from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
-from loguru import logger
 
-import models
 import service
+import sqlmodels
 from middleware.auth import auth_required
 from middleware.dependencies import SessionDep
-from utils.JWT import SECRET_KEY
-from utils import Password, http_exceptions
+from utils import JWT, Password, http_exceptions
+from .settings import user_settings_router
 
 user_router = APIRouter(
     prefix="/user",
     tags=["user"],
 )
 
-user_settings_router = APIRouter(
-    prefix='/user/settings',
-    tags=["user", "user_settings"],
-    dependencies=[Depends(auth_required)],
-)
+user_router.include_router(user_settings_router)
 
 @user_router.post(
     path='/session',
@@ -34,7 +30,7 @@ user_settings_router = APIRouter(
 async def router_user_session(
     session: SessionDep,
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
-) -> models.TokenResponse:
+) -> sqlmodels.TokenResponse:
     """
     用户登录端点。
 
@@ -43,7 +39,7 @@ async def router_user_session(
 
     OAuth2 scopes 字段格式: "otp:123456" 或直接传入验证码
     """
-    username = form_data.username
+    email = form_data.username  # OAuth2 表单字段名为 username，实际传入的是 email
     password = form_data.password
 
     # 从 scopes 中提取 OTP 验证码（OAuth2.1 扩展方式）
@@ -59,8 +55,8 @@ async def router_user_session(
 
     result = await service.user.login(
         session,
-        models.LoginRequest(
-            username=username,
+        sqlmodels.LoginRequest(
+            email=email,
             password=password,
             two_fa_code=otp_code,
         ),
@@ -75,19 +71,70 @@ async def router_user_session(
 )
 async def router_user_session_refresh(
     session: SessionDep,
-    request, # RefreshTokenRequest
-) -> models.TokenResponse:
-    http_exceptions.raise_not_implemented()
+    request: sqlmodels.RefreshTokenRequest,
+) -> sqlmodels.TokenResponse:
+    """
+    使用 refresh_token 签发新的 access_token 和 refresh_token。
+
+    流程：
+    1. 解码 refresh_token JWT
+    2. 验证 token_type 为 refresh
+    3. 验证用户存在且状态正常
+    4. 签发新的 access_token + refresh_token
+
+    :param session: 数据库会话
+    :param request: 刷新令牌请求
+    :return: 新的 TokenResponse
+    """
+
+    try:
+        payload = jwt.decode(request.refresh_token, JWT.SECRET_KEY, algorithms=["HS256"])
+    except jwt.InvalidTokenError:
+        http_exceptions.raise_unauthorized("刷新令牌无效或已过期")
+
+    # 验证是 refresh token
+    if payload.get("token_type") != "refresh":
+        http_exceptions.raise_unauthorized("非刷新令牌")
+
+    user_id_str = payload.get("sub")
+    if not user_id_str:
+        http_exceptions.raise_unauthorized("令牌缺少用户标识")
+
+    user_id = UUID(user_id_str)
+    user = await sqlmodels.User.get(session, sqlmodels.User.id == user_id)
+    if not user:
+        http_exceptions.raise_unauthorized("用户不存在")
+
+    if not user.status:
+        http_exceptions.raise_forbidden("账户已被禁用")
+
+    # 签发新令牌
+    access_token = JWT.create_access_token(
+        sub=user.id,
+        jti=uuid4(),
+    )
+    refresh_token = JWT.create_refresh_token(
+        sub=user.id,
+        jti=uuid4(),
+    )
+
+    return sqlmodels.TokenResponse(
+        access_token=access_token.access_token,
+        access_expires=access_token.access_expires,
+        refresh_token=refresh_token.refresh_token,
+        refresh_expires=refresh_token.refresh_expires,
+    )
 
 @user_router.post(
     path='/',
     summary='用户注册',
     description='User registration endpoint.',
+    status_code=204,
 )
 async def router_user_register(
     session: SessionDep,
-    request: models.RegisterRequest,
-) -> models.ResponseBase:
+    request: sqlmodels.RegisterRequest,
+) -> None:
     """
     用户注册端点
 
@@ -95,7 +142,7 @@ async def router_user_register(
     1. 验证用户名唯一性
     2. 获取默认用户组
     3. 创建用户记录
-    4. 创建以用户名命名的根目录
+    4. 创建用户根目录（name="/"）
 
     :param session: 数据库会话
     :param request: 注册请求
@@ -103,61 +150,52 @@ async def router_user_register(
     :raises HTTPException 400: 用户名已存在
     :raises HTTPException 500: 默认用户组或存储策略不存在
     """
-    # 1. 验证用户名唯一性
-    existing_user = await models.User.get(
+    # 1. 验证邮箱唯一性
+    existing_user = await sqlmodels.User.get(
         session,
-        models.User.username == request.username
+        sqlmodels.User.email == request.email
     )
     if existing_user:
-        raise HTTPException(status_code=400, detail="用户名已存在")
+        raise HTTPException(status_code=400, detail="邮箱已存在")
 
     # 2. 获取默认用户组（从设置中读取 UUID）
-    default_group_setting: models.Setting | None = await models.Setting.get(
+    default_group_setting: sqlmodels.Setting | None = await sqlmodels.Setting.get(
         session,
-        (models.Setting.type == models.SettingsType.REGISTER) & (models.Setting.name == "default_group")
+        (sqlmodels.Setting.type == sqlmodels.SettingsType.REGISTER) & (sqlmodels.Setting.name == "default_group")
     )
     if default_group_setting is None or not default_group_setting.value:
         logger.error("默认用户组不存在")
         http_exceptions.raise_internal_error()
 
     default_group_id = UUID(default_group_setting.value)
-    default_group = await models.Group.get(session, models.Group.id == default_group_id)
+    default_group = await sqlmodels.Group.get(session, sqlmodels.Group.id == default_group_id)
     if not default_group:
         logger.error("默认用户组不存在")
         http_exceptions.raise_internal_error()
 
     # 3. 创建用户
     hashed_password = Password.hash(request.password)
-    new_user = models.User(
-        username=request.username,
+    new_user = sqlmodels.User(
+        email=request.email,
         password=hashed_password,
         group_id=default_group.id,
     )
-    new_user_id = new_user.id  # 在 save 前保存 UUID
-    new_user_username = new_user.username
+    new_user_id = new_user.id
     await new_user.save(session)
 
-    # 4. 创建以用户名命名的根目录
-    default_policy = await models.Policy.get(session, models.Policy.name == "本地存储")
+    # 4. 创建用户根目录
+    default_policy = await sqlmodels.Policy.get(session, sqlmodels.Policy.name == "本地存储")
     if not default_policy:
         logger.error("默认存储策略不存在")
         http_exceptions.raise_internal_error()
 
-    await models.Object(
-        name=new_user_username,
-        type=models.ObjectType.FOLDER,
+    await sqlmodels.Object(
+        name="/",
+        type=sqlmodels.ObjectType.FOLDER,
         owner_id=new_user_id,
         parent_id=None,
         policy_id=default_policy.id,
     ).save(session)
-
-    return models.ResponseBase(
-        data={
-            "user_id": new_user_id,
-            "username": new_user_username,
-        },
-        msg="注册成功",
-    )
 
 @user_router.post(
     path='/code',
@@ -166,7 +204,7 @@ async def router_user_register(
 )
 def router_user_email_code(
     reason: Literal['register', 'reset'] = 'register',
-) -> models.ResponseBase:
+) -> sqlmodels.ResponseBase:
     """
     Send a verification code email.
     
@@ -180,7 +218,7 @@ def router_user_email_code(
     summary='初始化QQ登录',
     description='Initialize QQ login for a user.',
 )
-def router_user_qq() -> models.ResponseBase: 
+def router_user_qq() -> sqlmodels.ResponseBase: 
     """
     Initialize QQ login for a user.
     
@@ -194,7 +232,7 @@ def router_user_qq() -> models.ResponseBase:
     summary='WebAuthn登录初始化',
     description='Initialize WebAuthn login for a user.',
 )
-async def router_user_authn(username: str) -> models.ResponseBase:
+async def router_user_authn(username: str) -> sqlmodels.ResponseBase:
     
     http_exceptions.raise_not_implemented()
 
@@ -203,7 +241,7 @@ async def router_user_authn(username: str) -> models.ResponseBase:
     summary='WebAuthn登录',
     description='Finish WebAuthn login for a user.',
 )
-def router_user_authn_finish(username: str) -> models.ResponseBase:
+def router_user_authn_finish(username: str) -> sqlmodels.ResponseBase:
     """
     Finish WebAuthn login for a user.
     
@@ -220,7 +258,7 @@ def router_user_authn_finish(username: str) -> models.ResponseBase:
     summary='获取用户主页展示用分享',
     description='Get user profile for display.',
 )
-def router_user_profile(id: str) -> models.ResponseBase:
+def router_user_profile(id: str) -> sqlmodels.ResponseBase:
     """
     Get user profile for display.
     
@@ -237,7 +275,7 @@ def router_user_profile(id: str) -> models.ResponseBase:
     summary='获取用户头像',
     description='Get user avatar by ID and size.',
 )
-def router_user_avatar(id: str, size: int = 128) -> models.ResponseBase:
+def router_user_avatar(id: str, size: int = 128) -> sqlmodels.ResponseBase:
     """
     Get user avatar by ID and size.
     
@@ -259,12 +297,12 @@ def router_user_avatar(id: str, size: int = 128) -> models.ResponseBase:
     summary='获取用户信息',
     description='Get user information.',
     dependencies=[Depends(dependency=auth_required)],
-    response_model=models.UserResponse,
+    response_model=sqlmodels.UserResponse,
 )
 async def router_user_me(
     session: SessionDep,
-    user: Annotated[models.User, Depends(auth_required)],
-) -> models.ResponseBase:
+    user: Annotated[sqlmodels.User, Depends(auth_required)],
+) -> sqlmodels.UserResponse:
     """
     获取用户信息.
 
@@ -272,10 +310,10 @@ async def router_user_me(
     :rtype: ResponseBase
     """
     # 加载 group 及其 options 关系
-    group = await models.Group.get(
+    group = await sqlmodels.Group.get(
         session,
-        models.Group.id == user.group_id,
-        load=models.Group.options
+        sqlmodels.Group.id == user.group_id,
+        load=sqlmodels.Group.options
     )
 
     # 构建 GroupResponse
@@ -284,9 +322,9 @@ async def router_user_me(
     # 异步加载 tags 关系
     user_tags = await user.awaitable_attrs.tags
 
-    return models.UserResponse(
+    return sqlmodels.UserResponse(
         id=user.id,
-        username=user.username,
+        email=user.email,
         status=user.status,
         score=user.score,
         nickname=user.nickname,
@@ -304,30 +342,26 @@ async def router_user_me(
 )
 async def router_user_storage(
     session: SessionDep,
-    user: Annotated[models.user.User, Depends(auth_required)],
-) -> models.ResponseBase:
+    user: Annotated[sqlmodels.user.User, Depends(auth_required)],
+) -> sqlmodels.UserStorageResponse:
     """
     获取用户存储空间信息。
-
-    返回值：
-        - used: 已使用空间（字节）
-        - free: 剩余空间（字节）
-        - total: 总容量（字节）= 用户组容量
     """
     # 获取用户组的基础存储容量
-    group = await models.Group.get(session, models.Group.id == user.group_id)
+    group = await sqlmodels.Group.get(session, sqlmodels.Group.id == user.group_id)
     if not group:
-        raise HTTPException(status_code=500, detail="用户组不存在")
+        raise HTTPException(status_code=404, detail="用户组不存在")
+    
+    # [TODO] 总空间加上用户购买的额外空间
+    
     total: int = group.max_storage
     used: int = user.storage
     free: int = max(0, total - used)
 
-    return models.ResponseBase(
-        data={
-            "used": used,
-            "free": free,
-            "total": total,
-        }
+    return sqlmodels.UserStorageResponse(
+        used=used,
+        free=free,
+        total=total,
     )
 
 @user_router.put(
@@ -338,8 +372,8 @@ async def router_user_storage(
 )
 async def router_user_authn_start(
     session: SessionDep,
-    user: Annotated[models.user.User, Depends(auth_required)],
-) -> models.ResponseBase:
+    user: Annotated[sqlmodels.user.User, Depends(auth_required)],
+) -> sqlmodels.ResponseBase:
     """
     Initialize WebAuthn login for a user.
 
@@ -347,30 +381,30 @@ async def router_user_authn_start(
         dict: A dictionary containing WebAuthn initialization information.
     """
     # TODO: 检查 WebAuthn 是否开启，用户是否有注册过 WebAuthn 设备等
-    authn_setting = await models.Setting.get(
+    authn_setting = await sqlmodels.Setting.get(
         session,
-        (models.Setting.type == "authn") & (models.Setting.name == "authn_enabled")
+        (sqlmodels.Setting.type == "authn") & (sqlmodels.Setting.name == "authn_enabled")
     )
     if not authn_setting or authn_setting.value != "1":
         raise HTTPException(status_code=400, detail="WebAuthn is not enabled")
 
-    site_url_setting = await models.Setting.get(
+    site_url_setting = await sqlmodels.Setting.get(
         session,
-        (models.Setting.type == "basic") & (models.Setting.name == "siteURL")
+        (sqlmodels.Setting.type == "basic") & (sqlmodels.Setting.name == "siteURL")
     )
-    site_title_setting = await models.Setting.get(
+    site_title_setting = await sqlmodels.Setting.get(
         session,
-        (models.Setting.type == "basic") & (models.Setting.name == "siteTitle")
+        (sqlmodels.Setting.type == "basic") & (sqlmodels.Setting.name == "siteTitle")
     )
 
     options = generate_registration_options(
         rp_id=site_url_setting.value if site_url_setting else "",
         rp_name=site_title_setting.value if site_title_setting else "",
-        user_name=user.username,
-        user_display_name=user.nick or user.username,
+        user_name=user.email,
+        user_display_name=user.nickname or user.email,
     )
 
-    return models.ResponseBase(data=options_to_json_dict(options))
+    return sqlmodels.ResponseBase(data=options_to_json_dict(options))
 
 @user_router.put(
     path='/authn/finish',
@@ -378,7 +412,7 @@ async def router_user_authn_start(
     description='Finish WebAuthn login for a user.',
     dependencies=[Depends(auth_required)],
 )
-def router_user_authn_finish() -> models.ResponseBase:
+def router_user_authn_finish() -> sqlmodels.ResponseBase:
     """
     Finish WebAuthn login for a user.
     
@@ -386,171 +420,3 @@ def router_user_authn_finish() -> models.ResponseBase:
         dict: A dictionary containing WebAuthn login information.
     """
     http_exceptions.raise_not_implemented()
-
-@user_settings_router.get(
-    path='/policies',
-    summary='获取用户可选存储策略',
-    description='Get user selectable storage policies.',
-)
-def router_user_settings_policies() -> models.ResponseBase:
-    """
-    Get user selectable storage policies.
-    
-    Returns:
-        dict: A dictionary containing available storage policies for the user.
-    """
-    http_exceptions.raise_not_implemented()
-
-@user_settings_router.get(
-    path='/nodes',
-    summary='获取用户可选节点',
-    description='Get user selectable nodes.',
-    dependencies=[Depends(auth_required)],
-)
-def router_user_settings_nodes() -> models.ResponseBase:
-    """
-    Get user selectable nodes.
-    
-    Returns:
-        dict: A dictionary containing available nodes for the user.
-    """
-    http_exceptions.raise_not_implemented()
-
-@user_settings_router.get(
-    path='/tasks',
-    summary='任务队列',
-    description='Get user task queue.',
-    dependencies=[Depends(auth_required)],
-)
-def router_user_settings_tasks() -> models.ResponseBase:
-    """
-    Get user task queue.
-    
-    Returns:
-        dict: A dictionary containing the user's task queue information.
-    """
-    http_exceptions.raise_not_implemented()
-
-@user_settings_router.get(
-    path='/',
-    summary='获取当前用户设定',
-    description='Get current user settings.',
-    dependencies=[Depends(auth_required)],
-)
-def router_user_settings() -> models.ResponseBase:
-    """
-    Get current user settings.
-    
-    Returns:
-        dict: A dictionary containing the current user settings.
-    """
-    return models.ResponseBase(data=models.UserSettingResponse().model_dump())
-
-@user_settings_router.post(
-    path='/avatar',
-    summary='从文件上传头像',
-    description='Upload user avatar from file.',
-    dependencies=[Depends(auth_required)],
-)
-def router_user_settings_avatar() -> models.ResponseBase:
-    """
-    Upload user avatar from file.
-    
-    Returns:
-        dict: A dictionary containing the result of the avatar upload.
-    """
-    http_exceptions.raise_not_implemented()
-
-@user_settings_router.put(
-    path='/avatar',
-    summary='设定为Gravatar头像',
-    description='Set user avatar to Gravatar.',
-    dependencies=[Depends(auth_required)],
-)
-def router_user_settings_avatar_gravatar() -> models.ResponseBase:
-    """
-    Set user avatar to Gravatar.
-    
-    Returns:
-        dict: A dictionary containing the result of setting the Gravatar avatar.
-    """
-    http_exceptions.raise_not_implemented()
-
-@user_settings_router.patch(
-    path='/{option}',
-    summary='更新用户设定',
-    description='Update user settings.',
-    dependencies=[Depends(auth_required)],
-)
-def router_user_settings_patch(option: str) -> models.ResponseBase:
-    """
-    Update user settings.
-    
-    Args:
-        option (str): The setting option to update.
-    
-    Returns:
-        dict: A dictionary containing the result of the settings update.
-    """
-    http_exceptions.raise_not_implemented()
-
-@user_settings_router.get(
-    path='/2fa',
-    summary='获取两步验证初始化信息',
-    description='Get two-factor authentication initialization information.',
-    dependencies=[Depends(auth_required)],
-)
-async def router_user_settings_2fa(
-    user: Annotated[models.user.User, Depends(auth_required)],
-) -> models.ResponseBase:
-    """
-    Get two-factor authentication initialization information.
-    
-    Returns:
-        dict: A dictionary containing two-factor authentication setup information.
-    """
-
-    return models.ResponseBase(
-        data=await Password.generate_totp(user.username)
-    )
-
-@user_settings_router.post(
-    path='/2fa',
-    summary='启用两步验证',
-    description='Enable two-factor authentication.',
-    dependencies=[Depends(auth_required)],
-)
-async def router_user_settings_2fa_enable(
-    session: SessionDep,
-    user: Annotated[models.user.User, Depends(auth_required)],
-    setup_token: str,
-    code: str,
-) -> models.ResponseBase:
-    """
-    Enable two-factor authentication for the user.
-    
-    Returns:
-        dict: A dictionary containing the result of enabling two-factor authentication.
-    """
-
-    serializer = URLSafeTimedSerializer(SECRET_KEY)
-
-    try:
-        # 1. 解包 Token，设置有效期（例如 600秒）
-        secret = serializer.loads(setup_token, salt="2fa-setup-salt", max_age=600)
-    except SignatureExpired:
-        raise HTTPException(status_code=400, detail="Setup session expired")
-    except BadSignature:
-        raise HTTPException(status_code=400, detail="Invalid token")
-
-    # 2. 验证用户输入的 6 位验证码
-    if not Password.verify_totp(secret, code):
-        raise HTTPException(status_code=400, detail="Invalid OTP code")
-
-    # 3. 将 secret 存储到用户的数据库记录中，启用 2FA
-    user.two_factor = secret
-    user = await user.save(session)
-
-    return models.ResponseBase(
-        data={"message": "Two-factor authentication enabled successfully"}
-    )

@@ -16,7 +16,7 @@ async def test_user_login_success(
     response = await async_client.post(
         "/api/user/session",
         data={
-            "username": test_user_info["username"],
+            "username": test_user_info["email"],
             "password": test_user_info["password"],
         }
     )
@@ -38,7 +38,7 @@ async def test_user_login_wrong_password(
     response = await async_client.post(
         "/api/user/session",
         data={
-            "username": test_user_info["username"],
+            "username": test_user_info["email"],
             "password": "wrongpassword",
         }
     )
@@ -51,7 +51,7 @@ async def test_user_login_nonexistent_user(async_client: AsyncClient):
     response = await async_client.post(
         "/api/user/session",
         data={
-            "username": "nonexistent",
+            "username": "nonexistent@test.local",
             "password": "anypassword",
         }
     )
@@ -67,7 +67,7 @@ async def test_user_login_user_banned(
     response = await async_client.post(
         "/api/user/session",
         data={
-            "username": banned_user_info["username"],
+            "username": banned_user_info["email"],
             "password": banned_user_info["password"],
         }
     )
@@ -82,7 +82,7 @@ async def test_user_register_success(async_client: AsyncClient):
     response = await async_client.post(
         "/api/user/",
         json={
-            "username": "newuser",
+            "email": "newuser@test.local",
             "password": "newpass123",
         }
     )
@@ -91,20 +91,20 @@ async def test_user_register_success(async_client: AsyncClient):
     data = response.json()
     assert "data" in data
     assert "user_id" in data["data"]
-    assert "username" in data["data"]
-    assert data["data"]["username"] == "newuser"
+    assert "email" in data["data"]
+    assert data["data"]["email"] == "newuser@test.local"
 
 
 @pytest.mark.asyncio
-async def test_user_register_duplicate_username(
+async def test_user_register_duplicate_email(
     async_client: AsyncClient,
     test_user_info: dict[str, str]
 ):
-    """测试重复用户名返回 400"""
+    """测试重复邮箱返回 400"""
     response = await async_client.post(
         "/api/user/",
         json={
-            "username": test_user_info["username"],
+            "email": test_user_info["email"],
             "password": "anypassword",
         }
     )
@@ -143,8 +143,8 @@ async def test_user_me_returns_user_info(
     assert "data" in data
     user_data = data["data"]
     assert "id" in user_data
-    assert "username" in user_data
-    assert user_data["username"] == "testuser"
+    assert "email" in user_data
+    assert user_data["email"] == "testuser@test.local"
     assert "group" in user_data
     assert "tags" in user_data
 

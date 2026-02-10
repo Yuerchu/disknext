@@ -6,11 +6,13 @@ from sqlalchemy import func
 
 from middleware.auth import admin_required
 from middleware.dependencies import SessionDep, TableViewRequestDep, UserFilterParamsDep
-from models import (
+from sqlmodels import (
     User, ResponseBase, UserPublic, ListResponse,
-    Group, Object, ObjectType, )
-from models.user import (
-    UserAdminUpdateRequest, UserCalibrateResponse,
+    Group, Object, ObjectType, Setting, SettingsType,
+    BatchDeleteRequest,
+)
+from sqlmodels.user import (
+    UserAdminCreateRequest, UserAdminUpdateRequest, UserCalibrateResponse,
 )
 from utils import Password, http_exceptions
 
@@ -26,19 +28,19 @@ admin_user_router = APIRouter(
     description='Get user information by ID',
     dependencies=[Depends(admin_required)],
 )
-async def router_admin_get_user(session: SessionDep, user_id: int) -> ResponseBase:
+async def router_admin_get_user(session: SessionDep, user_id: UUID) -> UserPublic:
     """
     根据用户ID获取用户信息，包括用户名、邮箱、注册时间等。
 
     Args:
         session(SessionDep): 数据库会话依赖项。
-        user_id (int): 用户ID。
+        user_id (UUID): 用户ID。
 
     Returns:
         ResponseBase: 包含用户信息的响应模型。
     """
     user = await User.get_exist_one(session, user_id)
-    return ResponseBase(data=user.to_public().model_dump())
+    return user.to_public()
 
 
 @admin_user_router.get(
@@ -60,7 +62,7 @@ async def router_admin_get_users(
     :param filter_params: 用户筛选参数（用户组、用户名、昵称、状态）
     :return: 分页用户列表
     """
-    result = await User.get_with_count(session, filter_params=filter_params, table_view=table_view)
+    result = await User.get_with_count(session, filter_params=filter_params, table_view=table_view, load=User.group)
     return ListResponse(
         items=[user.to_public() for user in result.items],
         count=result.count,
@@ -75,22 +77,33 @@ async def router_admin_get_users(
 )
 async def router_admin_create_user(
     session: SessionDep,
-    user: User,
-) -> ResponseBase:
+    request: UserAdminCreateRequest,
+) -> UserPublic:
     """
-    创建一个新的用户，设置用户名、密码等信息。
+    创建一个新的用户，设置邮箱、密码、用户组等信息。
 
-    Returns:
-        ResponseBase: 包含创建结果的响应模型。
+    :param session: 数据库会话
+    :param request: 创建用户请求 DTO
+    :return: 创建结果
     """
-    existing_user = await User.get(session, User.username == user.username)
+    existing_user = await User.get(session, User.email == request.email)
     if existing_user:
-        return ResponseBase(
-            code=400,
-            msg="User with this username already exists."
-        )
+        raise HTTPException(status_code=409, detail="该邮箱已被注册")
+
+    # 验证用户组存在
+    group = await Group.get(session, Group.id == request.group_id)
+    if not group:
+        raise HTTPException(status_code=400, detail="目标用户组不存在")
+
+    user = User(
+        email=request.email,
+        password=Password.hash(request.password),
+        nickname=request.nickname,
+        group_id=request.group_id,
+        status=request.status,
+    )
     user = await user.save(session)
-    return ResponseBase(data=user.to_public().model_dump())
+    return user.to_public()
 
 
 @admin_user_router.patch(
@@ -98,12 +111,13 @@ async def router_admin_create_user(
     summary='更新用户信息',
     description='Update user information by ID',
     dependencies=[Depends(admin_required)],
+    status_code=204
 )
 async def router_admin_update_user(
     session: SessionDep,
     user_id: UUID,
     request: UserAdminUpdateRequest,
-) -> ResponseBase:
+) -> None:
     """
     根据用户ID更新用户信息。
 
@@ -116,8 +130,15 @@ async def router_admin_update_user(
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
 
-    # 默认管理员（用户名为 admin）不允许更改用户组
-    if request.group_id and user.username == "admin" and request.group_id != user.group_id:
+    # 默认管理员不允许更改用户组（通过 Setting 中的 default_admin_id 识别）
+    default_admin_setting = await Setting.get(
+        session,
+        (Setting.type == SettingsType.AUTH) & (Setting.name == "default_admin_id")
+    )
+    if (request.group_id
+            and default_admin_setting
+            and default_admin_setting.value == str(user_id)
+            and request.group_id != user.group_id):
         http_exceptions.raise_forbidden("默认管理员不允许更改用户组")
 
     # 如果更新用户组，验证新组存在
@@ -143,38 +164,35 @@ async def router_admin_update_user(
         setattr(user, key, value)
     user = await user.save(session)
 
-    l.info(f"管理员更新了用户: {user.username}")
-    return ResponseBase(data=user.to_public().model_dump())
+    l.info(f"管理员更新了用户: {request.email}")
 
 
 @admin_user_router.delete(
-    path='/{user_id}',
-    summary='删除用户',
-    description='Delete user by ID',
+    path='/',
+    summary='删除用户（支持批量）',
+    description='Delete users by ID list',
     dependencies=[Depends(admin_required)],
+    status_code=204,
 )
-async def router_admin_delete_user(
+async def router_admin_delete_users(
     session: SessionDep,
-    user_id: UUID,
-) -> ResponseBase:
+    request: BatchDeleteRequest,
+) -> None:
     """
-    根据用户ID删除用户及其所有数据。
+    批量删除用户及其所有数据。
 
     注意: 这是一个危险操作，会级联删除用户的所有文件、分享、任务等。
 
     :param session: 数据库会话
-    :param user_id: 用户UUID
-    :return: 删除结果
+    :param request: 批量删除请求，包含待删除用户的 UUID 列表
+    :return: 删除结果（已删除数 / 总请求数）
     """
-    user = await User.get(session, User.id == user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="用户不存在")
-
-    username = user.username
-    await User.delete(session, user)
-
-    l.info(f"管理员删除了用户: {username}")
-    return ResponseBase(data={"deleted": True})
+    deleted = 0
+    for uid in request.ids:
+        user = await User.get(session, User.id == uid)
+        if user:
+            await User.delete(session, user)
+            l.info(f"管理员删除了用户: {user.email}")
 
 
 @admin_user_router.post(
@@ -186,7 +204,7 @@ async def router_admin_delete_user(
 async def router_admin_calibrate_storage(
     session: SessionDep,
     user_id: UUID,
-) -> ResponseBase:
+) -> UserCalibrateResponse:
     """
     重新计算用户的已用存储空间。
 
@@ -228,5 +246,5 @@ async def router_admin_calibrate_storage(
         file_count=file_count,
     )
 
-    l.info(f"管理员校准了用户存储: {user.username}, 差值: {actual_storage - previous_storage}")
-    return ResponseBase(data=response.model_dump())
+    l.info(f"管理员校准了用户存储: {user.email}, 差值: {actual_storage - previous_storage}")
+    return response

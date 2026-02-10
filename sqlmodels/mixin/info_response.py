@@ -12,7 +12,7 @@ InfoResponse DTO Mixin模块
 from datetime import datetime
 from uuid import UUID
 
-from models.base import SQLModelBase
+from sqlmodels.base import SQLModelBase
 
 
 class IntIdInfoMixin(SQLModelBase):

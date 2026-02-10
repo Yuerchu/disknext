@@ -215,6 +215,6 @@ class AdminShareListItem(ShareListItemBase):
         """从 Share ORM 对象构建"""
         return cls(
             **ShareListItemBase.model_validate(share, from_attributes=True).model_dump(),
-            username=user.username if user else None,
+            username=user.email if user else None,
             object_name=obj.name if obj else None,
         )

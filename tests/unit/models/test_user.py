@@ -5,8 +5,8 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from models.user import User, ThemeType, UserPublic
-from models.group import Group
+from sqlmodels.user import User, ThemeType, UserPublic
+from sqlmodels.group import Group
 
 
 @pytest.mark.asyncio
@@ -18,7 +18,7 @@ async def test_user_create(db_session: AsyncSession):
 
     # 创建用户
     user = User(
-        username="testuser",
+        email="testuser@test.local",
         nickname="测试用户",
         password="hashed_password",
         group_id=group.id
@@ -26,7 +26,7 @@ async def test_user_create(db_session: AsyncSession):
     user = await user.save(db_session)
 
     assert user.id is not None
-    assert user.username == "testuser"
+    assert user.email == "testuser@test.local"
     assert user.nickname == "测试用户"
     assert user.status is True
     assert user.storage == 0
@@ -34,15 +34,15 @@ async def test_user_create(db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_user_unique_username(db_session: AsyncSession):
-    """测试用户名唯一约束"""
+async def test_user_unique_email(db_session: AsyncSession):
+    """测试邮箱唯一约束"""
     # 创建用户组
     group = Group(name="默认组")
     group = await group.save(db_session)
 
     # 创建第一个用户
     user1 = User(
-        username="duplicate",
+        email="duplicate@test.local",
         password="password1",
         group_id=group.id
     )
@@ -50,7 +50,7 @@ async def test_user_unique_username(db_session: AsyncSession):
 
     # 尝试创建同名用户
     user2 = User(
-        username="duplicate",
+        email="duplicate@test.local",
         password="password2",
         group_id=group.id
     )
@@ -68,7 +68,7 @@ async def test_user_to_public(db_session: AsyncSession):
 
     # 创建用户
     user = User(
-        username="publicuser",
+        email="publicuser@test.local",
         nickname="公开用户",
         password="secret_password",
         storage=1024,
@@ -82,7 +82,7 @@ async def test_user_to_public(db_session: AsyncSession):
 
     assert isinstance(public_user, UserPublic)
     assert public_user.id == user.id
-    assert public_user.username == "publicuser"
+    assert public_user.email == "publicuser@test.local"
     # 注意: UserPublic.nick 字段名与 User.nickname 不同，
     # model_validate 不会自动映射，所以 nick 为 None
     # 这是已知的设计问题，需要在 UserPublic 中添加别名或重命名字段
@@ -101,7 +101,7 @@ async def test_user_group_relationship(db_session: AsyncSession):
 
     # 创建用户
     user = User(
-        username="vipuser",
+        email="vipuser@test.local",
         password="password",
         group_id=group.id
     )
@@ -125,7 +125,7 @@ async def test_user_status_default(db_session: AsyncSession):
     group = await group.save(db_session)
 
     user = User(
-        username="defaultuser",
+        email="defaultuser@test.local",
         password="password",
         group_id=group.id
     )
@@ -141,7 +141,7 @@ async def test_user_storage_default(db_session: AsyncSession):
     group = await group.save(db_session)
 
     user = User(
-        username="storageuser",
+        email="storageuser@test.local",
         password="password",
         group_id=group.id
     )
@@ -158,7 +158,7 @@ async def test_user_theme_enum(db_session: AsyncSession):
 
     # 测试默认值
     user1 = User(
-        username="user1",
+        email="user1@test.local",
         password="password",
         group_id=group.id
     )
@@ -167,7 +167,7 @@ async def test_user_theme_enum(db_session: AsyncSession):
 
     # 测试设置为 LIGHT
     user2 = User(
-        username="user2",
+        email="user2@test.local",
         password="password",
         theme=ThemeType.LIGHT,
         group_id=group.id
@@ -177,7 +177,7 @@ async def test_user_theme_enum(db_session: AsyncSession):
 
     # 测试设置为 DARK
     user3 = User(
-        username="user3",
+        email="user3@test.local",
         password="password",
         theme=ThemeType.DARK,
         group_id=group.id

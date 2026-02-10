@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from middleware.auth import admin_required
 from middleware.dependencies import SessionDep
-from models import (
+from sqlmodels import (
     ResponseBase,
 )
 

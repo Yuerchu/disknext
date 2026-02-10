@@ -5,12 +5,12 @@ from loguru import logger as l
 
 from middleware.auth import admin_required
 from middleware.dependencies import SessionDep, TableViewRequestDep
-from models import (
+from sqlmodels import (
     User, ResponseBase, UserPublic, ListResponse,
     Group, GroupOptions, )
-from models.group import (
+from sqlmodels.group import (
     GroupCreateRequest, GroupUpdateRequest, GroupDetailResponse, )
-from models.policy import GroupPolicyLink
+from sqlmodels.policy import GroupPolicyLink
 
 admin_group_router = APIRouter(
     prefix="/group",
@@ -113,11 +113,12 @@ async def router_admin_get_group_members(
     summary='创建用户组',
     description='Create a new user group',
     dependencies=[Depends(admin_required)],
+    status_code=204,
 )
 async def router_admin_create_group(
     session: SessionDep,
     request: GroupCreateRequest,
-) -> ResponseBase:
+) -> None:
     """
     创建新的用户组。
 
@@ -164,7 +165,6 @@ async def router_admin_create_group(
     await session.commit()
 
     l.info(f"管理员创建了用户组: {group.name}")
-    return ResponseBase(data={"id": str(group.id), "name": group.name})
 
 
 @admin_group_router.patch(
@@ -172,12 +172,13 @@ async def router_admin_create_group(
     summary='更新用户组信息',
     description='Update user group information by ID',
     dependencies=[Depends(admin_required)],
+    status_code=204,
 )
 async def router_admin_update_group(
     session: SessionDep,
     group_id: UUID,
     request: GroupUpdateRequest,
-) -> ResponseBase:
+) -> None:
     """
     根据用户组ID更新用户组信息。
 
@@ -233,8 +234,7 @@ async def router_admin_update_group(
             session.add(link)
         await session.commit()
 
-    l.info(f"管理员更新了用户组: {group.name}")
-    return ResponseBase(data={"id": str(group.id)})
+    l.info(f"管理员更新了用户组: {group_id}")
 
 
 @admin_group_router.delete(
@@ -242,11 +242,12 @@ async def router_admin_update_group(
     summary='删除用户组',
     description='Delete user group by ID',
     dependencies=[Depends(admin_required)],
+    status_code=204,
 )
 async def router_admin_delete_group(
     session: SessionDep,
     group_id: UUID,
-) -> ResponseBase:
+) -> None:
     """
     根据用户组ID删除用户组。
 
@@ -271,5 +272,4 @@ async def router_admin_delete_group(
     group_name = group.name
     await Group.delete(session, group)
 
-    l.info(f"管理员删除了用户组: {group_name}")
-    return ResponseBase(data={"deleted": True})
+    l.info(f"管理员删除了用户组: {group_id}")

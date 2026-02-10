@@ -28,6 +28,10 @@ def raise_forbidden(detail: str | None = None, *args, **kwargs) -> NoReturn:
     """Raises an HTTP 403 Forbidden exception."""
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail, *args, **kwargs)
 
+def raise_banned(detail: str = "此文件已被管理员封禁，仅允许删除操作", *args, **kwargs) -> NoReturn:
+    """Raises an HTTP 403 Forbidden exception for banned objects."""
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail, *args, **kwargs)
+
 def raise_not_found(detail: str | None = None, *args, **kwargs) -> NoReturn:
     """Raises an HTTP 404 Not Found exception."""
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail, *args, **kwargs)

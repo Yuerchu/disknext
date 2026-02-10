@@ -5,7 +5,7 @@
 """
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from models.group import Group, GroupOptions
+from sqlmodels.group import Group, GroupOptions
 
 
 class GroupFactory:

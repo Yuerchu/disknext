@@ -3,7 +3,9 @@
     "allow": [
       "Bash(git rev-parse:*)",
       "Bash(findstr:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(yarn tsc:*)",
+      "Bash(dir:*)"
     ]
   }
 }

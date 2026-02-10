@@ -15,7 +15,7 @@ import aiofiles
 import aiofiles.os
 from loguru import logger as l
 
-from models.policy import Policy
+from sqlmodels.policy import Policy
 from .exceptions import (
     DirectoryCreationError,
     FileReadError,

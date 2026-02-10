@@ -5,7 +5,7 @@ from loguru import logger as l
 
 from middleware.auth import admin_required
 from middleware.dependencies import SessionDep, TableViewRequestDep
-from models import (
+from sqlmodels import (
     ResponseBase, ListResponse,
     Task, TaskSummary,
 )
@@ -89,7 +89,7 @@ async def router_admin_get_task(
         "progress": task.progress,
         "error": task.error,
         "user_id": str(task.user_id),
-        "username": user.username if user else None,
+        "username": user.email if user else None,
         "props": props.model_dump() if props else None,
         "created_at": task.created_at.isoformat(),
         "updated_at": task.updated_at.isoformat(),

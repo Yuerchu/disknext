@@ -22,7 +22,7 @@ from sqlalchemy.orm import sessionmaker
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 from main import app
-from models import Group, GroupOptions, Object, ObjectType, Policy, PolicyType, Setting, SettingsType, User
+from sqlmodels import Group, GroupOptions, Object, ObjectType, Policy, PolicyType, Setting, SettingsType, User
 from utils import Password
 from utils.JWT import create_access_token
 from utils.JWT import JWT
@@ -92,6 +92,7 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
         Setting(type=SettingsType.VIEW, name="home_view_method", value="list"),
         Setting(type=SettingsType.VIEW, name="share_view_method", value="grid"),
         Setting(type=SettingsType.AUTHN, name="authn_enabled", value="0"),
+        Setting(type=SettingsType.CAPTCHA, name="captcha_type", value="default"),
         Setting(type=SettingsType.CAPTCHA, name="captcha_ReCaptchaKey", value=""),
         Setting(type=SettingsType.CAPTCHA, name="captcha_CloudflareKey", value=""),
         Setting(type=SettingsType.REGISTER, name="register_enabled", value="1"),
@@ -180,7 +181,7 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
     # 6. 创建测试用户
     test_user = User(
         id=uuid4(),
-        username="testuser",
+        email="testuser@test.local",
         password=Password.hash("testpass123"),
         nickname="测试用户",
         status=True,
@@ -194,7 +195,7 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
 
     admin_user = User(
         id=uuid4(),
-        username="admin",
+        email="admin@disknext.local",
         password=Password.hash("adminpass123"),
         nickname="管理员",
         status=True,
@@ -208,7 +209,7 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
 
     banned_user = User(
         id=uuid4(),
-        username="banneduser",
+        email="banneduser@test.local",
         password=Password.hash("banned123"),
         nickname="封禁用户",
         status=False,  # 封禁状态
@@ -230,7 +231,7 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
     # 7. 创建用户根目录
     test_user_root = Object(
         id=uuid4(),
-        name=test_user.username,
+        name="/",
         type=ObjectType.FOLDER,
         owner_id=test_user.id,
         parent_id=None,
@@ -241,7 +242,7 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
 
     admin_user_root = Object(
         id=uuid4(),
-        name=admin_user.username,
+        name="/",
         type=ObjectType.FOLDER,
         owner_id=admin_user.id,
         parent_id=None,
@@ -264,7 +265,7 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
 def test_user_info() -> dict[str, str]:
     """测试用户信息"""
     return {
-        "username": "testuser",
+        "email": "testuser@test.local",
         "password": "testpass123",
     }
 
@@ -273,7 +274,7 @@ def test_user_info() -> dict[str, str]:
 def admin_user_info() -> dict[str, str]:
     """管理员用户信息"""
     return {
-        "username": "admin",
+        "email": "admin@disknext.local",
         "password": "adminpass123",
     }
 
@@ -282,7 +283,7 @@ def admin_user_info() -> dict[str, str]:
 def banned_user_info() -> dict[str, str]:
     """封禁用户信息"""
     return {
-        "username": "banneduser",
+        "email": "banneduser@test.local",
         "password": "banned123",
     }
 
@@ -293,7 +294,7 @@ def banned_user_info() -> dict[str, str]:
 def test_user_token(test_user_info: dict[str, str]) -> str:
     """生成测试用户的JWT token"""
     token, _ = JWT.create_access_token(
-        data={"sub": test_user_info["username"]},
+        data={"sub": test_user_info["email"]},
         expires_delta=timedelta(hours=1),
     )
     return token
@@ -303,7 +304,7 @@ def test_user_token(test_user_info: dict[str, str]) -> str:
 def admin_user_token(admin_user_info: dict[str, str]) -> str:
     """生成管理员的JWT token"""
     token, _ = JWT.create_access_token(
-        data={"sub": admin_user_info["username"]},
+        data={"sub": admin_user_info["email"]},
         expires_delta=timedelta(hours=1),
     )
     return token
@@ -313,7 +314,7 @@ def admin_user_token(admin_user_info: dict[str, str]) -> str:
 def expired_token() -> str:
     """生成过期的JWT token"""
     token, _ = JWT.create_access_token(
-        data={"sub": "testuser"},
+        data={"sub": "testuser@test.local"},
         expires_delta=timedelta(seconds=-1),  # 已过期
     )
     return token
@@ -362,7 +363,7 @@ async def test_directory_structure(initialized_db: AsyncSession) -> dict[str, UU
     """创建测试目录结构"""
 
     # 获取测试用户和根目录
-    test_user = await User.get(initialized_db, User.username == "testuser")
+    test_user = await User.get(initialized_db, User.email == "testuser@test.local")
     test_user_root = await Object.get_root(initialized_db, test_user.id)
 
     default_policy = await Policy.get(initialized_db, Policy.name == "本地存储")

@@ -5,7 +5,7 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from models.setting import Setting, SettingsType
+from sqlmodels.setting import Setting, SettingsType
 
 
 @pytest.mark.asyncio
@@ -113,7 +113,7 @@ async def test_setting_update_value(db_session: AsyncSession):
     setting = await setting.save(db_session)
 
     # 更新值
-    from models.base import SQLModelBase
+    from sqlmodels.base import SQLModelBase
 
     class SettingUpdate(SQLModelBase):
         value: str | None = None

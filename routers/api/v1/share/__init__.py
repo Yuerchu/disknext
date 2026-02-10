@@ -7,11 +7,11 @@ from loguru import logger as l
 
 from middleware.auth import auth_required
 from middleware.dependencies import SessionDep
-from models import ResponseBase
-from models.user import User
-from models.share import Share, ShareCreateRequest, ShareResponse
-from models.object import Object
-from models.mixin import ListResponse, TableViewRequest
+from sqlmodels import ResponseBase
+from sqlmodels.user import User
+from sqlmodels.share import Share, ShareCreateRequest, ShareResponse
+from sqlmodels.object import Object
+from sqlmodels.mixin import ListResponse, TableViewRequest
 from utils import http_exceptions
 from utils.password.pwd import Password
 
@@ -69,23 +69,6 @@ def router_share_preview(id: str) -> ResponseBase:
     
     Returns:
         dict: A dictionary containing preview information.
-    """
-    http_exceptions.raise_not_implemented()
-
-@share_router.get(
-    path='/doc/{id}',
-    summary='取得Office文档预览地址',
-    description='Get Office document preview URL by ID.',
-)
-def router_share_doc(id: str) -> ResponseBase:
-    """
-    Get Office document preview URL by ID.
-    
-    Args:
-        id (str): The ID of the Office document.
-    
-    Returns:
-        dict: A dictionary containing the document preview URL.
     """
     http_exceptions.raise_not_implemented()
 
@@ -260,6 +243,9 @@ async def router_share_create(
     obj = await Object.get(session, Object.id == request.object_id)
     if not obj or obj.owner_id != user.id:
         raise HTTPException(status_code=404, detail="对象不存在或无权限")
+
+    if obj.is_banned:
+        http_exceptions.raise_banned()
 
     # 生成分享码
     code = str(uuid4())

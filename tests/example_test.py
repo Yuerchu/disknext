@@ -8,9 +8,9 @@ from uuid import UUID
 
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from models.user import User
-from models.group import Group
-from models.object import Object, ObjectType
+from sqlmodels.user import User
+from sqlmodels.group import Group
+from sqlmodels.object import Object, ObjectType
 from tests.fixtures import UserFactory, GroupFactory, ObjectFactory
 
 
@@ -24,13 +24,13 @@ async def test_user_factory(db_session: AsyncSession):
     user = await UserFactory.create(
         db_session,
         group_id=group.id,
-        username="testuser",
+        email="testuser@test.local",
         password="password123"
     )
 
     # 验证
     assert user.id is not None
-    assert user.username == "testuser"
+    assert user.email == "testuser@test.local"
     assert user.group_id == group.id
     assert user.status is True
 
@@ -51,7 +51,7 @@ async def test_group_factory(db_session: AsyncSession):
 async def test_object_factory(db_session: AsyncSession):
     """测试对象工厂的基本功能"""
     # 准备依赖
-    from models.policy import Policy, PolicyType
+    from sqlmodels.policy import Policy, PolicyType
 
     group = await GroupFactory.create(db_session)
     user = await UserFactory.create(db_session, group_id=group.id)
@@ -102,7 +102,7 @@ async def test_conftest_fixtures(
     """测试 conftest.py 中的 fixtures"""
     # 验证 test_user fixture
     assert test_user["id"] is not None
-    assert test_user["username"] == "testuser"
+    assert test_user["email"] == "testuser@test.local"
     assert test_user["token"] is not None
 
     # 验证 auth_headers fixture
@@ -112,7 +112,7 @@ async def test_conftest_fixtures(
     # 验证用户在数据库中存在
     user = await User.get(db_session, User.id == test_user["id"])
     assert user is not None
-    assert user.username == test_user["username"]
+    assert user.email == test_user["email"]
 
 
 @pytest.mark.integration
@@ -145,7 +145,7 @@ async def test_test_directory_fixture(
 @pytest.mark.integration
 async def test_nested_structure_factory(db_session: AsyncSession):
     """测试嵌套结构工厂"""
-    from models.policy import Policy, PolicyType
+    from sqlmodels.policy import Policy, PolicyType
 
     # 准备依赖
     group = await GroupFactory.create(db_session)

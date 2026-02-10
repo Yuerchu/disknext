@@ -23,12 +23,12 @@ from sqlalchemy.orm import sessionmaker
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from main import app
-from models.database import get_session
-from models.group import Group, GroupOptions
-from models.migration import migration
-from models.object import Object, ObjectType
-from models.policy import Policy, PolicyType
-from models.user import User
+from sqlmodels.database import get_session
+from sqlmodels.group import Group, GroupOptions
+from sqlmodels.migration import migration
+from sqlmodels.object import Object, ObjectType
+from sqlmodels.policy import Policy, PolicyType
+from sqlmodels.user import User
 from utils.JWT.JWT import create_access_token
 from utils.password.pwd import Password
 
@@ -153,7 +153,7 @@ def override_get_session(db_session: AsyncSession):
 @pytest_asyncio.fixture(scope="function")
 async def test_user(db_session: AsyncSession) -> dict[str, str | UUID]:
     """
-    创建测试用户并返回 {id, username, password, token}
+    创建测试用户并返回 {id, email, password, token}
 
     创建一个普通用户，包含用户组、存储策略和根目录。
     """
@@ -190,7 +190,7 @@ async def test_user(db_session: AsyncSession) -> dict[str, str | UUID]:
     # 创建测试用户
     password = "test_password_123"
     user = User(
-        username="testuser",
+        email="testuser@test.local",
         nickname="测试用户",
         password=Password.hash(password),
         status=True,
@@ -202,7 +202,7 @@ async def test_user(db_session: AsyncSession) -> dict[str, str | UUID]:
 
     # 创建用户根目录
     root_folder = Object(
-        name=user.username,
+        name="/",
         type=ObjectType.FOLDER,
         parent_id=None,
         owner_id=user.id,
@@ -216,7 +216,7 @@ async def test_user(db_session: AsyncSession) -> dict[str, str | UUID]:
 
     return {
         "id": user.id,
-        "username": user.username,
+        "email": user.email,
         "password": password,
         "token": access_token,
         "group_id": group.id,
@@ -227,7 +227,7 @@ async def test_user(db_session: AsyncSession) -> dict[str, str | UUID]:
 @pytest_asyncio.fixture(scope="function")
 async def admin_user(db_session: AsyncSession) -> dict[str, str | UUID]:
     """
-    获取管理员用户 {id, username, token}
+    获取管理员用户 {id, email, token}
 
     创建具有管理员权限的用户。
     """
@@ -267,7 +267,7 @@ async def admin_user(db_session: AsyncSession) -> dict[str, str | UUID]:
     # 创建管理员用户
     password = "admin_password_456"
     admin = User(
-        username="admin",
+        email="admin@disknext.local",
         nickname="管理员",
         password=Password.hash(password),
         status=True,
@@ -279,7 +279,7 @@ async def admin_user(db_session: AsyncSession) -> dict[str, str | UUID]:
 
     # 创建管理员根目录
     root_folder = Object(
-        name=admin.username,
+        name="/",
         type=ObjectType.FOLDER,
         parent_id=None,
         owner_id=admin.id,
@@ -293,7 +293,7 @@ async def admin_user(db_session: AsyncSession) -> dict[str, str | UUID]:
 
     return {
         "id": admin.id,
-        "username": admin.username,
+        "email": admin.email,
         "password": password,
         "token": access_token,
         "group_id": admin_group.id,

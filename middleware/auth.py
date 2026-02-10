@@ -4,7 +4,7 @@ from uuid import UUID
 from fastapi import Depends
 import jwt
 
-from models.user import User
+from sqlmodels.user import User
 from utils import JWT
 from .dependencies import SessionDep
 from utils import http_exceptions
@@ -25,8 +25,8 @@ async def auth_required(
 
         user_id = UUID(user_id)
 
-        # 从数据库获取用户信息
-        user = await User.get(session, User.id == user_id)
+        # 从数据库获取用户信息（预加载 group 关系）
+        user = await User.get(session, User.id == user_id, load=User.group)
         if not user:
             http_exceptions.raise_unauthorized("账号或密码错误")
 
@@ -44,8 +44,7 @@ async def admin_required(
     使用方法：
     >>> APIRouter(dependencies=[Depends(admin_required)])
     """
-    group = await user.awaitable_attrs.group
-    if group.admin:
+    if user.group.admin:
         return user
     raise http_exceptions.raise_forbidden("Admin Required")
 

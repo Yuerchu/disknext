@@ -5,13 +5,59 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from loguru import logger as l
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from middleware.auth import admin_required
 from middleware.dependencies import SessionDep, TableViewRequestDep
-from models import (
-    Policy, PolicyType, User, ResponseBase, ListResponse,
+from sqlmodels import (
+    Policy, PolicyType, User, ListResponse,
     Object, ObjectType, AdminFileResponse, FileBanRequest, )
 from service.storage import LocalStorageService
+
+async def _set_ban_recursive(
+    session: AsyncSession,
+    obj: Object,
+    ban: bool,
+    admin_id: UUID,
+    reason: str | None,
+) -> int:
+    """
+    递归设置封禁状态，返回受影响对象数量。
+
+    :param session: 数据库会话
+    :param obj: 要封禁/解禁的对象
+    :param ban: True=封禁, False=解禁
+    :param admin_id: 管理员UUID
+    :param reason: 封禁原因
+    :return: 受影响的对象数量
+    """
+    count = 0
+
+    # 如果是文件夹，先递归处理子对象
+    if obj.is_folder:
+        children = await Object.get(
+            session,
+            Object.parent_id == obj.id,
+            fetch_mode="all",
+        )
+        for child in children:
+            count += await _set_ban_recursive(session, child, ban, admin_id, reason)
+
+    # 设置当前对象
+    obj.is_banned = ban
+    if ban:
+        obj.banned_at = datetime.now()
+        obj.banned_by = admin_id
+        obj.ban_reason = reason
+    else:
+        obj.banned_at = None
+        obj.banned_by = None
+        obj.ban_reason = None
+
+    await obj.save(session)
+    count += 1
+    return count
+
 
 admin_file_router = APIRouter(
     prefix="/file",
@@ -119,15 +165,17 @@ async def router_admin_preview_file(
     summary='封禁/解禁文件',
     description='Ban the file, user can\'t open, copy, move, download or share this file if administrator ban.',
     dependencies=[Depends(admin_required)],
+    status_code=204,
 )
 async def router_admin_ban_file(
     session: SessionDep,
     file_id: UUID,
     request: FileBanRequest,
     admin: Annotated[User, Depends(admin_required)],
-) -> ResponseBase:
+) -> None:
     """
-    封禁或解禁文件。封禁后用户无法访问该文件。
+    封禁或解禁文件/文件夹。封禁后用户无法访问该文件。
+    封禁文件夹时会级联封禁所有子对象。
 
     :param session: 数据库会话
     :param file_id: 文件UUID
@@ -139,24 +187,10 @@ async def router_admin_ban_file(
     if not file_obj:
         raise HTTPException(status_code=404, detail="文件不存在")
 
-    file_obj.is_banned = request.is_banned
-    if request.is_banned:
-        file_obj.banned_at = datetime.now()
-        file_obj.banned_by = admin.id
-        file_obj.ban_reason = request.reason
-    else:
-        file_obj.banned_at = None
-        file_obj.banned_by = None
-        file_obj.ban_reason = None
+    count = await _set_ban_recursive(session, file_obj, request.ban, admin.id, request.reason)
 
-    file_obj = await file_obj.save(session)
-
-    action = "封禁" if request.is_banned else "解禁"
-    l.info(f"管理员{action}了文件: {file_obj.name}")
-    return ResponseBase(data={
-        "id": str(file_obj.id),
-        "is_banned": file_obj.is_banned,
-    })
+    action = "封禁" if request.ban else "解禁"
+    l.info(f"管理员{action}了对象: {file_obj.name}，共影响 {count} 个对象")
 
 
 @admin_file_router.delete(
@@ -164,12 +198,13 @@ async def router_admin_ban_file(
     summary='删除文件',
     description='Delete file by ID',
     dependencies=[Depends(admin_required)],
+    status_code=204,
 )
 async def router_admin_delete_file(
     session: SessionDep,
     file_id: UUID,
     delete_physical: bool = True,
-) -> ResponseBase:
+) -> None:
     """
     删除文件。
 
@@ -212,4 +247,3 @@ async def router_admin_delete_file(
     await Object.delete(session, condition=Object.id == file_obj.id)
 
     l.info(f"管理员删除了文件: {file_name}")
-    return ResponseBase(data={"deleted": True})

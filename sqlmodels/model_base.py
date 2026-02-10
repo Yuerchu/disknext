@@ -120,3 +120,4 @@ class MCPResponseBase(MCPBase):
 
     result: str
     """方法返回结果"""
+    

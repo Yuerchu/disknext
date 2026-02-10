@@ -14,7 +14,8 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from middleware.auth import auth_required
 from middleware.dependencies import SessionDep
-from models import (
+from sqlmodels import (
+    CreateFileRequest,
     Object,
     ObjectCopyRequest,
     ObjectDeleteRequest,
@@ -26,10 +27,11 @@ from models import (
     PhysicalFile,
     Policy,
     PolicyType,
+    ResponseBase,
     User,
 )
-from models import ResponseBase
 from service.storage import LocalStorageService
+from utils import http_exceptions
 
 object_router = APIRouter(
     prefix="/object",
@@ -59,15 +61,22 @@ async def _delete_object_recursive(
     """
     deleted_count = 0
 
-    if obj.is_folder:
+    # 在任何数据库操作前保存所有需要的属性，避免 commit 后对象过期导致懒加载失败
+    obj_id = obj.id
+    obj_name = obj.name
+    obj_is_folder = obj.is_folder
+    obj_is_file = obj.is_file
+    obj_physical_file_id = obj.physical_file_id
+
+    if obj_is_folder:
         # 递归删除子对象
-        children = await Object.get_children(session, user_id, obj.id)
+        children = await Object.get_children(session, user_id, obj_id)
         for child in children:
             deleted_count += await _delete_object_recursive(session, child, user_id)
 
     # 如果是文件，处理物理文件引用
-    if obj.is_file and obj.physical_file_id:
-        physical_file = await PhysicalFile.get(session, PhysicalFile.id == obj.physical_file_id)
+    if obj_is_file and obj_physical_file_id:
+        physical_file = await PhysicalFile.get(session, PhysicalFile.id == obj_physical_file_id)
         if physical_file:
             # 减少引用计数
             new_count = physical_file.decrement_reference()
@@ -81,11 +90,11 @@ async def _delete_object_recursive(
                         await storage_service.move_to_trash(
                             source_path=physical_file.storage_path,
                             user_id=user_id,
-                            object_id=obj.id,
+                            object_id=obj_id,
                         )
-                        l.debug(f"物理文件已移动到回收站: {obj.name}")
+                        l.debug(f"物理文件已移动到回收站: {obj_name}")
                     except Exception as e:
-                        l.warning(f"移动物理文件到回收站失败: {obj.name}, 错误: {e}")
+                        l.warning(f"移动物理文件到回收站失败: {obj_name}, 错误: {e}")
 
                 # 删除 PhysicalFile 记录
                 await PhysicalFile.delete(session, physical_file)
@@ -95,8 +104,8 @@ async def _delete_object_recursive(
                 await physical_file.save(session)
                 l.debug(f"物理文件仍有 {new_count} 个引用，不删除: {physical_file.storage_path}")
 
-    # 删除数据库记录
-    await Object.delete(session, obj)
+    # 使用条件删除，避免访问过期的 obj 实例
+    await Object.delete(session, condition=Object.id == obj_id)
     deleted_count += 1
 
     return deleted_count
@@ -168,6 +177,97 @@ async def _copy_object_recursive(
     return copied_count, new_ids
 
 
+@object_router.post(
+    path='/',
+    summary='创建空白文件',
+    description='在指定目录下创建空白文件。',
+)
+async def router_object_create(
+    session: SessionDep,
+    user: Annotated[User, Depends(auth_required)],
+    request: CreateFileRequest,
+) -> ResponseBase:
+    """
+    创建空白文件端点
+
+    :param session: 数据库会话
+    :param user: 当前登录用户
+    :param request: 创建文件请求（parent_id, name）
+    :return: 创建结果
+    """
+    user_id = user.id
+
+    # 验证文件名
+    if not request.name or '/' in request.name or '\\' in request.name:
+        raise HTTPException(status_code=400, detail="无效的文件名")
+
+    # 验证父目录
+    parent = await Object.get(session, Object.id == request.parent_id)
+    if not parent or parent.owner_id != user_id:
+        raise HTTPException(status_code=404, detail="父目录不存在")
+
+    if not parent.is_folder:
+        raise HTTPException(status_code=400, detail="父对象不是目录")
+
+    if parent.is_banned:
+        http_exceptions.raise_banned("目标目录已被封禁，无法执行此操作")
+
+    # 检查是否已存在同名文件
+    existing = await Object.get(
+        session,
+        (Object.owner_id == user_id) &
+        (Object.parent_id == parent.id) &
+        (Object.name == request.name)
+    )
+    if existing:
+        raise HTTPException(status_code=409, detail="同名文件已存在")
+
+    # 确定存储策略
+    policy_id = request.policy_id or parent.policy_id
+    policy = await Policy.get(session, Policy.id == policy_id)
+    if not policy:
+        raise HTTPException(status_code=404, detail="存储策略不存在")
+
+    parent_id = parent.id
+
+    # 生成存储路径并创建空文件
+    if policy.type == PolicyType.LOCAL:
+        storage_service = LocalStorageService(policy)
+        dir_path, storage_name, full_path = await storage_service.generate_file_path(
+            user_id=user_id,
+            original_filename=request.name,
+        )
+        await storage_service.create_empty_file(full_path)
+        storage_path = full_path
+    else:
+        raise HTTPException(status_code=501, detail="S3 存储暂未实现")
+
+    # 创建 PhysicalFile 记录
+    physical_file = PhysicalFile(
+        storage_path=storage_path,
+        size=0,
+        policy_id=policy_id,
+        reference_count=1,
+    )
+    physical_file = await physical_file.save(session)
+
+    # 创建 Object 记录
+    file_object = Object(
+        name=request.name,
+        type=ObjectType.FILE,
+        size=0,
+        physical_file_id=physical_file.id,
+        parent_id=parent_id,
+        owner_id=user_id,
+        policy_id=policy_id,
+    )
+    await file_object.save(session)
+
+    l.info(f"创建空白文件: {request.name}")
+
+    return ResponseBase()
+
+
 @object_router.delete(
     path='/',
     summary='删除对象',
@@ -197,10 +297,7 @@ async def router_object_delete(
     user_id = user.id
     deleted_count = 0
 
-    # 处理单个 UUID 或 UUID 列表
-    ids = request.ids if isinstance(request.ids, list) else [request.ids]
-
-    for obj_id in ids:
+    for obj_id in request.ids:
         obj = await Object.get(session, Object.id == obj_id)
         if not obj or obj.owner_id != user_id:
             continue
@@ -219,7 +316,7 @@ async def router_object_delete(
     return ResponseBase(
         data={
             "deleted": deleted_count,
-            "total": len(ids),
+            "total": len(request.ids),
         }
     )
 
@@ -253,6 +350,9 @@ async def router_object_move(
     if not dst.is_folder:
         raise HTTPException(status_code=400, detail="目标不是有效文件夹")
 
+    if dst.is_banned:
+        http_exceptions.raise_banned("目标目录已被封禁，无法执行此操作")
+
     # 存储 dst 的属性，避免后续数据库操作导致 dst 过期后无法访问
     dst_id = dst.id
     dst_parent_id = dst.parent_id
@@ -262,6 +362,9 @@ async def router_object_move(
     for src_id in request.src_ids:
         src = await Object.get(session, Object.id == src_id)
         if not src or src.owner_id != user_id:
+            continue
+
+        if src.is_banned:
             continue
 
         # 不能移动根目录
@@ -348,12 +451,18 @@ async def router_object_copy(
     if not dst.is_folder:
         raise HTTPException(status_code=400, detail="目标不是有效文件夹")
 
+    if dst.is_banned:
+        http_exceptions.raise_banned("目标目录已被封禁，无法执行此操作")
+
     copied_count = 0
     new_ids: list[UUID] = []
 
     for src_id in request.src_ids:
         src = await Object.get(session, Object.id == src_id)
         if not src or src.owner_id != user_id:
+            continue
+
+        if src.is_banned:
             continue
 
         # 不能复制根目录
@@ -437,6 +546,9 @@ async def router_object_rename(
 
     if obj.owner_id != user_id:
         raise HTTPException(status_code=403, detail="无权操作此对象")
+
+    if obj.is_banned:
+        http_exceptions.raise_banned()
 
     # 不能重命名根目录
     if obj.parent_id is None:
@@ -543,7 +655,7 @@ async def router_object_property_detail(
     policy_name = policy.name if policy else None
 
     # 获取分享统计
-    from models import Share
+    from sqlmodels import Share
     shares = await Share.get(
         session,
         Share.object_id == obj.id,

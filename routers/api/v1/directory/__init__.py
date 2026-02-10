@@ -1,10 +1,12 @@
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from middleware.auth import auth_required
 from middleware.dependencies import SessionDep
-from models import (
+from sqlmodels import (
     DirectoryCreateRequest,
     DirectoryResponse,
     Object,
@@ -14,50 +16,28 @@ from models import (
     User,
     ResponseBase,
 )
+from utils import http_exceptions
 
 directory_router = APIRouter(
     prefix="/directory",
     tags=["directory"]
 )
 
-@directory_router.get(
-    path="/{path:path}",
-    summary="获取目录内容",
-)
-async def router_directory_get(
-        session: SessionDep,
-        user: Annotated[User, Depends(auth_required)],
-        path: str
+
+async def _get_directory_response(
+        session: AsyncSession,
+        user_id: UUID,
+        folder: Object,
 ) -> DirectoryResponse:
     """
-    获取目录内容
-
-    路径必须以用户名或 `.crash` 开头，如 /api/directory/admin 或 /api/directory/admin/docs
-    `.crash` 代表回收站，也就意味着用户名禁止为 `.crash`
+    构建目录响应 DTO
 
     :param session: 数据库会话
-    :param user: 当前登录用户
-    :param path: 目录路径（必须以用户名开头）
-    :return: 目录内容
+    :param user_id: 用户UUID
+    :param folder: 目录对象
+    :return: DirectoryResponse
     """
-    # 路径必须以用户名开头
-    path = path.strip("/")
-    if not path:
-        raise HTTPException(status_code=400, detail="路径不能为空，请使用 /{username} 格式")
-
-    path_parts = path.split("/")
-    if path_parts[0] != user.username:
-        raise HTTPException(status_code=403, detail="无权访问其他用户的目录")
-
-    folder = await Object.get_by_path(session, user.id, "/" + path, user.username)
-
-    if not folder:
-        raise HTTPException(status_code=404, detail="目录不存在")
-
-    if not folder.is_folder:
-        raise HTTPException(status_code=400, detail="指定路径不是目录")
-
-    children = await Object.get_children(session, user.id, folder.id)
+    children = await Object.get_children(session, user_id, folder.id)
     policy = await folder.awaitable_attrs.policy
 
     objects = [
@@ -67,8 +47,8 @@ async def router_directory_get(
             thumb=False,
             size=child.size,
             type=ObjectType.FOLDER if child.is_folder else ObjectType.FILE,
-            date=child.updated_at,
-            create_date=child.created_at,
+            created_at=child.created_at,
+            updated_at=child.updated_at,
             source_enabled=False,
         )
         for child in children
@@ -89,7 +69,74 @@ async def router_directory_get(
     )
 
 
-@directory_router.put(
+@directory_router.get(
+    path="/",
+    summary="获取根目录内容",
+)
+async def router_directory_root(
+        session: SessionDep,
+        user: Annotated[User, Depends(auth_required)],
+) -> DirectoryResponse:
+    """
+    获取当前用户的根目录内容
+
+    :param session: 数据库会话
+    :param user: 当前登录用户
+    :return: 根目录内容
+    """
+    root = await Object.get_root(session, user.id)
+    if not root:
+        raise HTTPException(status_code=404, detail="根目录不存在")
+
+    if root.is_banned:
+        http_exceptions.raise_banned()
+
+    return await _get_directory_response(session, user.id, root)
+
+
+@directory_router.get(
+    path="/{path:path}",
+    summary="获取目录内容",
+)
+async def router_directory_get(
+        session: SessionDep,
+        user: Annotated[User, Depends(auth_required)],
+        path: str
+) -> DirectoryResponse:
+    """
+    获取目录内容
+
+    路径从用户根目录开始，不包含用户名前缀。
+    如 /api/v1/directory/docs 表示根目录下的 docs 目录。
+
+    :param session: 数据库会话
+    :param user: 当前登录用户
+    :param path: 目录路径（从根目录开始的相对路径）
+    :return: 目录内容
+    """
+    path = path.strip("/")
+    if not path:
+        # 空路径交给根目录端点处理（理论上不会到达这里）
+        root = await Object.get_root(session, user.id)
+        if not root:
+            raise HTTPException(status_code=404, detail="根目录不存在")
+        return await _get_directory_response(session, user.id, root)
+
+    folder = await Object.get_by_path(session, user.id, "/" + path)
+
+    if not folder:
+        raise HTTPException(status_code=404, detail="目录不存在")
+
+    if not folder.is_folder:
+        raise HTTPException(status_code=400, detail="指定路径不是目录")
+
+    if folder.is_banned:
+        http_exceptions.raise_banned()
+
+    return await _get_directory_response(session, user.id, folder)
+
+
+@directory_router.post(
     path="/",
     summary="创建目录",
 )
@@ -122,6 +169,9 @@ async def router_directory_create(
 
     if not parent.is_folder:
         raise HTTPException(status_code=400, detail="父路径不是目录")
+
+    if parent.is_banned:
+        http_exceptions.raise_banned("目标目录已被封禁，无法执行此操作")
 
     # 检查是否已存在同名对象
     existing = await Object.get(

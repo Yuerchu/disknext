@@ -3,8 +3,8 @@ import pytest
 @pytest.mark.asyncio
 async def test_settings_curd():
     """测试数据库的增删改查"""
-    from models import database
-    from models.setting import Setting
+    from sqlmodels import database
+    from sqlmodels.setting import Setting
     
     await database.init_db(url='sqlite:///:memory:')
     

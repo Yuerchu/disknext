@@ -414,7 +414,7 @@ class __DeclarativeMeta(SQLModelMetaclass):
 
     def __new__(cls, name, bases, attrs, **kwargs):
         # 1. 约定优于配置：自动设置 table=True
-        is_intended_as_table = any(getattr(b, '_is_table_mixin', False) for b in bases)
+        is_intended_as_table = any(getattr(b, '_has_table_mixin', False) for b in bases)
         if is_intended_as_table and 'table' not in kwargs:
             kwargs['table'] = True
 

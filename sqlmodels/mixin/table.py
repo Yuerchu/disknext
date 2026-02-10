@@ -12,7 +12,14 @@
     mixin/table.py  ← 当前文件，导入 PolymorphicBaseMixin
             ↓
     base/__init__.py  ← 从 mixin 重新导出（保持向后兼容）
+
+维护须知：
+    增删功能时必须更新 __version__ 字段（遵循语义化版本）
+
+版本历史：
+    0.1.0 - delete() 方法支持条件删除（condition 参数）
 """
+__version__ = "0.1.0"
 import uuid
 from datetime import datetime
 from typing import TypeVar, Literal, override, Any, ClassVar, Generic
@@ -26,16 +33,19 @@ from typing import TypeVar, Literal, override, Any, ClassVar, Generic
 # 未来: PR #1275合并后可改回继承SQLModelBase
 from pydantic import BaseModel, ConfigDict
 from fastapi import HTTPException
-from sqlalchemy import DateTime, BinaryExpression, ClauseElement, desc, asc, func, distinct
+from sqlalchemy import DateTime, BinaryExpression, ClauseElement, desc, asc, func, distinct, delete as sql_delete, inspect
 from sqlalchemy.orm import selectinload, Relationship, with_polymorphic
+from sqlalchemy.orm.exc import StaleDataError
 from sqlmodel import Field, select
+
+from .optimistic_lock import OptimisticLockError
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.sql._typing import _OnClauseArgument
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlmodel.main import RelationshipInfo
 
 from .polymorphic import PolymorphicBaseMixin
-from models.base.sqlmodel_base import SQLModelBase
+from sqlmodels.base.sqlmodel_base import SQLModelBase
 
 # Type variables for generic type hints, improving code completion and analysis.
 T = TypeVar("T", bound="TableBaseMixin")
@@ -196,8 +206,8 @@ class TableBaseMixin(AsyncAttrs):
         created_at (datetime): 记录创建时的时间戳, 自动设置.
         updated_at (datetime): 记录每次更新时的时间戳, 自动更新.
     """
-    _is_table_mixin: ClassVar[bool] = True
-    """标记此类为表混入类的内部属性"""
+    _has_table_mixin: ClassVar[bool] = True
+    """标记此类继承了表混入类的内部属性"""
 
     def __init_subclass__(cls, **kwargs):
         """
@@ -218,7 +228,7 @@ class TableBaseMixin(AsyncAttrs):
     )
 
     @classmethod
-    async def add(cls: type[T], session: AsyncSession, instances: T | list[T], refresh: bool = True, commit: bool = True) -> T | list[T]:
+    async def add(cls: type[T], session: AsyncSession, instances: T | list[T], refresh: bool = True) -> T | list[T]:
         """
         向数据库中添加一个新的或多个新的记录.
 
@@ -230,8 +240,6 @@ class TableBaseMixin(AsyncAttrs):
             session (AsyncSession): 用于数据库操作的异步会话对象.
             instances (T | list[T]): 要添加的单个模型实例或模型实例列表.
             refresh (bool): 如果为 True, 将在提交后刷新实例以同步数据库状态. 默认为 True.
-            commit (bool): 是否提交事务。设为 False 可在批量操作时减少提交次数，
-                          之后需要手动调用 `session.commit()`。默认为 True.
 
         Returns:
             T | list[T]: 已添加并（可选地）刷新的一个或多个模型实例.
@@ -246,11 +254,6 @@ class TableBaseMixin(AsyncAttrs):
             # 添加单个实例
             item3 = Item(name="Cherry")
             added_item = await Item.add(session, item3)
-
-            # 批量操作，减少提交次数
-            await Item.add(session, [item1, item2], commit=False)
-            await Item.add(session, [item3, item4], commit=False)
-            await session.commit()
         """
         is_list = False
         if isinstance(instances, list):
@@ -259,10 +262,7 @@ class TableBaseMixin(AsyncAttrs):
         else:
             session.add(instances)
 
-        if commit:
-            await session.commit()
-        else:
-            await session.flush()
+        await session.commit()
 
         if refresh:
             if is_list:
@@ -278,14 +278,16 @@ class TableBaseMixin(AsyncAttrs):
             session: AsyncSession,
             load: RelationshipInfo | list[RelationshipInfo] | None = None,
             refresh: bool = True,
-            commit: bool = True
+            commit: bool = True,
+            jti_subclasses: list[type[PolymorphicBaseMixin]] | Literal['all'] | None = None,
+            optimistic_retry_count: int = 0,
     ) -> T:
         """
         保存（插入或更新）当前模型实例到数据库.
 
         这是一个实例方法，它将当前对象添加到会话中并提交更改。
         可以用于创建新记录或更新现有记录。还可以选择在保存后
-        预加载（eager load）一个或多个关联关系.
+        预加载（eager load）一个关联关系.
 
         **重要**：调用此方法后，session中的所有对象都会过期（expired）。
         如果需要继续使用该对象，必须使用返回值：
@@ -298,13 +300,17 @@ class TableBaseMixin(AsyncAttrs):
         # ✅ 正确：不需要返回值时，指定 refresh=False 节省性能
         await client.save(session, refresh=False)
 
-        # ✅ 正确：批量操作，减少提交次数
-        await item1.save(session, commit=False)
-        await item2.save(session, commit=False)
+        # ✅ 正确：批量操作时延迟提交
+        for item in items:
+            item = await item.save(session, commit=False)
         await session.commit()
 
-        # ✅ 正确：批量操作并预加载多个关联关系
-        user = await user.save(session, load=[User.group, User.tags])
+        # ✅ 正确：保存后需要访问多态关系时
+        tool_set = await tool_set.save(session, load=ToolSet.tools, jti_subclasses='all')
+        return tool_set  # tools 关系已正确加载子类数据
+
+        # ✅ 正确：启用乐观锁自动重试
+        order = await order.save(session, optimistic_retry_count=3)
 
         # ❌ 错误：需要返回值但未使用
         await client.save(session)
@@ -313,34 +319,77 @@ class TableBaseMixin(AsyncAttrs):
 
         Args:
             session (AsyncSession): 用于数据库操作的异步会话对象.
-            load (Relationship | list[Relationship] | None): 可选的，指定在保存和刷新后要预加载的关联属性.
-                                                         可以是单个关系或关系列表.
-                                                         例如 `User.posts` 或 `[User.group, User.tags]`.
+            load (Relationship | None): 可选的，指定在保存和刷新后要预加载的关联属性.
+                                          例如 `User.posts`.
             refresh (bool): 是否在保存后刷新对象。如果不需要使用返回值，
                            设为 False 可节省一次数据库查询。默认为 True.
-            commit (bool): 是否提交事务。设为 False 可在批量操作时减少提交次数，
-                          之后需要手动调用 `session.commit()`。默认为 True.
+            commit (bool): 是否在保存后提交事务。如果为 False，只会 flush 获取 ID
+                          但不提交，适用于批量操作场景。默认为 True.
+            jti_subclasses: 多态子类加载选项，需要与 load 参数配合使用。
+                - list[type[PolymorphicBaseMixin]]: 指定要加载的子类列表
+                - 'all': 两阶段查询，只加载实际关联的子类
+                - None（默认）: 不使用多态加载
+            optimistic_retry_count (int): 乐观锁冲突时的自动重试次数。默认为 0（不重试）。
+                重试时会重新查询最新数据，将当前修改合并后再次保存。
 
         Returns:
             T: 如果 refresh=True，返回已刷新的模型实例；否则返回未刷新的 self.
+
+        Raises:
+            OptimisticLockError: 如果启用了乐观锁且版本号不匹配，且重试次数已耗尽
         """
-        session.add(self)
-        if commit:
-            await session.commit()
-        else:
-            await session.flush()
+        cls = type(self)
+        instance = self
+        retries_remaining = optimistic_retry_count
+        current_data: dict[str, Any] | None = None  # 延迟计算，仅在需要重试时
+
+        while True:
+            session.add(instance)
+            try:
+                if commit:
+                    await session.commit()
+                else:
+                    await session.flush()
+                break  # 成功，退出循环
+            except StaleDataError as e:
+                await session.rollback()
+                if retries_remaining <= 0:
+                    raise OptimisticLockError(
+                        message=f"{cls.__name__} 乐观锁冲突：记录已被其他事务修改",
+                        model_class=cls.__name__,
+                        record_id=str(getattr(instance, 'id', None)),
+                        expected_version=getattr(instance, 'version', None),
+                        original_error=e,
+                    ) from e
+
+                # 失败后重试：重新查询最新数据并合并修改
+                retries_remaining -= 1
+                if current_data is None:
+                    current_data = self.model_dump(exclude={'id', 'version', 'created_at', 'updated_at'})
+
+                fresh = await cls.get(session, cls.id == self.id)
+                if fresh is None:
+                    raise OptimisticLockError(
+                        message=f"{cls.__name__} 重试失败：记录已被删除",
+                        model_class=cls.__name__,
+                        record_id=str(getattr(self, 'id', None)),
+                        original_error=e,
+                    ) from e
+
+                for key, value in current_data.items():
+                    if hasattr(fresh, key):
+                        setattr(fresh, key, value)
+                instance = fresh
 
         if not refresh:
-            return self
+            return instance
 
         if load is not None:
-            cls = type(self)
-            await session.refresh(self)
-            # 如果指定了 load, 重新获取实例并加载关联关系
-            return await cls.get(session, cls.id == self.id, load=load)
+            await session.refresh(instance)
+            return await cls.get(session, cls.id == instance.id, load=load, jti_subclasses=jti_subclasses)
         else:
-            await session.refresh(self)
-            return self
+            await session.refresh(instance)
+            return instance
 
     async def update(
             self: T,
@@ -351,7 +400,9 @@ class TableBaseMixin(AsyncAttrs):
             exclude: set[str] | None = None,
             load: RelationshipInfo | list[RelationshipInfo] | None = None,
             refresh: bool = True,
-            commit: bool = True
+            commit: bool = True,
+            jti_subclasses: list[type[PolymorphicBaseMixin]] | Literal['all'] | None = None,
+            optimistic_retry_count: int = 0,
     ) -> T:
         """
         使用另一个模型实例或字典中的数据来更新当前实例.
@@ -371,16 +422,20 @@ class TableBaseMixin(AsyncAttrs):
         user = await user.update(session, update_data, load=User.permission)
         return user
 
+        # ✅ 正确：更新后需要访问多态关系时
+        tool_set = await tool_set.update(session, data, load=ToolSet.tools, jti_subclasses='all')
+        return tool_set  # tools 关系已正确加载子类数据
+
         # ✅ 正确：不需要返回值时，指定 refresh=False 节省性能
         await client.update(session, update_data, refresh=False)
 
-        # ✅ 正确：批量操作，减少提交次数
-        await user1.update(session, data1, commit=False)
-        await user2.update(session, data2, commit=False)
+        # ✅ 正确：批量操作时延迟提交
+        for item in items:
+            item = await item.update(session, data, commit=False)
         await session.commit()
 
-        # ✅ 正确：批量操作并预加载多个关联关系
-        user = await user.update(session, data, load=[User.group, User.tags])
+        # ✅ 正确：启用乐观锁自动重试
+        order = await order.update(session, update_data, optimistic_retry_count=3)
 
         # ❌ 错误：需要返回值但未使用
         await client.update(session, update_data)
@@ -394,111 +449,134 @@ class TableBaseMixin(AsyncAttrs):
             exclude_unset (bool): 如果为 True, `other` 对象中未设置（即值为 None 或未提供）
                                   的字段将被忽略. 默认为 True.
             exclude (set[str] | None): 要从更新中排除的字段名集合。例如 {'permission'}.
-            load (Relationship | list[Relationship] | None): 可选的，指定在更新和刷新后要预加载的关联属性.
-                                                        可以是单个关系或关系列表.
-                                                        例如 `User.permission` 或 `[User.group, User.tags]`.
+            load (RelationshipInfo | None): 可选的，指定在更新和刷新后要预加载的关联属性.
+                                             例如 `User.permission`.
             refresh (bool): 是否在更新后刷新对象。如果不需要使用返回值，
                            设为 False 可节省一次数据库查询。默认为 True.
-            commit (bool): 是否提交事务。设为 False 可在批量操作时减少提交次数，
-                          之后需要手动调用 `session.commit()`。默认为 True.
+            commit (bool): 是否在更新后提交事务。如果为 False，只会 flush
+                          但不提交，适用于批量操作场景。默认为 True.
+            jti_subclasses: 多态子类加载选项，需要与 load 参数配合使用。
+                - list[type[PolymorphicBaseMixin]]: 指定要加载的子类列表
+                - 'all': 两阶段查询，只加载实际关联的子类
+                - None（默认）: 不使用多态加载
+            optimistic_retry_count (int): 乐观锁冲突时的自动重试次数。默认为 0（不重试）。
+                重试时会重新查询最新数据，将 other 的更新重新应用后再次保存。
 
         Returns:
             T: 如果 refresh=True，返回已刷新的模型实例；否则返回未刷新的 self.
-        """
-        self.sqlmodel_update(
-            other.model_dump(exclude_unset=exclude_unset, exclude=exclude),
-            update=extra_data
-        )
 
-        session.add(self)
-        if commit:
-            await session.commit()
-        else:
-            await session.flush()
+        Raises:
+            OptimisticLockError: 如果启用了乐观锁且版本号不匹配，且重试次数已耗尽
+        """
+        cls = type(self)
+        update_data = other.model_dump(exclude_unset=exclude_unset, exclude=exclude)
+        instance = self
+        retries_remaining = optimistic_retry_count
+
+        while True:
+            instance.sqlmodel_update(update_data, update=extra_data)
+            session.add(instance)
+
+            try:
+                if commit:
+                    await session.commit()
+                else:
+                    await session.flush()
+                break  # 成功，退出循环
+            except StaleDataError as e:
+                await session.rollback()
+                if retries_remaining <= 0:
+                    raise OptimisticLockError(
+                        message=f"{cls.__name__} 乐观锁冲突：记录已被其他事务修改",
+                        model_class=cls.__name__,
+                        record_id=str(getattr(instance, 'id', None)),
+                        expected_version=getattr(instance, 'version', None),
+                        original_error=e,
+                    ) from e
+
+                # 失败后重试：重新查询最新数据并重新应用更新
+                retries_remaining -= 1
+                fresh = await cls.get(session, cls.id == self.id)
+                if fresh is None:
+                    raise OptimisticLockError(
+                        message=f"{cls.__name__} 重试失败：记录已被删除",
+                        model_class=cls.__name__,
+                        record_id=str(getattr(self, 'id', None)),
+                        original_error=e,
+                    ) from e
+                instance = fresh
 
         if not refresh:
-            return self
+            return instance
 
         if load is not None:
-            cls = type(self)
-            await session.refresh(self)
-            return await cls.get(session, cls.id == self.id, load=load)
+            await session.refresh(instance)
+            return await cls.get(session, cls.id == instance.id, load=load, jti_subclasses=jti_subclasses)
         else:
-            await session.refresh(self)
-            return self
+            await session.refresh(instance)
+            return instance
 
     @classmethod
     async def delete(
-        cls: type[T],
-        session: AsyncSession,
-        instances: T | list[T] | None = None,
-        *,
-        condition: BinaryExpression | ClauseElement | None = None,
-        commit: bool = True
+            cls: type[T],
+            session: AsyncSession,
+            instances: T | list[T] | None = None,
+            *,
+            condition: BinaryExpression | ClauseElement | None = None,
+            commit: bool = True,
     ) -> int:
         """
-        从数据库中删除记录.
-
-        支持两种删除方式：
-        1. 实例删除：传入 instances 参数，先加载再删除
-        2. 条件删除：传入 condition 参数，直接 SQL 删除（更高效）
+        从数据库中删除记录，支持实例删除和条件删除两种模式。
 
         Args:
-            session (AsyncSession): 用于数据库操作的异步会话对象.
-            instances (T | list[T] | None): 要删除的单个模型实例或模型实例列表（可选）.
-            condition (BinaryExpression | ClauseElement | None): 删除条件（可选，与 instances 二选一）.
-            commit (bool): 是否提交事务。设为 False 可在批量操作时减少提交次数，
-                          之后需要手动调用 `session.commit()`。默认为 True.
+            session: 用于数据库操作的异步会话对象
+            instances: 要删除的单个模型实例或模型实例列表（实例删除模式）
+            condition: WHERE 条件表达式（条件删除模式，直接执行 SQL DELETE）
+            commit: 是否在删除后提交事务。默认为 True
 
         Returns:
-            int: 删除的记录数量
+            删除的记录数（条件删除模式返回实际删除数，实例删除模式返回实例数）
+
+        Raises:
+            ValueError: 同时提供 instances 和 condition，或两者都未提供
 
         Usage:
-            # 实例删除
-            item_to_delete = await Item.get(session, Item.id == 1)
-            if item_to_delete:
-                deleted_count = await Item.delete(session, item_to_delete)
+            # 实例删除模式
+            item = await Item.get(session, Item.id == 1)
+            if item:
+                await Item.delete(session, item)
 
-            # 条件删除（更高效，无需加载实例）
+            items = await Item.get(session, Item.name.in_(["A", "B"]), fetch_mode="all")
+            if items:
+                await Item.delete(session, items)
+
+            # 条件删除模式（高效批量删除，不加载实例到内存）
             deleted_count = await Item.delete(
                 session,
-                condition=(Item.status == "inactive") & (Item.created_at < cutoff_date)
+                condition=(Item.user_id == user_id) & (Item.status == "expired"),
             )
-
-            # 批量删除后手动提交
-            await Item.delete(session, item1, commit=False)
-            await Item.delete(session, item2, commit=False)
-            await session.commit()
         """
-        # 条件删除模式
-        if condition is not None:
-            from sqlmodel import delete as sql_delete
-
-            if instances is not None:
-                raise ValueError("不能同时指定 instances 和 condition")
-
-            # 执行条件删除
-            stmt = sql_delete(cls).where(condition)
-            result = await session.exec(stmt)
-            deleted_count = result.rowcount
-
-            if commit:
-                await session.commit()
-
-            return deleted_count
-
-        # 实例删除模式（原有逻辑）
-        if instances is None:
-            raise ValueError("必须指定 instances 或 condition")
+        if instances is not None and condition is not None:
+            raise ValueError("不能同时提供 instances 和 condition 参数")
+        if instances is None and condition is None:
+            raise ValueError("必须提供 instances 或 condition 参数之一")
 
         deleted_count = 0
-        if isinstance(instances, list):
-            for instance in instances:
-                await session.delete(instance)
-                deleted_count += 1
+
+        if condition is not None:
+            # 条件删除模式：直接执行 SQL DELETE
+            stmt = sql_delete(cls).where(condition)
+            result = await session.execute(stmt)
+            deleted_count = result.rowcount
         else:
-            await session.delete(instances)
-            deleted_count = 1
+            # 实例删除模式
+            if isinstance(instances, list):
+                for instance in instances:
+                    await session.delete(instance)
+                deleted_count = len(instances)
+            else:
+                await session.delete(instances)
+                deleted_count = 1
 
         if commit:
             await session.commit()
@@ -552,7 +630,8 @@ class TableBaseMixin(AsyncAttrs):
             filter: BinaryExpression | ClauseElement | None = None,
             with_for_update: bool = False,
             table_view: TableViewRequest | None = None,
-            load_polymorphic: list[type[PolymorphicBaseMixin]] | Literal['all'] | None = None,
+            jti_subclasses: list[type[PolymorphicBaseMixin]] | Literal['all'] | None = None,
+            populate_existing: bool = False,
             created_before_datetime: datetime | None = None,
             created_after_datetime: datetime | None = None,
             updated_before_datetime: datetime | None = None,
@@ -581,8 +660,10 @@ class TableBaseMixin(AsyncAttrs):
             options (list | None): SQLAlchemy 查询选项列表, 通常用于预加载关联数据,
                                    例如 `[selectinload(User.posts)]`.
             load (Relationship | list[Relationship] | None): `selectinload` 的快捷方式，用于预加载关联关系.
-                                                         可以是单个关系或关系列表.
-                                                         例如 `User.profile` 或 `[User.group, User.tags]`.
+                                                可以是单个关系或关系列表。支持嵌套关系预加载：
+                                                当传入多个关系时，会自动检测依赖关系并构建链式 selectinload。
+                                                例如 `[NodeGroupNode.element_links, NodeGroupElementLink.node]`
+                                                会自动构建 `selectinload(element_links).selectinload(node)`。
             order_by (list[ClauseElement] | None): 用于排序的排序列或表达式的列表.
                                                    例如 `[User.name.asc(), User.created_at.desc()]`.
             filter (BinaryExpression | ClauseElement | None): 附加的过滤条件.
@@ -593,10 +674,15 @@ class TableBaseMixin(AsyncAttrs):
                                                   会覆盖offset、limit、order_by及时间筛选参数。
                                                   这是推荐的分页排序方式，统一了所有LIST端点的参数格式。
 
-            load_polymorphic: 多态子类加载选项，需要与 load 参数配合使用。
+            jti_subclasses: 多态子类加载选项，需要与 load 参数配合使用。
                 - list[type[PolymorphicBaseMixin]]: 指定要加载的子类列表
                 - 'all': 两阶段查询，只加载实际关联的子类（对于 > 10 个子类的场景有明显性能收益）
                 - None（默认）: 不使用多态加载
+
+            populate_existing (bool): 如果为 True，强制用数据库数据覆盖 session 中已存在的对象（identity map）。
+                用于批量刷新对象，避免循环调用 session.refresh() 导致的 N 次查询。
+                注意：只刷新标量字段，不影响运行时属性（_开头的属性）。
+                对于 STI（单表继承）对象，推荐按子类分组查询以包含子类字段。默认为 False。
 
             created_before_datetime (datetime | None): 筛选 created_at < datetime 的记录
             created_after_datetime (datetime | None): 筛选 created_at >= datetime 的记录
@@ -607,7 +693,7 @@ class TableBaseMixin(AsyncAttrs):
             T | list[T] | None: 根据 `fetch_mode` 的设置，返回单个实例、实例列表或 `None`.
 
         Raises:
-            ValueError: 如果提供了无效的 `fetch_mode` 值，或 load_polymorphic 未与 load 配合使用.
+            ValueError: 如果提供了无效的 `fetch_mode` 值，或 jti_subclasses 未与 load 配合使用.
 
         Examples:
             # 使用table_view参数（推荐）
@@ -621,13 +707,13 @@ class TableBaseMixin(AsyncAttrs):
                 session,
                 ToolSet.id == tool_set_id,
                 load=ToolSet.tools,
-                load_polymorphic='all'  # 只加载实际关联的子类
+                jti_subclasses='all'  # 只加载实际关联的子类
             )
         """
-        # 参数验证：load_polymorphic 需要与 load 配合使用
-        if load_polymorphic is not None and load is None:
+        # 参数验证：jti_subclasses 需要与 load 配合使用
+        if jti_subclasses is not None and load is None:
             raise ValueError(
-                "load_polymorphic 参数需要与 load 参数配合使用，"
+                "jti_subclasses 参数需要与 load 参数配合使用，"
                 "请同时指定要加载的关系"
             )
 
@@ -656,12 +742,33 @@ class TableBaseMixin(AsyncAttrs):
 
         # 对于多态基类，使用 with_polymorphic 预加载所有子类的列
         # 这避免了在响应序列化时的延迟加载问题（MissingGreenlet 错误）
-        if issubclass(cls, PolymorphicBaseMixin):
+        polymorphic_cls = None  # 保存多态实体，用于子类关系预加载
+        is_polymorphic = issubclass(cls, PolymorphicBaseMixin)
+        is_jti = is_polymorphic and cls._is_joined_table_inheritance()
+        is_sti = is_polymorphic and not cls._is_joined_table_inheritance()
+
+        # JTI 模式：总是使用 with_polymorphic（避免 N+1 查询）
+        # STI 模式：不使用 with_polymorphic（批量刷新时请按子类分组查询）
+        if is_jti:
             # '*' 表示加载所有子类
             polymorphic_cls = with_polymorphic(cls, '*')
             statement = select(polymorphic_cls)
         else:
             statement = select(cls)
+
+        # 对于 STI（单表继承）子类，自动添加多态过滤条件
+        # SQLAlchemy/SQLModel 在 STI 模式下不会自动添加 WHERE discriminator = 'identity' 过滤
+        # 这是已知行为，参考:
+        # - https://github.com/sqlalchemy/sqlalchemy/issues/5018 (bulk operations 不自动添加多态过滤)
+        # - https://github.com/fastapi/sqlmodel/issues/488 (SQLModel STI 支持不完整)
+        # 社区最佳实践是显式添加多态过滤条件
+        if issubclass(cls, PolymorphicBaseMixin) and not cls._is_joined_table_inheritance():
+            mapper = inspect(cls)
+            # 检查是否有 polymorphic_identity 且不是抽象类
+            if mapper.polymorphic_identity is not None and not mapper.polymorphic_abstract:
+                poly_on = mapper.polymorphic_on
+                if poly_on is not None:
+                    statement = statement.where(poly_on == mapper.polymorphic_identity)
 
         if condition is not None:
             statement = statement.where(condition)
@@ -688,12 +795,19 @@ class TableBaseMixin(AsyncAttrs):
             # 标准化为列表
             load_list = load if isinstance(load, list) else [load]
 
-            # 处理多态加载
-            if load_polymorphic is not None:
-                # 多态加载只支持单个关系
-                if len(load_list) > 1:
-                    raise ValueError("load_polymorphic 仅支持单个关系")
-                target_class = load_list[0].property.mapper.class_
+            # 构建链式 selectinload（支持嵌套关系预加载）
+            # 例如：load=[NodeGroupNode.element_links, NodeGroupElementLink.node]
+            # 会构建：selectinload(element_links).selectinload(node)
+            load_chains = cls._build_load_chains(load_list)
+
+            # 处理多态加载（仅支持单链且只有一个关系）
+            if jti_subclasses is not None:
+                if len(load_chains) > 1 or len(load_chains[0]) > 1:
+                    raise ValueError(
+                        "jti_subclasses 仅支持单个关系（无嵌套链），请不要传入多个关系"
+                    )
+                single_load = load_chains[0][0]
+                target_class = single_load.property.mapper.class_
 
                 # 检查目标类是否继承自 PolymorphicBaseMixin
                 if not issubclass(target_class, PolymorphicBaseMixin):
@@ -702,26 +816,48 @@ class TableBaseMixin(AsyncAttrs):
                         f"请确保其继承自 PolymorphicBaseMixin"
                     )
 
-                if load_polymorphic == 'all':
+                if jti_subclasses == 'all':
                     # 两阶段查询：获取实际关联的多态类型
                     subclasses_to_load = await cls._resolve_polymorphic_subclasses(
-                        session, condition, load_list[0], target_class
+                        session, condition, single_load, target_class
                     )
                 else:
-                    subclasses_to_load = load_polymorphic
+                    subclasses_to_load = jti_subclasses
 
                 if subclasses_to_load:
                     # 关键：selectin_polymorphic 必须作为 selectinload 的链式子选项
                     # 参考: https://docs.sqlalchemy.org/en/20/orm/queryguide/relationships.html#polymorphic-eager-loading
                     statement = statement.options(
-                        selectinload(load_list[0]).selectin_polymorphic(subclasses_to_load)
+                        selectinload(single_load).selectin_polymorphic(subclasses_to_load)
                     )
                 else:
-                    statement = statement.options(selectinload(load_list[0]))
+                    statement = statement.options(selectinload(single_load))
             else:
-                # 为每个关系添加 selectinload
-                for rel in load_list:
-                    statement = statement.options(selectinload(rel))
+                # 为每条链构建链式 selectinload
+                for chain in load_chains:
+                    # 获取第一个关系并检查是否需要通过多态实体访问
+                    first_rel = chain[0]
+                    first_rel_parent = first_rel.property.parent.class_
+
+                    # 如果关系的 parent_class 是当前类的子类（不是 cls 本身），
+                    # 且当前是多态查询，则需要通过 polymorphic_cls.SubclassName 访问
+                    if (
+                        polymorphic_cls is not None
+                        and first_rel_parent is not cls
+                        and issubclass(first_rel_parent, cls)
+                    ):
+                        # 通过多态实体访问子类的关系属性
+                        # 例如：polymorphic_cls.NodeGroupNode.element_links
+                        subclass_alias = getattr(polymorphic_cls, first_rel_parent.__name__)
+                        rel_name = first_rel.key
+                        first_rel_via_poly = getattr(subclass_alias, rel_name)
+                        loader = selectinload(first_rel_via_poly)
+                    else:
+                        loader = selectinload(first_rel)
+
+                    for rel in chain[1:]:
+                        loader = loader.selectinload(rel)
+                    statement = statement.options(loader)
 
         if order_by is not None:
             statement = statement.order_by(*order_by)
@@ -736,7 +872,17 @@ class TableBaseMixin(AsyncAttrs):
             statement = statement.filter(filter)
 
         if with_for_update:
-            statement = statement.with_for_update()
+            # 对于联表继承的多态模型，使用 FOR UPDATE OF <主表> 来避免 PostgreSQL 的限制
+            # PostgreSQL 不支持在 LEFT OUTER JOIN 的可空侧使用 FOR UPDATE
+            if issubclass(cls, PolymorphicBaseMixin):
+                statement = statement.with_for_update(of=cls)
+            else:
+                statement = statement.with_for_update()
+
+        if populate_existing:
+            # 强制用数据库数据覆盖 identity map 中的对象
+            # 用于批量刷新，避免循环 refresh() 的 N 次查询
+            statement = statement.execution_options(populate_existing=True)
 
         result = await session.exec(statement)
 
@@ -748,6 +894,79 @@ class TableBaseMixin(AsyncAttrs):
             return list(result.all())
         else:
             raise ValueError(f"无效的 fetch_mode: {fetch_mode}")
+
+    @staticmethod
+    def _build_load_chains(load_list: list[RelationshipInfo]) -> list[list[RelationshipInfo]]:
+        """
+        将关系列表构建为链式加载结构
+
+        自动检测关系之间的依赖关系，构建嵌套预加载链。
+        例如：[NodeGroupNode.element_links, NodeGroupElementLink.node]
+        会构建：[[element_links, node]]（一条链）
+
+        算法：
+        1. 获取每个关系的 parent class 和 target class
+        2. 如果关系 B 的 parent class 等于关系 A 的 target class，则 B 链在 A 后面
+        3. 独立的关系各自成为一条链
+
+        Args:
+            load_list: 关系属性列表
+
+        Returns:
+            链式关系列表，每条链是一个关系列表
+        """
+        if not load_list:
+            return []
+
+        # 构建关系信息：{关系: (parent_class, target_class)}
+        rel_info: dict[RelationshipInfo, tuple[type, type]] = {}
+        for rel in load_list:
+            parent_class = rel.property.parent.class_
+            target_class = rel.property.mapper.class_
+            rel_info[rel] = (parent_class, target_class)
+
+        # 构建依赖图：{关系: 其前置关系}
+        predecessors: dict[RelationshipInfo, RelationshipInfo | None] = {rel: None for rel in load_list}
+        for rel_b in load_list:
+            parent_b, _ = rel_info[rel_b]
+            for rel_a in load_list:
+                if rel_a is rel_b:
+                    continue
+                _, target_a = rel_info[rel_a]
+                # 如果 B 的 parent 精确等于 A 的 target，则 B 链在 A 后面
+                # 使用精确匹配避免继承关系导致的误判（如 NodeGroupNode 是 CanvasNode 子类）
+                if parent_b is target_a:
+                    predecessors[rel_b] = rel_a
+                    break
+
+        # 找出所有链的起点（没有前置关系的）
+        roots = [rel for rel, pred in predecessors.items() if pred is None]
+
+        # 构建链
+        chains: list[list[RelationshipInfo]] = []
+        used: set[RelationshipInfo] = set()
+
+        for root in roots:
+            chain = [root]
+            used.add(root)
+            # 找后续节点
+            current = root
+            while True:
+                # 找以 current 的 target 为 parent 的关系
+                _, current_target = rel_info[current]
+                next_rel = None
+                for rel, (parent, _) in rel_info.items():
+                    if rel not in used and parent is current_target:
+                        next_rel = rel
+                        break
+                if next_rel is None:
+                    break
+                chain.append(next_rel)
+                used.add(next_rel)
+                current = next_rel
+            chains.append(chain)
+
+        return chains
 
     @classmethod
     async def _resolve_polymorphic_subclasses(
@@ -791,12 +1010,15 @@ class TableBaseMixin(AsyncAttrs):
                 ))
             )
         else:
-            # 一对多关系：通过外键查询
-            foreign_key_col = relationship_property.local_remote_pairs[0][1]
+            # 多对一/一对多关系：通过外键查询
+            # local_remote_pairs[0] = (local_fk_col, remote_pk_col)
+            # 对于多对一：local 是当前类的外键，remote 是目标类的主键
+            local_fk_col = relationship_property.local_remote_pairs[0][0]
+            remote_pk_col = relationship_property.local_remote_pairs[0][1]
             type_query = (
                 select(distinct(poly_name_col))
-                .where(foreign_key_col.in_(
-                    select(cls.id).where(condition) if condition is not None else select(cls.id)
+                .where(remote_pk_col.in_(
+                    select(local_fk_col).where(condition) if condition is not None else select(local_fk_col)
                 ))
             )
 
@@ -898,7 +1120,7 @@ class TableBaseMixin(AsyncAttrs):
             order_by: list[ClauseElement] | None = None,
             filter: BinaryExpression | ClauseElement | None = None,
             table_view: TableViewRequest | None = None,
-            load_polymorphic: list[type[PolymorphicBaseMixin]] | Literal['all'] | None = None,
+            jti_subclasses: list[type[PolymorphicBaseMixin]] | Literal['all'] | None = None,
     ) -> 'ListResponse[T]':
         """
         获取分页列表及总数，直接返回 ListResponse
@@ -918,7 +1140,7 @@ class TableBaseMixin(AsyncAttrs):
             order_by: 排序子句
             filter: 附加过滤条件
             table_view: 分页排序参数（推荐使用）
-            load_polymorphic: 多态子类加载选项
+            jti_subclasses: 多态子类加载选项
 
         Returns:
             ListResponse[T]: 包含 count 和 items 的分页响应
@@ -957,7 +1179,7 @@ class TableBaseMixin(AsyncAttrs):
             order_by=order_by,
             filter=filter,
             table_view=table_view,
-            load_polymorphic=load_polymorphic,
+            jti_subclasses=jti_subclasses,
         )
 
         return ListResponse(count=total_count, items=items)
@@ -973,8 +1195,7 @@ class TableBaseMixin(AsyncAttrs):
         Args:
             session (AsyncSession): 用于数据库操作的异步会话对象.
             id (int): 要查找的记录的主键 ID.
-            load (Relationship | list[Relationship] | None): 可选的，用于预加载的关联属性.
-                                                           可以是单个关系或关系列表.
+            load (Relationship | None): 可选的，用于预加载的关联属性.
 
         Returns:
             T: 找到的模型实例.
@@ -1002,7 +1223,7 @@ class UUIDTableBaseMixin(TableBaseMixin):
 
     @override
     @classmethod
-    async def get_exist_one(cls: type[T], session: AsyncSession, id: uuid.UUID, load: Relationship | list[Relationship] | None = None) -> T:
+    async def get_exist_one(cls: type[T], session: AsyncSession, id: uuid.UUID, load: Relationship | None = None) -> T:
         """
         根据 UUID 主键获取一个存在的记录, 如果不存在则抛出 404 异常.
 
@@ -1012,8 +1233,7 @@ class UUIDTableBaseMixin(TableBaseMixin):
         Args:
             session (AsyncSession): 用于数据库操作的异步会话对象.
             id (uuid.UUID): 要查找的记录的 UUID 主键.
-            load (Relationship | list[Relationship] | None): 可选的，用于预加载的关联属性.
-                                                           可以是单个关系或关系列表.
+            load (Relationship | None): 可选的，用于预加载的关联属性.
 
         Returns:
             T: 找到的模型实例.

@@ -1,11 +1,14 @@
 from .user import (
+    BatchDeleteRequest,
     LoginRequest,
+    RefreshTokenRequest,
     RegisterRequest,
     AccessTokenBase,
     RefreshTokenBase,
     TokenResponse,
     User,
     UserBase,
+    UserStorageResponse,
     UserPublic,
     UserResponse,
     UserSettingResponse,
@@ -66,6 +69,7 @@ from .object import (
     FileBanRequest,
 )
 from .physical_file import PhysicalFile, PhysicalFileBase
+from .uri import DiskNextURI, FileSystemNamespace
 from .order import Order, OrderStatus, OrderType
 from .policy import Policy, PolicyBase, PolicyOptions, PolicyOptionsBase, PolicyType, PolicySummary
 from .redeem import Redeem, RedeemType
@@ -82,7 +86,7 @@ from .tag import Tag, TagType
 from .task import Task, TaskProps, TaskPropsBase, TaskStatus, TaskType, TaskSummary
 from .webdav import WebDAV
 
-from .database import engine, get_session
+from .database_connection import DatabaseManager
 
 from .model_base import (
     MCPBase,

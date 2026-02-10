@@ -11,7 +11,7 @@ from uuid import UUID
 @pytest.mark.asyncio
 async def test_directory_requires_auth(async_client: AsyncClient):
     """测试获取目录需要认证"""
-    response = await async_client.get("/api/directory/testuser")
+    response = await async_client.get("/api/directory/")
     assert response.status_code == 401
 
 
@@ -24,7 +24,7 @@ async def test_directory_get_root(
 ):
     """测试获取用户根目录"""
     response = await async_client.get(
-        "/api/directory/testuser",
+        "/api/directory/",
         headers=auth_headers
     )
     assert response.status_code == 200
@@ -45,7 +45,7 @@ async def test_directory_get_nested(
 ):
     """测试获取嵌套目录"""
     response = await async_client.get(
-        "/api/directory/testuser/docs",
+        "/api/directory/docs",
         headers=auth_headers
     )
     assert response.status_code == 200
@@ -63,7 +63,7 @@ async def test_directory_get_contains_children(
 ):
     """测试目录包含子对象"""
     response = await async_client.get(
-        "/api/directory/testuser/docs",
+        "/api/directory/docs",
         headers=auth_headers
     )
     assert response.status_code == 200
@@ -76,42 +76,29 @@ async def test_directory_get_contains_children(
 
 
 @pytest.mark.asyncio
-async def test_directory_forbidden_other_user(
-    async_client: AsyncClient,
-    auth_headers: dict[str, str]
-):
-    """测试访问他人目录返回 403"""
-    response = await async_client.get(
-        "/api/directory/admin",
-        headers=auth_headers
-    )
-    assert response.status_code == 403
-
-
-@pytest.mark.asyncio
 async def test_directory_not_found(
     async_client: AsyncClient,
     auth_headers: dict[str, str]
 ):
     """测试目录不存在返回 404"""
     response = await async_client.get(
-        "/api/directory/testuser/nonexistent",
+        "/api/directory/nonexistent",
         headers=auth_headers
     )
     assert response.status_code == 404
 
 
 @pytest.mark.asyncio
-async def test_directory_empty_path_returns_400(
+async def test_directory_root_returns_200(
     async_client: AsyncClient,
     auth_headers: dict[str, str]
 ):
-    """测试空路径返回 400"""
+    """测试根目录端点返回 200"""
     response = await async_client.get(
         "/api/directory/",
         headers=auth_headers
     )
-    assert response.status_code == 400
+    assert response.status_code == 200
 
 
 @pytest.mark.asyncio
@@ -121,7 +108,7 @@ async def test_directory_response_includes_policy(
 ):
     """测试目录响应包含存储策略"""
     response = await async_client.get(
-        "/api/directory/testuser",
+        "/api/directory/",
         headers=auth_headers
     )
     assert response.status_code == 200
@@ -284,7 +271,7 @@ async def test_directory_create_other_user_parent(
     """测试在他人目录下创建目录返回 404"""
     # 先用管理员账号获取管理员的根目录ID
     admin_response = await async_client.get(
-        "/api/directory/admin",
+        "/api/directory/",
         headers=admin_headers
     )
     assert admin_response.status_code == 200

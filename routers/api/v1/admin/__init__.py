@@ -5,15 +5,15 @@ from loguru import logger as l
 
 from middleware.auth import admin_required
 from middleware.dependencies import SessionDep
-from models import (
+from sqlmodels import (
     User, ResponseBase,
     Setting, Object, ObjectType, Share, AdminSummaryResponse, MetricsSummary, LicenseInfo, VersionInfo,
 )
-from models.base import SQLModelBase
-from models.setting import (
+from sqlmodels.base import SQLModelBase
+from sqlmodels.setting import (
     SettingItem, SettingsListResponse, SettingsUpdateRequest, SettingsUpdateResponse,
 )
-from models.setting import SettingsType
+from sqlmodels.setting import SettingsType
 from utils import http_exceptions
 from utils.conf import appmeta
 from .file import admin_file_router

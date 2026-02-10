@@ -8,8 +8,8 @@ import pytest
 from fastapi import HTTPException
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from models.user import User
-from models.group import Group
+from sqlmodels.user import User
+from sqlmodels.group import Group
 
 
 @pytest.mark.asyncio
@@ -62,7 +62,7 @@ async def test_table_base_update(db_session: AsyncSession):
     group = await group.save(db_session)
 
     # 更新数据
-    from models.group import GroupBase
+    from sqlmodels.group import GroupBase
     update_data = GroupBase(name="更新后名称")
     updated_group = await group.update(db_session, update_data)
 
@@ -200,7 +200,7 @@ async def test_timestamps_auto_update(db_session: AsyncSession):
     await asyncio.sleep(0.1)
 
     # 更新记录
-    from models.group import GroupBase
+    from sqlmodels.group import GroupBase
     update_data = GroupBase(name="更新后的名称")
     group = await group.update(db_session, update_data)
 

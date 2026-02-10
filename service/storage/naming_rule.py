@@ -23,7 +23,7 @@ import string
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from models.base import SQLModelBase
+from sqlmodels.base import SQLModelBase
 
 
 class NamingContext(SQLModelBase):

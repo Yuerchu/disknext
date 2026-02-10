@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 
 from middleware.auth import auth_required
-from models import ResponseBase
+from sqlmodels import ResponseBase
 from utils import http_exceptions
 
 # WebDAV 管理路由

@@ -6,10 +6,10 @@ from sqlmodel import Field
 
 from middleware.auth import admin_required
 from middleware.dependencies import SessionDep, TableViewRequestDep
-from models import (
+from sqlmodels import (
     Policy, PolicyBase, PolicyType, PolicySummary, ResponseBase,
     ListResponse, Object, )
-from models.base import SQLModelBase
+from sqlmodels.base import SQLModelBase
 from service.storage import DirectoryCreationError, LocalStorageService
 
 admin_policy_router = APIRouter(

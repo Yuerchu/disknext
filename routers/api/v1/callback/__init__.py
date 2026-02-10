@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Query
 from fastapi.responses import PlainTextResponse
 
-from models import ResponseBase
+from sqlmodels import ResponseBase
 import service.oauth
 from utils import http_exceptions
 

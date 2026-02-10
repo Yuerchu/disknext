@@ -73,6 +73,8 @@ class Password:
 
         :param length: 密码长度
         :type length: int
+        :param url_safe: 是否生成 URL 安全的密码
+        :type url_safe: bool
         :return: 随机密码
         :rtype: str
         """

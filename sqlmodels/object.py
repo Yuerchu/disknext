@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Literal
 from uuid import UUID
 
 from enum import StrEnum
+from sqlalchemy import BigInteger
 from sqlmodel import Field, Relationship, UniqueConstraint, CheckConstraint, Index, text
 
 from .base import SQLModelBase
@@ -15,6 +16,7 @@ if TYPE_CHECKING:
     from .source_link import SourceLink
     from .share import Share
     from .physical_file import PhysicalFile
+    from .uri import DiskNextURI
 
 
 class ObjectType(StrEnum):
@@ -103,7 +105,7 @@ class ObjectMoveRequest(SQLModelBase):
 class ObjectDeleteRequest(SQLModelBase):
     """删除对象请求 DTO"""
 
-    ids: UUID | list[UUID]
+    ids: list[UUID]
     """待删除对象UUID列表"""
 
 
@@ -116,11 +118,11 @@ class ObjectResponse(ObjectBase):
     thumb: bool = False
     """是否有缩略图"""
 
-    date: datetime
-    """对象修改时间"""
-
-    create_date: datetime
+    created_at: datetime
     """对象创建时间"""
+
+    updated_at: datetime
+    """对象修改时间"""
 
     source_enabled: bool = False
     """是否启用离线下载源"""
@@ -138,7 +140,7 @@ class PolicyResponse(SQLModelBase):
     type: StorageType
     """存储类型"""
 
-    max_size: int = Field(ge=0, default=0)
+    max_size: int = Field(ge=0, default=0, sa_type=BigInteger)
     """单文件最大限制，单位字节，0表示不限制"""
 
     file_type: list[str] | None = None
@@ -186,18 +188,18 @@ class Object(ObjectBase, UUIDTableBaseMixin):
     合并了原有的 File 和 Folder 模型，通过 type 字段区分文件和目录。
 
     根目录规则：
-    - 每个用户有一个显式根目录对象（name=用户的username, parent_id=NULL）
+    - 每个用户有一个显式根目录对象（name="/", parent_id=NULL）
     - 用户创建的文件/文件夹的 parent_id 指向根目录或其他文件夹的 id
     - 根目录的 policy_id 指定用户默认存储策略
-    - 路径格式：/username/path/to/file（如 /admin/docs/readme.md）
+    - 路径格式：/path/to/file（如 /docs/readme.md），不包含用户名前缀
     """
 
     __table_args__ = (
         # 同一父目录下名称唯一（包括 parent_id 为 NULL 的情况）
         UniqueConstraint("owner_id", "parent_id", "name", name="uq_object_parent_name"),
-        # 名称不能包含斜杠 ([TODO] 还有特殊字符)
+        # 名称不能包含斜杠（根目录 parent_id IS NULL 除外，因为根目录 name="/"）
         CheckConstraint(
-            "name NOT LIKE '%/%' AND name NOT LIKE '%\\%'",
+            "parent_id IS NULL OR (name NOT LIKE '%/%' AND name NOT LIKE '%\\%')",
             name="ck_object_name_no_slash",
         ),
         # 性能索引
@@ -220,7 +222,7 @@ class Object(ObjectBase, UUIDTableBaseMixin):
 
     # ==================== 文件专属字段 ====================
 
-    size: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
+    size: int = Field(default=0, sa_type=BigInteger, sa_column_kwargs={"server_default": "0"})
     """文件大小（字节），目录为 0"""
 
     upload_session_id: str | None = Field(default=None, max_length=255, unique=True, index=True)
@@ -374,15 +376,16 @@ class Object(ObjectBase, UUIDTableBaseMixin):
         session,
         user_id: UUID,
         path: str,
-        username: str,
     ) -> "Object | None":
         """
         根据路径获取对象
 
+        路径从用户根目录开始，不包含用户名前缀。
+        如 "/" 表示根目录，"/docs/images" 表示根目录下的 docs/images。
+
         :param session: 数据库会话
         :param user_id: 用户UUID
-        :param path: 路径，如 "/username" 或 "/username/docs/images"
-        :param username: 用户名，用于识别根目录
+        :param path: 路径，如 "/" 或 "/docs/images"
         :return: Object 或 None
         """
         path = path.strip()
@@ -403,16 +406,7 @@ class Object(ObjectBase, UUIDTableBaseMixin):
         if not parts:
             return root
 
-        # 检查第一部分是否是用户名（根目录名）
-        if parts[0] == username:
-            # 路径以用户名开头，如 /admin/docs
-            if len(parts) == 1:
-                # 只有用户名，返回根目录
-                return root
-            # 去掉用户名部分，从第二个部分开始遍历
-            parts = parts[1:]
-
-        # 从根目录开始遍历剩余路径
+        # 从根目录开始遍历路径
         current = root
         for part in parts:
             if not current:
@@ -443,6 +437,77 @@ class Object(ObjectBase, UUIDTableBaseMixin):
             fetch_mode="all"
         )
 
+    @classmethod
+    async def resolve_uri(
+        cls,
+        session,
+        uri: "DiskNextURI",
+        requesting_user_id: UUID | None = None,
+    ) -> "Object":
+        """
+        将 URI 解析为 Object 实例
+
+        分派逻辑（类似 Cloudreve 的 getNavigator）：
+        - MY    → user_id = uri.id(str(requesting_user_id))
+                  验证权限（自己的或管理员），然后 get_by_path
+        - SHARE → 通过 uri.fs_id 查 Share 表，验证密码和有效期
+                  获取 share.object，然后沿 uri.path 遍历子对象
+        - TRASH → 延后实现
+
+        :param session: 数据库会话
+        :param uri: DiskNextURI 实例
+        :param requesting_user_id: 请求用户UUID
+        :return: Object 实例
+        :raises ValueError: URI 无法解析
+        :raises PermissionError: 权限不足
+        :raises NotImplementedError: 不支持的命名空间
+        """
+        from .uri import FileSystemNamespace
+
+        if uri.namespace == FileSystemNamespace.MY:
+            # 确定目标用户
+            target_user_id_str = uri.id(str(requesting_user_id) if requesting_user_id else None)
+            if not target_user_id_str:
+                raise ValueError("MY 命名空间需要提供 fs_id 或 requesting_user_id")
+
+            target_user_id = UUID(target_user_id_str)
+
+            # 权限检查：只能访问自己的空间（管理员权限由路由层判断）
+            if requesting_user_id and target_user_id != requesting_user_id:
+                raise PermissionError("无权访问其他用户的文件空间")
+
+            obj = await cls.get_by_path(session, target_user_id, uri.path)
+            if not obj:
+                raise ValueError(f"路径不存在: {uri.path}")
+            return obj
+
+        elif uri.namespace == FileSystemNamespace.SHARE:
+            raise NotImplementedError("分享空间解析尚未实现")
+
+        elif uri.namespace == FileSystemNamespace.TRASH:
+            raise NotImplementedError("回收站解析尚未实现")
+
+        else:
+            raise ValueError(f"未知的命名空间: {uri.namespace}")
+
+    async def get_full_path(self, session) -> str:
+        """
+        从当前对象沿 parent_id 向上遍历到根目录，返回完整路径
+
+        :param session: 数据库会话
+        :return: 完整路径，如 "/docs/images/photo.jpg"
+        """
+        parts: list[str] = []
+        current: Object | None = self
+
+        while current and current.parent_id is not None:
+            parts.append(current.name)
+            current = await Object.get(session, Object.id == current.parent_id)
+
+        # 反转顺序（从根到当前）
+        parts.reverse()
+        return "/" + "/".join(parts)
+
 
 # ==================== 上传会话模型 ====================
 
@@ -452,10 +517,10 @@ class UploadSessionBase(SQLModelBase):
     file_name: str = Field(max_length=255)
     """原始文件名"""
 
-    file_size: int = Field(ge=0)
+    file_size: int = Field(ge=0, sa_type=BigInteger)
     """文件总大小（字节）"""
 
-    chunk_size: int = Field(ge=1)
+    chunk_size: int = Field(ge=1, sa_type=BigInteger)
     """分片大小（字节）"""
 
     total_chunks: int = Field(ge=1)
@@ -474,7 +539,7 @@ class UploadSession(UploadSessionBase, UUIDTableBaseMixin):
     uploaded_chunks: int = 0
     """已上传分片数"""
 
-    uploaded_size: int = 0
+    uploaded_size: int = Field(default=0, sa_type=BigInteger)
     """已上传大小（字节）"""
 
     storage_path: str | None = Field(default=None, max_length=512)
@@ -680,8 +745,8 @@ class AdminFileResponse(ObjectResponse):
     owner_id: UUID
     """所有者UUID"""
 
-    owner_username: str
-    """所有者用户名"""
+    owner_email: str
+    """所有者邮箱"""
 
     policy_name: str
     """存储策略名称"""
@@ -709,12 +774,12 @@ class AdminFileResponse(ObjectResponse):
             # ObjectResponse 字段
             id=obj.id,
             thumb=False,
-            date=obj.updated_at,
-            create_date=obj.created_at,
+            created_at=obj.created_at,
+            updated_at=obj.updated_at,
             source_enabled=False,
             # AdminFileResponse 字段
             owner_id=obj.owner_id,
-            owner_username=owner.username if owner else "unknown",
+            owner_email=owner.email if owner else "unknown",
             policy_name=policy.name if policy else "unknown",
             is_banned=obj.is_banned,
             banned_at=obj.banned_at,
@@ -725,7 +790,7 @@ class AdminFileResponse(ObjectResponse):
 class FileBanRequest(SQLModelBase):
     """文件封禁请求 DTO"""
 
-    is_banned: bool = True
+    ban: bool = True
     """是否封禁"""
 
     reason: str | None = Field(default=None, max_length=500)

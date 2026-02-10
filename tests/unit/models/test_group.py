@@ -4,7 +4,7 @@ Group 和 GroupOptions 模型的单元测试
 import pytest
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from models.group import Group, GroupOptions, GroupResponse
+from sqlmodels.group import Group, GroupOptions, GroupResponse
 
 
 @pytest.mark.asyncio

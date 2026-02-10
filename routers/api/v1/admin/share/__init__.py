@@ -5,7 +5,7 @@ from loguru import logger as l
 
 from middleware.auth import admin_required
 from middleware.dependencies import SessionDep, TableViewRequestDep
-from models import (
+from sqlmodels import (
     ResponseBase, ListResponse,
     Share, AdminShareListItem, )
 
@@ -80,7 +80,7 @@ async def router_admin_get_share(
         "score": share.score,
         "has_password": bool(share.password),
         "user_id": str(share.user_id),
-        "username": user.username if user else None,
+        "username": user.email if user else None,
         "object": {
             "id": str(obj.id),
             "name": obj.name,

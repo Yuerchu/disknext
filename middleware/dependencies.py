@@ -14,14 +14,14 @@ from uuid import UUID
 from fastapi import Depends, Query
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from models.database import get_session
-from models.mixin import TimeFilterRequest, TableViewRequest
-from models.user import UserFilterParams, UserStatus
+from sqlmodels.database_connection import DatabaseManager
+from sqlmodels.mixin import TimeFilterRequest, TableViewRequest
+from sqlmodels.user import UserFilterParams, UserStatus
 
 
 # --- 数据库会话依赖 ---
 
-SessionDep: TypeAlias = Annotated[AsyncSession, Depends(get_session)]
+SessionDep: TypeAlias = Annotated[AsyncSession, Depends(DatabaseManager.get_session)]
 """数据库会话依赖，用于路由函数中获取数据库会话"""
 
 
@@ -79,14 +79,14 @@ TableViewRequestDep: TypeAlias = Annotated[TableViewRequest, Depends(_get_table_
 
 async def _get_user_filter_params(
     group_id: Annotated[UUID | None, Query(description="按用户组UUID筛选")] = None,
-    username: Annotated[str | None, Query(max_length=50, description="按用户名模糊搜索")] = None,
+    email: Annotated[str | None, Query(max_length=50, description="按邮箱模糊搜索")] = None,
     nickname: Annotated[str | None, Query(max_length=50, description="按昵称模糊搜索")] = None,
     status: Annotated[UserStatus | None, Query(description="按用户状态筛选")] = None,
 ) -> UserFilterParams:
     """解析用户过滤查询参数"""
     return UserFilterParams(
         group_id=group_id,
-        username_contains=username,
+        email_contains=email,
         nickname_contains=nickname,
         status=status,
     )

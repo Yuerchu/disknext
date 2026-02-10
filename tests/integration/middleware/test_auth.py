@@ -83,7 +83,7 @@ async def test_auth_required_token_without_sub(async_client: AsyncClient):
 async def test_auth_required_nonexistent_user_token(async_client: AsyncClient):
     """测试用户不存在的token返回 401"""
     token, _ = JWT.create_access_token(
-        data={"sub": "nonexistent_user"},
+        data={"sub": "nonexistent_user@test.local"},
         expires_delta=timedelta(hours=1)
     )
 
@@ -178,12 +178,12 @@ async def test_auth_on_directory_endpoint(
 ):
     """测试目录端点应用认证"""
     # 无认证
-    response_no_auth = await async_client.get("/api/directory/testuser")
+    response_no_auth = await async_client.get("/api/directory/")
     assert response_no_auth.status_code == 401
 
     # 有认证
     response_with_auth = await async_client.get(
-        "/api/directory/testuser",
+        "/api/directory/",
         headers=auth_headers
     )
     assert response_with_auth.status_code == 200
@@ -235,7 +235,7 @@ async def test_auth_on_storage_endpoint(
 async def test_refresh_token_format(test_user_info: dict[str, str]):
     """测试刷新token格式正确"""
     refresh_token, _ = JWT.create_refresh_token(
-        data={"sub": test_user_info["username"]},
+        data={"sub": test_user_info["email"]},
         expires_delta=timedelta(days=7)
     )
 
@@ -247,7 +247,7 @@ async def test_refresh_token_format(test_user_info: dict[str, str]):
 async def test_access_token_format(test_user_info: dict[str, str]):
     """测试访问token格式正确"""
     access_token, expires = JWT.create_access_token(
-        data={"sub": test_user_info["username"]},
+        data={"sub": test_user_info["email"]},
         expires_delta=timedelta(hours=1)
     )
 

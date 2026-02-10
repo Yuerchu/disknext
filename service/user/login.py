@@ -3,7 +3,7 @@ from uuid import uuid4
 from loguru import logger
 
 from middleware.dependencies import SessionDep
-from models import LoginRequest, TokenResponse, User
+from sqlmodels import LoginRequest, TokenResponse, User
 from utils import http_exceptions
 from utils.JWT import create_access_token, create_refresh_token
 from utils.password.pwd import Password, PasswordStatus
@@ -30,17 +30,17 @@ async def login(
     # is_captcha_required = captcha_setting and captcha_setting.value == "1"
 
     # 获取用户信息
-    current_user: User = await User.get(session, User.username == login_request.username, fetch_mode="first")   #type: ignore
+    current_user: User = await User.get(session, User.email == login_request.email, fetch_mode="first")   #type: ignore
 
     # 验证用户是否存在
     if not current_user:
-        logger.debug(f"Cannot find user with username: {login_request.username}")
-        http_exceptions.raise_unauthorized("Invalid username or password")
+        logger.debug(f"Cannot find user with email: {login_request.email}")
+        http_exceptions.raise_unauthorized("Invalid email or password")
 
     # 验证密码是否正确
     if Password.verify(current_user.password, login_request.password) != PasswordStatus.VALID:
-        logger.debug(f"Password verification failed for user: {login_request.username}")
-        http_exceptions.raise_unauthorized("Invalid username or password")
+        logger.debug(f"Password verification failed for user: {login_request.email}")
+        http_exceptions.raise_unauthorized("Invalid email or password")
 
     # 验证用户是否可登录
     if not current_user.status:
@@ -50,23 +50,23 @@ async def login(
     if current_user.two_factor:
         # 用户已启用两步验证
         if not login_request.two_fa_code:
-            logger.debug(f"2FA required for user: {login_request.username}")
+            logger.debug(f"2FA required for user: {login_request.email}")
             http_exceptions.raise_precondition_required("2FA required")
 
         # 验证 OTP 码
         if Password.verify_totp(current_user.two_factor, login_request.two_fa_code) != PasswordStatus.VALID:
-            logger.debug(f"Invalid 2FA code for user: {login_request.username}")
+            logger.debug(f"Invalid 2FA code for user: {login_request.email}")
             http_exceptions.raise_unauthorized("Invalid 2FA code")
 
     # 创建令牌
-    access_token = create_access_token(data={
-        'sub': str(current_user.id), 
-        'jti': str(uuid4())
-    })
-    refresh_token = create_refresh_token(data={
-        'sub': str(current_user.id),
-        'jti': str(uuid4())
-    })
+    access_token = create_access_token(
+        sub=current_user.id, 
+        jti=uuid4()
+    )
+    refresh_token = create_refresh_token(
+        sub=current_user.id,
+        jti=uuid4()
+    )
 
     return TokenResponse(
         access_token=access_token.access_token,

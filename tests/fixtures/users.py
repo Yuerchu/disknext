@@ -7,7 +7,7 @@ from uuid import UUID
 
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from models.user import User
+from sqlmodels.user import User
 from utils.password.pwd import Password
 
 
@@ -18,7 +18,7 @@ class UserFactory:
     async def create(
         session: AsyncSession,
         group_id: UUID,
-        username: str | None = None,
+        email: str | None = None,
         password: str | None = None,
         **kwargs
     ) -> User:
@@ -28,7 +28,7 @@ class UserFactory:
         参数:
             session: 数据库会话
             group_id: 用户组UUID
-            username: 用户名（默认: test_user_{随机}）
+            email: 用户邮箱（默认: test_user_{随机}@test.local）
             password: 明文密码（默认: password123）
             **kwargs: 其他用户字段
 
@@ -37,15 +37,15 @@ class UserFactory:
         """
         import uuid
 
-        if username is None:
-            username = f"test_user_{uuid.uuid4().hex[:8]}"
+        if email is None:
+            email = f"test_user_{uuid.uuid4().hex[:8]}@test.local"
 
         if password is None:
             password = "password123"
 
         user = User(
-            username=username,
-            nickname=kwargs.get("nickname", username),
+            email=email,
+            nickname=kwargs.get("nickname", email),
             password=Password.hash(password),
             status=kwargs.get("status", True),
             storage=kwargs.get("storage", 0),
@@ -67,7 +67,7 @@ class UserFactory:
     async def create_admin(
         session: AsyncSession,
         admin_group_id: UUID,
-        username: str | None = None,
+        email: str | None = None,
         password: str | None = None
     ) -> User:
         """
@@ -76,7 +76,7 @@ class UserFactory:
         参数:
             session: 数据库会话
             admin_group_id: 管理员组UUID
-            username: 用户名（默认: admin_{随机}）
+            email: 用户邮箱（默认: admin_{随机}@disknext.local）
             password: 明文密码（默认: admin_password）
 
         返回:
@@ -84,15 +84,15 @@ class UserFactory:
         """
         import uuid
 
-        if username is None:
-            username = f"admin_{uuid.uuid4().hex[:8]}"
+        if email is None:
+            email = f"admin_{uuid.uuid4().hex[:8]}@disknext.local"
 
         if password is None:
             password = "admin_password"
 
         admin = User(
-            username=username,
-            nickname=f"管理员 {username}",
+            email=email,
+            nickname=f"管理员 {email}",
             password=Password.hash(password),
             status=True,
             storage=0,
@@ -108,7 +108,7 @@ class UserFactory:
     async def create_banned(
         session: AsyncSession,
         group_id: UUID,
-        username: str | None = None
+        email: str | None = None
     ) -> User:
         """
         创建被封禁用户
@@ -116,19 +116,19 @@ class UserFactory:
         参数:
             session: 数据库会话
             group_id: 用户组UUID
-            username: 用户名（默认: banned_user_{随机}）
+            email: 用户邮箱（默认: banned_user_{随机}@test.local）
 
         返回:
             User: 创建的被封禁用户实例
         """
         import uuid
 
-        if username is None:
-            username = f"banned_user_{uuid.uuid4().hex[:8]}"
+        if email is None:
+            email = f"banned_user_{uuid.uuid4().hex[:8]}@test.local"
 
         banned_user = User(
-            username=username,
-            nickname=f"封禁用户 {username}",
+            email=email,
+            nickname=f"封禁用户 {email}",
             password=Password.hash("banned_password"),
             status=False,  # 封禁状态
             storage=0,
@@ -145,7 +145,7 @@ class UserFactory:
         session: AsyncSession,
         group_id: UUID,
         storage_bytes: int,
-        username: str | None = None
+        email: str | None = None
     ) -> User:
         """
         创建已使用指定存储空间的用户
@@ -154,19 +154,19 @@ class UserFactory:
             session: 数据库会话
             group_id: 用户组UUID
             storage_bytes: 已使用的存储空间（字节）
-            username: 用户名（默认: storage_user_{随机}）
+            email: 用户邮箱（默认: storage_user_{随机}@test.local）
 
         返回:
             User: 创建的用户实例
         """
         import uuid
 
-        if username is None:
-            username = f"storage_user_{uuid.uuid4().hex[:8]}"
+        if email is None:
+            email = f"storage_user_{uuid.uuid4().hex[:8]}@test.local"
 
         user = User(
-            username=username,
-            nickname=username,
+            email=email,
+            nickname=email,
             password=Password.hash("password123"),
             status=True,
             storage=storage_bytes,

@@ -3,8 +3,8 @@ import pytest
 @pytest.mark.asyncio
 async def test_group_curd():
     """测试数据库的增删改查"""
-    from models import database, migration
-    from models.group import Group
+    from sqlmodels import database, migration
+    from sqlmodels.group import Group
 
     await database.init_db(url='sqlite+aiosqlite:///:memory:')
 

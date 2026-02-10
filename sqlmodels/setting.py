@@ -20,16 +20,10 @@ class SiteConfigResponse(SQLModelBase):
     title: str = "DiskNext"
     """网站标题"""
 
-    # themes: dict[str, str] = {}
-    # """网站主题配置"""
-
-    # default_theme: dict[str, str] = {}
-    # """默认主题RGB色号"""
-
     site_notice: str | None = None
     """网站公告"""
 
-    user: UserResponse
+    user: UserResponse | None = None
     """用户信息"""
 
     logo_light: str | None = None
@@ -38,11 +32,23 @@ class SiteConfigResponse(SQLModelBase):
     logo_dark: str | None = None
     """网站Logo URL（深色模式）"""
 
-    captcha_type: CaptchaType | None = None
+    register_enabled: bool = True
+    """是否允许注册"""
+
+    login_captcha: bool = False
+    """登录是否需要验证码"""
+
+    reg_captcha: bool = False
+    """注册是否需要验证码"""
+
+    forget_captcha: bool = False
+    """找回密码是否需要验证码"""
+
+    captcha_type: CaptchaType = CaptchaType.DEFAULT
     """验证码类型"""
 
     captcha_key: str | None = None
-    """验证码密钥"""
+    """验证码 public key（DEFAULT 类型时为 None）"""
 
 
 # ==================== 管理员设置 DTO ====================

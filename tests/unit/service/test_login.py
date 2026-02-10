@@ -4,8 +4,8 @@ Login 服务的单元测试
 import pytest
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from models.user import User, LoginRequest, TokenResponse
-from models.group import Group
+from sqlmodels.user import User, LoginRequest, TokenResponse
+from sqlmodels.group import Group
 from service.user.login import login
 from utils.password.pwd import Password
 
@@ -20,7 +20,7 @@ async def setup_user(db_session: AsyncSession):
     # 创建正常用户
     plain_password = "secure_password_123"
     user = User(
-        username="loginuser",
+        email="loginuser@test.local",
         password=Password.hash(plain_password),
         status=True,
         group_id=group.id
@@ -41,7 +41,7 @@ async def setup_banned_user(db_session: AsyncSession):
     group = await group.save(db_session)
 
     user = User(
-        username="banneduser",
+        email="banneduser@test.local",
         password=Password.hash("password"),
         status=False,  # 封禁状态
         group_id=group.id
@@ -61,7 +61,7 @@ async def setup_2fa_user(db_session: AsyncSession):
 
     secret = pyotp.random_base32()
     user = User(
-        username="2fauser",
+        email="2fauser@test.local",
         password=Password.hash("password"),
         status=True,
         two_factor=secret,
@@ -82,7 +82,7 @@ async def test_login_success(db_session: AsyncSession, setup_user):
     user_data = setup_user
 
     login_request = LoginRequest(
-        username="loginuser",
+        email="loginuser@test.local",
         password=user_data["password"]
     )
 
@@ -99,7 +99,7 @@ async def test_login_success(db_session: AsyncSession, setup_user):
 async def test_login_user_not_found(db_session: AsyncSession):
     """测试用户不存在"""
     login_request = LoginRequest(
-        username="nonexistent_user",
+        email="nonexistent@test.local",
         password="any_password"
     )
 
@@ -112,7 +112,7 @@ async def test_login_user_not_found(db_session: AsyncSession):
 async def test_login_wrong_password(db_session: AsyncSession, setup_user):
     """测试密码错误"""
     login_request = LoginRequest(
-        username="loginuser",
+        email="loginuser@test.local",
         password="wrong_password"
     )
 
@@ -125,7 +125,7 @@ async def test_login_wrong_password(db_session: AsyncSession, setup_user):
 async def test_login_user_banned(db_session: AsyncSession, setup_banned_user):
     """测试用户被封禁"""
     login_request = LoginRequest(
-        username="banneduser",
+        email="banneduser@test.local",
         password="password"
     )
 
@@ -140,7 +140,7 @@ async def test_login_2fa_required(db_session: AsyncSession, setup_2fa_user):
     user_data = setup_2fa_user
 
     login_request = LoginRequest(
-        username="2fauser",
+        email="2fauser@test.local",
         password=user_data["password"]
         # 未提供 two_fa_code
     )
@@ -156,7 +156,7 @@ async def test_login_2fa_invalid(db_session: AsyncSession, setup_2fa_user):
     user_data = setup_2fa_user
 
     login_request = LoginRequest(
-        username="2fauser",
+        email="2fauser@test.local",
         password=user_data["password"],
         two_fa_code="000000"  # 错误的验证码
     )
@@ -179,7 +179,7 @@ async def test_login_2fa_success(db_session: AsyncSession, setup_2fa_user):
     valid_code = totp.now()
 
     login_request = LoginRequest(
-        username="2fauser",
+        email="2fauser@test.local",
         password=user_data["password"],
         two_fa_code=valid_code
     )
@@ -198,7 +198,7 @@ async def test_login_returns_valid_tokens(db_session: AsyncSession, setup_user):
     user_data = setup_user
 
     login_request = LoginRequest(
-        username="loginuser",
+        email="loginuser@test.local",
         password=user_data["password"]
     )
 
@@ -217,17 +217,17 @@ async def test_login_returns_valid_tokens(db_session: AsyncSession, setup_user):
 
 
 @pytest.mark.asyncio
-async def test_login_case_sensitive_username(db_session: AsyncSession, setup_user):
-    """测试用户名大小写敏感"""
+async def test_login_case_sensitive_email(db_session: AsyncSession, setup_user):
+    """测试邮箱大小写敏感"""
     user_data = setup_user
 
-    # 使用大写用户名登录（如果数据库是 loginuser）
+    # 使用大写邮箱登录
     login_request = LoginRequest(
-        username="LOGINUSER",
+        email="LOGINUSER@TEST.LOCAL",
         password=user_data["password"]
     )
 
     result = await login(db_session, login_request)
 
-    # 应该失败，因为用户名大小写不匹配
+    # 应该失败，因为邮箱大小写不匹配
     assert result is None

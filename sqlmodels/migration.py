@@ -104,9 +104,11 @@ Neue',Helvetica,Arial,sans-serif; box-sizing: border-box; font-size: 14px; verti
     Setting(name="captcha_IsShowSlimeLine", value="1", type=SettingsType.CAPTCHA),
     Setting(name="captcha_IsShowSineLine", value="0", type=SettingsType.CAPTCHA),
     Setting(name="captcha_CaptchaLen", value="6", type=SettingsType.CAPTCHA),
-    Setting(name="captcha_IsUseReCaptcha", value="0", type=SettingsType.CAPTCHA),
-    Setting(name="captcha_ReCaptchaKey", value="defaultKey", type=SettingsType.CAPTCHA),
-    Setting(name="captcha_ReCaptchaSecret", value="defaultSecret", type=SettingsType.CAPTCHA),
+    Setting(name="captcha_type", value="default", type=SettingsType.CAPTCHA),
+    Setting(name="captcha_ReCaptchaKey", value="", type=SettingsType.CAPTCHA),
+    Setting(name="captcha_ReCaptchaSecret", value="", type=SettingsType.CAPTCHA),
+    Setting(name="captcha_CloudflareKey", value="", type=SettingsType.CAPTCHA),
+    Setting(name="captcha_CloudflareSecret", value="", type=SettingsType.CAPTCHA),
     Setting(name="thumb_width", value="400", type=SettingsType.THUMB),
     Setting(name="thumb_height", value="300", type=SettingsType.THUMB),
     Setting(name="pwa_small_icon", value="/static/img/favicon.ico", type=SettingsType.PWA),
@@ -119,11 +121,11 @@ Neue',Helvetica,Arial,sans-serif; box-sizing: border-box; font-size: 14px; verti
 
 async def init_default_settings() -> None:
     from .setting import Setting
-    from .database import get_session
+    from .database_connection import DatabaseManager
 
     log.info('初始化设置...')
 
-    async for session in get_session():
+    async for session in DatabaseManager.get_session():
         # 检查是否已经存在版本设置
         ver = await Setting.get(
             session,
@@ -139,11 +141,11 @@ async def init_default_group() -> None:
     from .group import Group, GroupOptions
     from .policy import Policy, GroupPolicyLink
     from .setting import Setting
-    from .database import get_session
+    from .database_connection import DatabaseManager
 
     log.info('初始化用户组...')
 
-    async for session in get_session():
+    async for session in DatabaseManager.get_session():
         # 获取默认存储策略
         default_policy = await Policy.get(session, Policy.name == "本地存储")
         default_policy_id = default_policy.id if default_policy else None
@@ -231,13 +233,20 @@ async def init_default_user() -> None:
     from .group import Group
     from .object import Object, ObjectType
     from .policy import Policy
-    from .database import get_session
+    from .database_connection import DatabaseManager
 
     log.info('初始化管理员用户...')
 
-    async for session in get_session():
-        # 检查管理员用户是否存在
-        admin_user = await User.get(session, User.username == "admin")
+    async for session in DatabaseManager.get_session():
+        # 检查管理员用户是否存在（通过 Setting 中的 default_admin_id 判断）
+        admin_id_setting = await Setting.get(
+            session,
+            (Setting.type == SettingsType.AUTH) & (Setting.name == "default_admin_id")
+        )
+        admin_user = None
+        if admin_id_setting and admin_id_setting.value:
+            from uuid import UUID
+            admin_user = await User.get(session, User.id == UUID(admin_id_setting.value))
 
         if not admin_user:
             # 获取管理员组
@@ -256,18 +265,24 @@ async def init_default_user() -> None:
             hashed_admin_password = Password.hash(admin_password)
 
             admin_user = User(
-                username="admin",
+                email="admin@disknext.local",
                 nickname="admin",
                 group_id=admin_group.id,
                 password=hashed_admin_password,
             )
             admin_user_id = admin_user.id  # 在 save 前保存 UUID
-            admin_username = admin_user.username
             await admin_user.save(session)
 
-            # 为管理员创建根目录（使用用户名作为目录名）
+            # 记录默认管理员 ID 到 Setting
+            await Setting(
+                name="default_admin_id",
+                value=str(admin_user_id),
+                type=SettingsType.AUTH,
+            ).save(session)
+
+            # 为管理员创建根目录
             await Object(
-                name=admin_username,
+                name="/",
                 type=ObjectType.FOLDER,
                 owner_id=admin_user_id,
                 parent_id=None,
@@ -275,18 +290,18 @@ async def init_default_user() -> None:
             ).save(session)
 
             log.warning('请注意，账号密码仅显示一次，请妥善保管')
-            log.info(f'初始管理员账号: admin')
+            log.info(f'初始管理员邮箱: admin@disknext.local')
             log.info(f'初始管理员密码: {admin_password}')
 
 
 async def init_default_policy() -> None:
     from .policy import Policy, PolicyType
-    from .database import get_session
+    from .database_connection import DatabaseManager
     from service.storage import LocalStorageService
 
     log.info('初始化默认存储策略...')
 
-    async for session in get_session():
+    async for session in DatabaseManager.get_session():
         # 检查默认存储策略是否存在
         default_policy = await Policy.get(session, Policy.name == "本地存储")
 

@@ -60,8 +60,8 @@ class UserFilterParams(SQLModelBase):
     group_id: UUID | None = None
     """按用户组UUID筛选"""
 
-    username_contains: str | None = Field(default=None, max_length=50)
-    """用户名包含（不区分大小写的模糊搜索）"""
+    email_contains: str | None = Field(default=None, max_length=50)
+    """邮箱包含（不区分大小写的模糊搜索）"""
 
     nickname_contains: str | None = Field(default=None, max_length=50)
     """昵称包含（不区分大小写的模糊搜索）"""
@@ -75,8 +75,8 @@ class UserFilterParams(SQLModelBase):
 class UserBase(SQLModelBase):
     """用户基础字段，供数据库模型和 DTO 共享"""
 
-    username: str
-    """用户名"""
+    email: str
+    """用户邮箱"""
 
     status: UserStatus = UserStatus.ACTIVE
     """用户状态"""
@@ -90,8 +90,8 @@ class UserBase(SQLModelBase):
 class LoginRequest(SQLModelBase):
     """登录请求 DTO"""
 
-    username: str
-    """用户名或邮箱"""
+    email: str
+    """用户邮箱"""
 
     password: str
     """用户密码"""
@@ -106,14 +106,28 @@ class LoginRequest(SQLModelBase):
 class RegisterRequest(SQLModelBase):
     """注册请求 DTO"""
 
-    username: str
-    """用户名，唯一，一经注册不可更改"""
+    email: str
+    """用户邮箱，唯一"""
 
     password: str
     """用户密码"""
 
     captcha: str | None = None
     """验证码"""
+
+
+class BatchDeleteRequest(SQLModelBase):
+    """批量删除请求 DTO"""
+
+    ids: list[UUID]
+    """待删除 UUID 列表"""
+
+
+class RefreshTokenRequest(SQLModelBase):
+    """刷新令牌请求 DTO"""
+
+    refresh_token: str
+    """刷新令牌"""
 
 
 class WebAuthnInfo(SQLModelBase):
@@ -166,6 +180,9 @@ class UserResponse(ResponseBase):
     id: UUID
     """用户UUID"""
 
+    email: str
+    """用户邮箱"""
+
     nickname: str | None = None
     """用户昵称"""
 
@@ -184,11 +201,23 @@ class UserResponse(ResponseBase):
     tags: list[str] = []
     """用户标签列表"""
 
+class UserStorageResponse(SQLModelBase):
+    """用户存储信息 DTO"""
+
+    used: int
+    """已用存储空间（字节）"""
+    
+    free: int
+    """剩余存储空间（字节）"""
+    
+    total: int
+    """总存储空间（字节）"""
+
 
 class UserPublic(UserBase):
     """用户公开信息 DTO，用于 API 响应"""
 
-    id: UUID | None = None
+    id: UUID
     """用户UUID"""
 
     nickname: str | None = None
@@ -206,6 +235,9 @@ class UserPublic(UserBase):
     group_id: UUID | None = None
     """所属用户组UUID"""
 
+    group_name: str | None = None
+    """用户组名称"""
+
     two_factor: str | None = None
     """两步验证密钥（32位字符串，null 表示未启用）"""
 
@@ -219,29 +251,63 @@ class UserPublic(UserBase):
 class UserSettingResponse(SQLModelBase):
     """用户设置响应 DTO"""
 
-    authn: "AuthnResponse | None" = None
+    id: UUID
+    """用户UUID"""
+
+    email: str
+    """用户邮箱"""
+
+    nickname: str | None = None
+    """昵称"""
+    
+    created_at: datetime
+    """用户注册时间"""
+
+    group_name: str
+    """用户所属用户组名称"""
+    
+    language: str
+    """语言偏好"""
+    
+    timezone: int
+    """时区"""
+
+    authn: "list[AuthnResponse] | None" = None
     """认证信息"""
 
     group_expires: datetime | None = None
     """用户组过期时间"""
 
-    prefer_theme: str = "#5898d4"
-    """用户首选主题"""
-
-    themes: dict[str, str] = {}
-    """用户主题配置"""
-
     two_factor: bool = False
     """是否启用两步验证"""
-
-    uid: UUID | None = None
-    """用户UUID"""
 
 
 # ==================== 管理员用户管理 DTO ====================
 
+class UserAdminCreateRequest(SQLModelBase):
+    """管理员创建用户请求 DTO"""
+
+    email: str = Field(max_length=50)
+    """用户邮箱"""
+
+    password: str
+    """用户密码（明文，由服务端加密）"""
+
+    nickname: str | None = Field(default=None, max_length=50)
+    """昵称"""
+
+    group_id: UUID
+    """所属用户组UUID"""
+
+    status: UserStatus = UserStatus.ACTIVE
+    """用户状态"""
+
+
 class UserAdminUpdateRequest(SQLModelBase):
     """管理员更新用户请求 DTO"""
+    
+    email: str = Field(max_length=50)
+    """邮箱"""
 
     nickname: str | None = Field(default=None, max_length=50)
     """昵称"""
@@ -317,8 +383,8 @@ UserSettingResponse.model_rebuild()
 class User(UserBase, UUIDTableBaseMixin):
     """用户模型"""
 
-    username: str = Field(max_length=50, unique=True, index=True)
-    """用户名，唯一，一经注册不可更改"""
+    email: str = Field(max_length=50, unique=True, index=True)
+    """用户邮箱，唯一"""
 
     nickname: str | None = Field(default=None, max_length=50)
     """用于公开展示的名字，可使用真实姓名或昵称"""
@@ -426,8 +492,10 @@ class User(UserBase, UUIDTableBaseMixin):
     )
 
     def to_public(self) -> "UserPublic":
-        """转换为公开 DTO，排除敏感字段"""
-        return UserPublic.model_validate(self)
+        """转换为公开 DTO，排除敏感字段。需要预加载 group 关系。"""
+        data = UserPublic.model_validate(self)
+        data.group_name = self.group.name
+        return data
 
     @classmethod
     async def get_with_count(
@@ -457,8 +525,8 @@ class User(UserBase, UUIDTableBaseMixin):
             if filter_params.group_id is not None:
                 filter_conditions.append(cls.group_id == filter_params.group_id)
 
-            if filter_params.username_contains is not None:
-                filter_conditions.append(cls.username.ilike(f"%{filter_params.username_contains}%"))
+            if filter_params.email_contains is not None:
+                filter_conditions.append(cls.email.ilike(f"%{filter_params.email_contains}%"))
 
             if filter_params.nickname_contains is not None:
                 filter_conditions.append(cls.nickname.ilike(f"%{filter_params.nickname_contains}%"))
@@ -483,3 +551,4 @@ class User(UserBase, UUIDTableBaseMixin):
             filter=filter,
             table_view=table_view,
         )
+    

@@ -124,7 +124,7 @@ async def test_admin_get_user_list_contains_user_data(
     if len(users) > 0:
         user = users[0]
         assert "id" in user
-        assert "username" in user
+        assert "email" in user
 
 
 @pytest.mark.asyncio
@@ -132,7 +132,7 @@ async def test_admin_create_user_requires_auth(async_client: AsyncClient):
     """测试创建用户需要认证"""
     response = await async_client.post(
         "/api/admin/user/create",
-        json={"username": "newadminuser", "password": "pass123"}
+        json={"email": "newadminuser@test.local", "password": "pass123"}
     )
     assert response.status_code == 401
 
@@ -146,7 +146,7 @@ async def test_admin_create_user_requires_admin(
     response = await async_client.post(
         "/api/admin/user/create",
         headers=auth_headers,
-        json={"username": "newadminuser", "password": "pass123"}
+        json={"email": "newadminuser@test.local", "password": "pass123"}
     )
     assert response.status_code == 403
 

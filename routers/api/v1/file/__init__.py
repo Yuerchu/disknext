@@ -18,7 +18,7 @@ from loguru import logger as l
 
 from middleware.auth import auth_required, verify_download_token
 from middleware.dependencies import SessionDep
-from models import (
+from sqlmodels import (
     CreateFileRequest,
     CreateUploadSessionRequest,
     Object,
@@ -91,6 +91,9 @@ async def create_upload_session(
     if not parent.is_folder:
         raise HTTPException(status_code=400, detail="父对象不是目录")
 
+    if parent.is_banned:
+        http_exceptions.raise_banned("目标目录已被封禁，无法执行此操作")
+
     # 确定存储策略
     policy_id = request.policy_id or parent.policy_id
     policy = await Policy.get(session, Policy.id == policy_id)
@@ -100,7 +103,7 @@ async def create_upload_session(
     # 验证文件大小限制
     if policy.max_size > 0 and request.file_size > policy.max_size:
         raise HTTPException(
-            status_code=400,
+            status_code=413,
             detail=f"文件大小超过限制 ({policy.max_size} bytes)"
         )
 
@@ -221,30 +224,40 @@ async def upload_chunk(
     upload_session.uploaded_size += len(content)
     upload_session = await upload_session.save(session)
 
-    # 检查是否完成
+    # 在后续可能的 commit 前保存需要的属性
     is_complete = upload_session.is_complete
+    uploaded_chunks = upload_session.uploaded_chunks
+    total_chunks = upload_session.total_chunks
     file_object_id: UUID | None = None
 
     if is_complete:
+        # 保存 upload_session 属性（commit 后会过期）
+        file_name = upload_session.file_name
+        uploaded_size = upload_session.uploaded_size
+        storage_path = upload_session.storage_path
+        upload_session_id = upload_session.id
+        parent_id = upload_session.parent_id
+        policy_id = upload_session.policy_id
+
         # 创建 PhysicalFile 记录
         physical_file = PhysicalFile(
-            storage_path=upload_session.storage_path,
-            size=upload_session.uploaded_size,
-            policy_id=upload_session.policy_id,
+            storage_path=storage_path,
+            size=uploaded_size,
+            policy_id=policy_id,
             reference_count=1,
         )
         physical_file = await physical_file.save(session, commit=False)
 
         # 创建 Object 记录
         file_object = Object(
-            name=upload_session.file_name,
+            name=file_name,
             type=ObjectType.FILE,
-            size=upload_session.uploaded_size,
+            size=uploaded_size,
             physical_file_id=physical_file.id,
-            upload_session_id=str(upload_session.id),
-            parent_id=upload_session.parent_id,
+            upload_session_id=str(upload_session_id),
+            parent_id=parent_id,
             owner_id=user_id,
-            policy_id=upload_session.policy_id,
+            policy_id=policy_id,
         )
         file_object = await file_object.save(session, commit=False)
         file_object_id = file_object.id
@@ -252,18 +265,18 @@ async def upload_chunk(
         # 删除上传会话（使用条件删除）
         await UploadSession.delete(
             session,
-            condition=UploadSession.id == upload_session.id,
+            condition=UploadSession.id == upload_session_id,
             commit=False
         )
 
         # 统一提交所有更改
         await session.commit()
 
-        l.info(f"文件上传完成: {file_object.name}, size={file_object.size}, id={file_object.id}")
+        l.info(f"文件上传完成: {file_name}, size={uploaded_size}, id={file_object_id}")
 
     return UploadChunkResponse(
-        uploaded_chunks=upload_session.uploaded_chunks if not is_complete else upload_session.total_chunks,
-        total_chunks=upload_session.total_chunks,
+        uploaded_chunks=uploaded_chunks if not is_complete else total_chunks,
+        total_chunks=total_chunks,
         is_complete=is_complete,
         object_id=file_object_id,
     )
@@ -368,6 +381,9 @@ async def create_download_token_endpoint(
     if not file_obj.is_file:
         raise HTTPException(status_code=400, detail="对象不是文件")
 
+    if file_obj.is_banned:
+        http_exceptions.raise_banned()
+
     token = create_download_token(file_id, user.id)
 
     l.debug(f"创建下载令牌: file_id={file_id}, user_id={user.id}")
@@ -409,6 +425,9 @@ async def download_file(
 
     if not file_obj.is_file:
         raise HTTPException(status_code=400, detail="对象不是文件")
+
+    if file_obj.is_banned:
+        http_exceptions.raise_banned()
 
     # 预加载 physical_file 关系以获取存储路径
     physical_file = await file_obj.awaitable_attrs.physical_file
@@ -469,6 +488,9 @@ async def create_empty_file(
 
     if not parent.is_folder:
         raise HTTPException(status_code=400, detail="父对象不是目录")
+
+    if parent.is_banned:
+        http_exceptions.raise_banned("目标目录已被封禁，无法执行此操作")
 
     # 检查是否已存在同名文件
     existing = await Object.get(

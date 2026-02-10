@@ -7,8 +7,8 @@ from uuid import UUID
 
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from models.object import Object, ObjectType
-from models.user import User
+from sqlmodels.object import Object, ObjectType
+from sqlmodels.user import User
 
 
 class ObjectFactory:
@@ -119,7 +119,7 @@ class ObjectFactory:
             Object: 创建的根目录实例
         """
         root = Object(
-            name=user.username,
+            name="/",
             type=ObjectType.FOLDER,
             parent_id=None,
             owner_id=user.id,

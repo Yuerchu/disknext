@@ -630,7 +630,7 @@ For developers modifying this module:
    - Handles Python 3.14 annotations via `get_type_hints()`
 
 **Metaclass processing order**:
-1. Check if class should be a table (`_is_table_mixin`)
+1. Check if class should be a table (`_has_table_mixin`)
 2. Collect `__mapper_args__` from kwargs and explicit dict
 3. Process `table_args`, `table_name`, `abstract` parameters
 4. Resolve annotations using `get_type_hints()`

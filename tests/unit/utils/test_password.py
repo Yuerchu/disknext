@@ -72,9 +72,9 @@ def test_password_verify_expired():
 @pytest.mark.asyncio
 async def test_totp_generate():
     """测试 TOTP 密钥生成"""
-    username = "testuser"
+    email = "testuser@test.local"
 
-    response = await Password.generate_totp(username)
+    response = await Password.generate_totp(email)
 
     assert response.setup_token is not None
     assert response.uri is not None
@@ -82,7 +82,7 @@ async def test_totp_generate():
     assert isinstance(response.uri, str)
     # TOTP URI 格式: otpauth://totp/...
     assert response.uri.startswith("otpauth://totp/")
-    assert username in response.uri
+    assert email in response.uri
 
 
 def test_totp_verify_valid():

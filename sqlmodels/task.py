@@ -73,7 +73,7 @@ class TaskSummary(TaskSummaryBase):
         """从 Task ORM 对象构建"""
         return cls(
             **TaskSummaryBase.model_validate(task, from_attributes=True).model_dump(),
-            username=user.username if user else None,
+            username=user.email if user else None,
         )
 
 

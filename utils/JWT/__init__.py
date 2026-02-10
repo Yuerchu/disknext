@@ -4,7 +4,7 @@ from uuid import UUID, uuid4
 import jwt
 from fastapi.security import OAuth2PasswordBearer
 
-from models import AccessTokenBase, RefreshTokenBase
+from sqlmodels import AccessTokenBase, RefreshTokenBase, TokenResponse
 
 oauth2_scheme = OAuth2PasswordBearer(
     scheme_name='获取 JWT Bearer 令牌',
@@ -21,8 +21,8 @@ async def load_secret_key() -> None:
     从数据库读取 JWT 的密钥。
     """
     # 延迟导入以避免循环依赖
-    from models.database import get_session
-    from models.setting import Setting
+    from sqlmodels.database import get_session
+    from sqlmodels.setting import Setting
 
     global SECRET_KEY
     async for session in get_session():
@@ -69,19 +69,29 @@ def build_token_payload(
 
 # 访问令牌
 def create_access_token(
-    data: dict, 
+    sub: UUID,
+    jti: UUID,
     expires_delta: timedelta | None = None,
-    algorithm: str = "HS256"
+    algorithm: str = "HS256",
+    **kwargs
 ) -> AccessTokenBase:
     """
     生成访问令牌，默认有效期 3 小时。
 
-    :param data: 需要放进 JWT Payload 的字段。
+    :param sub: 令牌的主题，通常是用户 ID。
+    :param jti: 令牌的唯一标识符，通常是一个 UUID。
     :param expires_delta: 过期时间, 缺省时为 3 小时。
     :param algorithm: JWT 密钥强度，缺省时为 HS256
+    :param kwargs: 需要放进 JWT Payload 的字段。
 
     :return: 包含密钥本身和过期时间的 `AccessTokenBase`
     """
+    
+    data = {"sub": str(sub), "jti": str(jti)}
+    
+    # 将额外的字段添加到 Payload 中
+    for key, value in kwargs.items():
+        data[key] = value
 
     access_token, expire_at = build_token_payload(
         data, 
@@ -97,19 +107,29 @@ def create_access_token(
 
 # 刷新令牌
 def create_refresh_token(
-    data: dict, 
+    sub: UUID,
+    jti: UUID,
     expires_delta: timedelta | None = None,
-    algorithm: str = "HS256"
+    algorithm: str = "HS256",
+    **kwargs,
 ) -> RefreshTokenBase:
     """
     生成刷新令牌，默认有效期 30 天。
 
-    :param data: 需要放进 JWT Payload 的字段。
+    :param sub: 令牌的主题，通常是用户 ID。
+    :param jti: 令牌的唯一标识符，通常是一个 UUID。
     :param expires_delta: 过期时间, 缺省时为 30 天。
     :param algorithm: JWT 密钥强度，缺省时为 HS256
+    :param kwargs: 需要放进 JWT Payload 的字段。
 
     :return: 包含密钥本身和过期时间的 `RefreshTokenBase`
     """
+    
+    data = {"sub": str(sub), "jti": str(jti)}
+    
+    # 将额外的字段添加到 Payload 中
+    for key, value in kwargs.items():
+        data[key] = value
 
     refresh_token, expire_at = build_token_payload(
         data, 

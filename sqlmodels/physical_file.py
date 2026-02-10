@@ -12,6 +12,7 @@
 from typing import TYPE_CHECKING
 from uuid import UUID
 
+from sqlalchemy import BigInteger
 from sqlmodel import Field, Relationship, Index
 
 from .base import SQLModelBase
@@ -28,7 +29,7 @@ class PhysicalFileBase(SQLModelBase):
     storage_path: str = Field(max_length=512)
     """物理存储路径（相对于存储策略根目录）"""
 
-    size: int = 0
+    size: int = Field(default=0, sa_type=BigInteger)
     """文件大小（字节）"""
 
     checksum_md5: str | None = Field(default=None, max_length=32)
