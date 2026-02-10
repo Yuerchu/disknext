@@ -22,10 +22,11 @@ from sqlalchemy.orm import sessionmaker
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 from main import app
-from sqlmodels import Group, GroupOptions, Object, ObjectType, Policy, PolicyType, Setting, SettingsType, User
+from sqlmodels import Group, GroupClaims, GroupOptions, Object, ObjectType, Policy, PolicyType, Setting, SettingsType, User
+from sqlmodels.user import UserStatus
 from utils import Password
 from utils.JWT import create_access_token
-from utils.JWT import JWT
+import utils.JWT as JWT
 
 
 # ==================== 事件循环配置 ====================
@@ -184,12 +185,11 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
         email="testuser@test.local",
         password=Password.hash("testpass123"),
         nickname="测试用户",
-        status=True,
+        status=UserStatus.ACTIVE,
         storage=0,
         score=0,
         group_id=default_group.id,
         avatar="default",
-        theme="system",
     )
     test_session.add(test_user)
 
@@ -198,12 +198,11 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
         email="admin@disknext.local",
         password=Password.hash("adminpass123"),
         nickname="管理员",
-        status=True,
+        status=UserStatus.ACTIVE,
         storage=0,
         score=0,
         group_id=admin_group.id,
         avatar="default",
-        theme="system",
     )
     test_session.add(admin_user)
 
@@ -212,12 +211,11 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
         email="banneduser@test.local",
         password=Password.hash("banned123"),
         nickname="封禁用户",
-        status=False,  # 封禁状态
+        status=UserStatus.ADMIN_BANNED,
         storage=0,
         score=0,
         group_id=default_group.id,
         avatar="default",
-        theme="system",
     )
     test_session.add(banned_user)
 
@@ -256,6 +254,10 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
     # 8. 设置JWT密钥（从数据库加载）
     JWT.SECRET_KEY = "test_secret_key_for_jwt_token_generation"
 
+    # 刷新 group options
+    await test_session.refresh(default_group_options)
+    await test_session.refresh(admin_group_options)
+
     return test_session
 
 
@@ -290,34 +292,68 @@ def banned_user_info() -> dict[str, str]:
 
 # ==================== JWT Token ====================
 
-@pytest.fixture
-def test_user_token(test_user_info: dict[str, str]) -> str:
+def _build_group_claims(group: Group, group_options: GroupOptions | None) -> GroupClaims:
+    """从 Group 对象构建 GroupClaims"""
+    group.options = group_options
+    return GroupClaims.from_group(group)
+
+
+@pytest_asyncio.fixture
+async def test_user_token(initialized_db: AsyncSession) -> str:
     """生成测试用户的JWT token"""
-    token, _ = JWT.create_access_token(
-        data={"sub": test_user_info["email"]},
+    user = await User.get(initialized_db, User.email == "testuser@test.local")
+    group = await Group.get(initialized_db, Group.id == user.group_id)
+    group_options = await GroupOptions.get(initialized_db, GroupOptions.group_id == group.id)
+    group_claims = _build_group_claims(group, group_options)
+
+    result = create_access_token(
+        sub=user.id,
+        jti=uuid4(),
+        status=user.status.value,
+        group=group_claims,
         expires_delta=timedelta(hours=1),
     )
-    return token
+    return result.access_token
 
 
-@pytest.fixture
-def admin_user_token(admin_user_info: dict[str, str]) -> str:
+@pytest_asyncio.fixture
+async def admin_user_token(initialized_db: AsyncSession) -> str:
     """生成管理员的JWT token"""
-    token, _ = JWT.create_access_token(
-        data={"sub": admin_user_info["email"]},
+    user = await User.get(initialized_db, User.email == "admin@disknext.local")
+    group = await Group.get(initialized_db, Group.id == user.group_id)
+    group_options = await GroupOptions.get(initialized_db, GroupOptions.group_id == group.id)
+    group_claims = _build_group_claims(group, group_options)
+
+    result = create_access_token(
+        sub=user.id,
+        jti=uuid4(),
+        status=user.status.value,
+        group=group_claims,
         expires_delta=timedelta(hours=1),
     )
-    return token
+    return result.access_token
 
 
 @pytest.fixture
 def expired_token() -> str:
     """生成过期的JWT token"""
-    token, _ = JWT.create_access_token(
-        data={"sub": "testuser@test.local"},
-        expires_delta=timedelta(seconds=-1),  # 已过期
+    group_claims = GroupClaims(
+        id=uuid4(),
+        name="测试组",
+        max_storage=0,
+        share_enabled=False,
+        web_dav_enabled=False,
+        admin=False,
+        speed_limit=0,
     )
-    return token
+    result = create_access_token(
+        sub=uuid4(),
+        jti=uuid4(),
+        status="active",
+        group=group_claims,
+        expires_delta=timedelta(seconds=-1),
+    )
+    return result.access_token
 
 
 # ==================== 认证头 ====================

@@ -24,12 +24,12 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from main import app
 from sqlmodels.database import get_session
-from sqlmodels.group import Group, GroupOptions
+from sqlmodels.group import Group, GroupClaims, GroupOptions
 from sqlmodels.migration import migration
 from sqlmodels.object import Object, ObjectType
 from sqlmodels.policy import Policy, PolicyType
-from sqlmodels.user import User
-from utils.JWT.JWT import create_access_token
+from sqlmodels.user import User, UserStatus
+from utils.JWT import create_access_token
 from utils.password.pwd import Password
 
 
@@ -193,7 +193,7 @@ async def test_user(db_session: AsyncSession) -> dict[str, str | UUID]:
         email="testuser@test.local",
         nickname="测试用户",
         password=Password.hash(password),
-        status=True,
+        status=UserStatus.ACTIVE,
         storage=0,
         score=100,
         group_id=group.id,
@@ -211,14 +211,24 @@ async def test_user(db_session: AsyncSession) -> dict[str, str | UUID]:
     )
     await root_folder.save(db_session)
 
+    # 构建权限快照
+    group.options = group_options
+    group_claims = GroupClaims.from_group(group)
+
     # 生成访问令牌
-    access_token, _ = create_access_token({"sub": str(user.id)})
+    from uuid import uuid4
+    access_token_obj = create_access_token(
+        sub=user.id,
+        jti=uuid4(),
+        status=user.status.value,
+        group=group_claims,
+    )
 
     return {
         "id": user.id,
         "email": user.email,
         "password": password,
-        "token": access_token,
+        "token": access_token_obj.access_token,
         "group_id": group.id,
         "policy_id": policy.id,
     }
@@ -270,7 +280,7 @@ async def admin_user(db_session: AsyncSession) -> dict[str, str | UUID]:
         email="admin@disknext.local",
         nickname="管理员",
         password=Password.hash(password),
-        status=True,
+        status=UserStatus.ACTIVE,
         storage=0,
         score=9999,
         group_id=admin_group.id,
@@ -288,14 +298,24 @@ async def admin_user(db_session: AsyncSession) -> dict[str, str | UUID]:
     )
     await root_folder.save(db_session)
 
+    # 构建权限快照
+    admin_group.options = admin_group_options
+    admin_group_claims = GroupClaims.from_group(admin_group)
+
     # 生成访问令牌
-    access_token, _ = create_access_token({"sub": str(admin.id)})
+    from uuid import uuid4
+    access_token_obj = create_access_token(
+        sub=admin.id,
+        jti=uuid4(),
+        status=admin.status.value,
+        group=admin_group_claims,
+    )
 
     return {
         "id": admin.id,
         "email": admin.email,
         "password": password,
-        "token": access_token,
+        "token": access_token_obj.access_token,
         "group_id": admin_group.id,
         "policy_id": policy.id,
     }

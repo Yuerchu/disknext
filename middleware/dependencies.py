@@ -6,12 +6,14 @@ FastAPI 依赖注入
 - TimeFilterRequestDep: 时间筛选查询依赖（用于 count 等统计接口）
 - TableViewRequestDep: 分页排序查询依赖（包含时间筛选 + 分页排序）
 - UserFilterParamsDep: 用户筛选参数依赖（用于管理员用户列表）
+- require_captcha: 验证码校验依赖注入工厂
 """
+from collections.abc import Awaitable, Callable
 from datetime import datetime
 from typing import Annotated, Literal, TypeAlias
 from uuid import UUID
 
-from fastapi import Depends, Query
+from fastapi import Depends, Form, Query
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from sqlmodels.database_connection import DatabaseManager
@@ -94,3 +96,30 @@ async def _get_user_filter_params(
 
 UserFilterParamsDep: TypeAlias = Annotated[UserFilterParams, Depends(_get_user_filter_params)]
 """获取用户筛选参数的依赖（用于管理员用户列表）"""
+
+
+# --- 验证码校验依赖 ---
+
+def require_captcha(scene: 'CaptchaScene') -> Callable[..., Awaitable[None]]:
+    """
+    验证码校验依赖注入工厂。
+
+    根据场景查询数据库设置，判断是否需要验证码。
+    需要则校验前端提交的 captcha_code，失败则抛出异常。
+
+    使用方式::
+
+        @router.post('/session', dependencies=[Depends(require_captcha(CaptchaScene.LOGIN))])
+        async def login(...): ...
+
+    :param scene: 验证码使用场景（LOGIN / REGISTER / FORGET）
+    """
+    from service.captcha import CaptchaScene, verify_captcha_if_needed
+
+    async def _verify_captcha(
+            session: SessionDep,
+            captcha_code: Annotated[str | None, Form()] = None,
+    ) -> None:
+        await verify_captcha_if_needed(session, scene, captcha_code)
+
+    return _verify_captcha

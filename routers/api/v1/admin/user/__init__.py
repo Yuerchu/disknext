@@ -6,13 +6,14 @@ from sqlalchemy import func
 
 from middleware.auth import admin_required
 from middleware.dependencies import SessionDep, TableViewRequestDep, UserFilterParamsDep
+from service.redis.user_ban_store import UserBanStore
 from sqlmodels import (
     User, ResponseBase, UserPublic, ListResponse,
     Group, Object, ObjectType, Setting, SettingsType,
     BatchDeleteRequest,
 )
 from sqlmodels.user import (
-    UserAdminCreateRequest, UserAdminUpdateRequest, UserCalibrateResponse,
+    UserAdminCreateRequest, UserAdminUpdateRequest, UserCalibrateResponse, UserStatus,
 )
 from utils import Password, http_exceptions
 
@@ -159,10 +160,20 @@ async def router_admin_update_user(
         if len(update_data['two_factor']) != 32:
             raise HTTPException(status_code=400, detail="两步验证密钥必须为32位字符串")
 
+    # 记录旧 status 以便检测变更
+    old_status = user.status
+
     # 更新字段
     for key, value in update_data.items():
         setattr(user, key, value)
     user = await user.save(session)
+
+    # 封禁状态变更 → 更新 BanStore
+    new_status = user.status
+    if old_status == UserStatus.ACTIVE and new_status != UserStatus.ACTIVE:
+        await UserBanStore.ban(str(user_id))
+    elif old_status != UserStatus.ACTIVE and new_status == UserStatus.ACTIVE:
+        await UserBanStore.unban(str(user_id))
 
     l.info(f"管理员更新了用户: {request.email}")
 

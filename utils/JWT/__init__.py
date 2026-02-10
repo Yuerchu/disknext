@@ -1,10 +1,14 @@
 from datetime import datetime, timedelta, timezone
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 import jwt
 from fastapi.security import OAuth2PasswordBearer
 
 from sqlmodels import AccessTokenBase, RefreshTokenBase, TokenResponse
+
+if TYPE_CHECKING:
+    from sqlmodels.group import GroupClaims
 
 oauth2_scheme = OAuth2PasswordBearer(
     scheme_name='获取 JWT Bearer 令牌',
@@ -59,7 +63,7 @@ def build_token_payload(
     elif is_refresh:
         expire = datetime.now(timezone.utc) + timedelta(days=30)
     else:
-        expire = datetime.now(timezone.utc) + timedelta(hours=3)
+        expire = datetime.now(timezone.utc) + timedelta(hours=1)
     to_encode.update({
         "iat": int(datetime.now(timezone.utc).timestamp()),
         "exp": int(expire.timestamp())
@@ -71,33 +75,36 @@ def build_token_payload(
 def create_access_token(
     sub: UUID,
     jti: UUID,
+    *,
+    status: str,
+    group: "GroupClaims",
     expires_delta: timedelta | None = None,
     algorithm: str = "HS256",
-    **kwargs
 ) -> AccessTokenBase:
     """
-    生成访问令牌，默认有效期 3 小时。
+    生成访问令牌，默认有效期 1 小时。
 
     :param sub: 令牌的主题，通常是用户 ID。
     :param jti: 令牌的唯一标识符，通常是一个 UUID。
-    :param expires_delta: 过期时间, 缺省时为 3 小时。
+    :param status: 用户状态字符串。
+    :param group: 用户组权限快照。
+    :param expires_delta: 过期时间, 缺省时为 1 小时。
     :param algorithm: JWT 密钥强度，缺省时为 HS256
-    :param kwargs: 需要放进 JWT Payload 的字段。
 
     :return: 包含密钥本身和过期时间的 `AccessTokenBase`
     """
-    
-    data = {"sub": str(sub), "jti": str(jti)}
-    
-    # 将额外的字段添加到 Payload 中
-    for key, value in kwargs.items():
-        data[key] = value
+    data = {
+        "sub": str(sub),
+        "jti": str(jti),
+        "status": status,
+        "group": group.model_dump(mode="json"),
+    }
 
     access_token, expire_at = build_token_payload(
-        data, 
-        False, 
-        algorithm, 
-        expires_delta
+        data,
+        False,
+        algorithm,
+        expires_delta,
     )
     return AccessTokenBase(
         access_token=access_token,

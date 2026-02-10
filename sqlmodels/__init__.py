@@ -1,5 +1,6 @@
 from .user import (
     BatchDeleteRequest,
+    JWTPayload,
     LoginRequest,
     RefreshTokenRequest,
     RegisterRequest,
@@ -37,7 +38,7 @@ from .node import (
     NodeType,
 )
 from .group import (
-    Group, GroupBase, GroupOptions, GroupOptionsBase, GroupAllOptionsBase, GroupResponse,
+    Group, GroupBase, GroupClaims, GroupOptions, GroupOptionsBase, GroupAllOptionsBase, GroupResponse,
     # 管理员DTO
     GroupCreateRequest, GroupUpdateRequest, GroupDetailResponse, GroupListResponse,
 )

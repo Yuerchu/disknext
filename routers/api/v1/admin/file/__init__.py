@@ -10,7 +10,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from middleware.auth import admin_required
 from middleware.dependencies import SessionDep, TableViewRequestDep
 from sqlmodels import (
-    Policy, PolicyType, User, ListResponse,
+    JWTPayload, Policy, PolicyType, User, ListResponse,
     Object, ObjectType, AdminFileResponse, FileBanRequest, )
 from service.storage import LocalStorageService
 
@@ -164,14 +164,13 @@ async def router_admin_preview_file(
     path='/ban/{file_id}',
     summary='封禁/解禁文件',
     description='Ban the file, user can\'t open, copy, move, download or share this file if administrator ban.',
-    dependencies=[Depends(admin_required)],
     status_code=204,
 )
 async def router_admin_ban_file(
     session: SessionDep,
     file_id: UUID,
     request: FileBanRequest,
-    admin: Annotated[User, Depends(admin_required)],
+    claims: Annotated[JWTPayload, Depends(admin_required)],
 ) -> None:
     """
     封禁或解禁文件/文件夹。封禁后用户无法访问该文件。
@@ -180,14 +179,14 @@ async def router_admin_ban_file(
     :param session: 数据库会话
     :param file_id: 文件UUID
     :param request: 封禁请求
-    :param admin: 当前管理员
+    :param claims: 当前管理员 JWT claims
     :return: 封禁结果
     """
     file_obj = await Object.get(session, Object.id == file_id)
     if not file_obj:
         raise HTTPException(status_code=404, detail="文件不存在")
 
-    count = await _set_ban_recursive(session, file_obj, request.ban, admin.id, request.reason)
+    count = await _set_ban_recursive(session, file_obj, request.ban, claims.sub, request.reason)
 
     action = "封禁" if request.ban else "解禁"
     l.info(f"管理员{action}了对象: {file_obj.name}，共影响 {count} 个对象")

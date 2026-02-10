@@ -188,6 +188,28 @@ class GroupListResponse(SQLModelBase):
     """总数"""
 
 
+class GroupClaims(GroupCoreBase, GroupAllOptionsBase):
+    """
+    JWT 中的用户组权限快照。
+
+    复用 GroupCoreBase（id, name, max_storage, share_enabled, web_dav_enabled, admin, speed_limit）
+    和 GroupAllOptionsBase（share_download, share_free, ... 共 11 个功能开关）。
+    """
+
+    @classmethod
+    def from_group(cls, group: "Group") -> "GroupClaims":
+        """
+        从 Group ORM 对象（需预加载 options 关系）构建权限快照。
+
+        :param group: 已加载 options 的 Group 对象
+        """
+        opts = group.options
+        return cls(
+            **GroupCoreBase.model_validate(group, from_attributes=True).model_dump(),
+            **(GroupAllOptionsBase.model_validate(opts, from_attributes=True).model_dump() if opts else {}),
+        )
+
+
 class GroupResponse(GroupBase, GroupOptionsBase):
     """用户组响应 DTO"""
 

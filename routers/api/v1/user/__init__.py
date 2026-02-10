@@ -2,8 +2,7 @@ from typing import Annotated, Literal
 from uuid import UUID, uuid4
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.security import OAuth2PasswordRequestForm
+from fastapi import APIRouter, Depends, Form, HTTPException
 from loguru import logger
 from webauthn import generate_registration_options
 from webauthn.helpers import options_to_json_dict
@@ -11,7 +10,9 @@ from webauthn.helpers import options_to_json_dict
 import service
 import sqlmodels
 from middleware.auth import auth_required
-from middleware.dependencies import SessionDep
+from middleware.dependencies import SessionDep, require_captcha
+from service.captcha import CaptchaScene
+from sqlmodels.user import UserStatus
 from utils import JWT, Password, http_exceptions
 from .settings import user_settings_router
 
@@ -22,47 +23,59 @@ user_router = APIRouter(
 
 user_router.include_router(user_settings_router)
 
+class OAuth2PasswordWithExtrasForm:
+    """
+    扩展 OAuth2 密码表单。
+
+    在标准 username/password 基础上添加 otp_code 字段。
+    captcha_code 由 require_captcha 依赖注入单独处理。
+    """
+
+    def __init__(
+            self,
+            *,
+            username: Annotated[str, Form()],
+            password: Annotated[str, Form()],
+            otp_code: Annotated[str | None, Form(min_length=6, max_length=6)] = None,
+    ):
+        self.username = username
+        self.password = password
+        self.otp_code = otp_code
+
+
 @user_router.post(
     path='/session',
     summary='用户登录',
-    description='User login endpoint. 当用户启用两步验证时，需要传入 otp 参数。',
+    description='用户登录端点，支持验证码校验和两步验证。',
+    dependencies=[Depends(require_captcha(CaptchaScene.LOGIN))],
 )
 async def router_user_session(
     session: SessionDep,
-    form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
+    form_data: Annotated[OAuth2PasswordWithExtrasForm, Depends()],
 ) -> sqlmodels.TokenResponse:
     """
-    用户登录端点。
+    用户登录端点
 
-    根据 OAuth2.1 规范，使用 password grant type 进行登录。
-    当用户启用两步验证时，需要在表单中传入 otp 参数（通过 scopes 字段传递）。
+    表单字段：
+    - username: 用户邮箱
+    - password: 用户密码
+    - captcha_code: 验证码 token（可选，由 require_captcha 依赖校验）
+    - otp_code: 两步验证码（可选，仅在用户启用 2FA 时需要）
 
-    OAuth2 scopes 字段格式: "otp:123456" 或直接传入验证码
+    错误处理：
+    - 400: 需要验证码但未提供
+    - 401: 邮箱/密码错误，或 2FA 验证码错误
+    - 403: 账户已禁用 / 验证码验证失败
+    - 428: 需要两步验证但未提供 otp_code
     """
-    email = form_data.username  # OAuth2 表单字段名为 username，实际传入的是 email
-    password = form_data.password
-
-    # 从 scopes 中提取 OTP 验证码（OAuth2.1 扩展方式）
-    # scopes 格式可以是 ["otp:123456"] 或 ["123456"]
-    otp_code: str | None = None
-    for scope in form_data.scopes:
-        if scope.startswith("otp:"):
-            otp_code = scope[4:]
-            break
-        elif scope.isdigit() and len(scope) == 6:
-            otp_code = scope
-            break
-
-    result = await service.user.login(
+    return await service.user.login(
         session,
         sqlmodels.LoginRequest(
-            email=email,
-            password=password,
-            two_fa_code=otp_code,
+            email=form_data.username,
+            password=form_data.password,
+            two_fa_code=form_data.otp_code,
         ),
     )
-
-    return result
 
 @user_router.post(
     path='/session/refresh',
@@ -101,17 +114,27 @@ async def router_user_session_refresh(
         http_exceptions.raise_unauthorized("令牌缺少用户标识")
 
     user_id = UUID(user_id_str)
-    user = await sqlmodels.User.get(session, sqlmodels.User.id == user_id)
+    user = await sqlmodels.User.get(session, sqlmodels.User.id == user_id, load=sqlmodels.User.group)
     if not user:
         http_exceptions.raise_unauthorized("用户不存在")
 
-    if not user.status:
+    if user.status != UserStatus.ACTIVE:
         http_exceptions.raise_forbidden("账户已被禁用")
+
+    # 加载 GroupOptions（获取最新权限）
+    group_options = await sqlmodels.GroupOptions.get(
+        session,
+        sqlmodels.GroupOptions.group_id == user.group_id,
+    )
+    user.group.options = group_options
+    group_claims = sqlmodels.GroupClaims.from_group(user.group)
 
     # 签发新令牌
     access_token = JWT.create_access_token(
         sub=user.id,
         jti=uuid4(),
+        status=user.status.value,
+        group=group_claims,
     )
     refresh_token = JWT.create_refresh_token(
         sub=user.id,

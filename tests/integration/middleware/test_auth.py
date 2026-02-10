@@ -1,11 +1,15 @@
 """
 认证中间件集成测试
 """
+from datetime import timedelta
+from uuid import uuid4
+
 import pytest
 from httpx import AsyncClient
-from datetime import timedelta
 
-from utils.JWT import JWT
+from sqlmodels.group import GroupClaims
+from utils.JWT import create_access_token, create_refresh_token
+import utils.JWT as JWT
 
 
 # ==================== AuthRequired 测试 ====================
@@ -66,11 +70,14 @@ async def test_auth_required_valid_token(
 
 @pytest.mark.asyncio
 async def test_auth_required_token_without_sub(async_client: AsyncClient):
-    """测试缺少sub字段的token返回 401"""
-    token, _ = JWT.create_access_token(
-        data={"other_field": "value"},
-        expires_delta=timedelta(hours=1)
-    )
+    """测试缺少必要字段的token返回 401"""
+    import jwt as pyjwt
+    # 手动构建一个缺少 status 和 group 的 token
+    payload = {
+        "other_field": "value",
+        "exp": int((__import__('datetime').datetime.now(__import__('datetime').timezone.utc) + timedelta(hours=1)).timestamp()),
+    }
+    token = pyjwt.encode(payload, JWT.SECRET_KEY, algorithm="HS256")
 
     response = await async_client.get(
         "/api/user/me",
@@ -81,16 +88,29 @@ async def test_auth_required_token_without_sub(async_client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_auth_required_nonexistent_user_token(async_client: AsyncClient):
-    """测试用户不存在的token返回 401"""
-    token, _ = JWT.create_access_token(
-        data={"sub": "nonexistent_user@test.local"},
-        expires_delta=timedelta(hours=1)
+    """测试用户不存在的token返回 403 或 401（取决于 Redis 可用性）"""
+    group_claims = GroupClaims(
+        id=uuid4(),
+        name="测试组",
+        max_storage=0,
+        share_enabled=False,
+        web_dav_enabled=False,
+        admin=False,
+        speed_limit=0,
+    )
+    result = create_access_token(
+        sub=uuid4(),  # 不存在的用户 UUID
+        jti=uuid4(),
+        status="active",
+        group=group_claims,
+        expires_delta=timedelta(hours=1),
     )
 
     response = await async_client.get(
         "/api/user/me",
-        headers={"Authorization": f"Bearer {token}"}
+        headers={"Authorization": f"Bearer {result.access_token}"}
     )
+    # auth_required 会查库，用户不存在时返回 401
     assert response.status_code == 401
 
 
@@ -234,23 +254,36 @@ async def test_auth_on_storage_endpoint(
 @pytest.mark.asyncio
 async def test_refresh_token_format(test_user_info: dict[str, str]):
     """测试刷新token格式正确"""
-    refresh_token, _ = JWT.create_refresh_token(
-        data={"sub": test_user_info["email"]},
-        expires_delta=timedelta(days=7)
+    result = create_refresh_token(
+        sub=uuid4(),
+        jti=uuid4(),
+        expires_delta=timedelta(days=7),
     )
 
-    assert isinstance(refresh_token, str)
-    assert len(refresh_token) > 0
+    assert isinstance(result.refresh_token, str)
+    assert len(result.refresh_token) > 0
 
 
 @pytest.mark.asyncio
 async def test_access_token_format(test_user_info: dict[str, str]):
     """测试访问token格式正确"""
-    access_token, expires = JWT.create_access_token(
-        data={"sub": test_user_info["email"]},
-        expires_delta=timedelta(hours=1)
+    group_claims = GroupClaims(
+        id=uuid4(),
+        name="测试组",
+        max_storage=0,
+        share_enabled=False,
+        web_dav_enabled=False,
+        admin=False,
+        speed_limit=0,
+    )
+    result = create_access_token(
+        sub=uuid4(),
+        jti=uuid4(),
+        status="active",
+        group=group_claims,
+        expires_delta=timedelta(hours=1),
     )
 
-    assert isinstance(access_token, str)
-    assert len(access_token) > 0
-    assert expires is not None
+    assert isinstance(result.access_token, str)
+    assert len(result.access_token) > 0
+    assert result.access_expires is not None

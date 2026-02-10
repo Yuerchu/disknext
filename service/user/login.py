@@ -4,6 +4,8 @@ from loguru import logger
 
 from middleware.dependencies import SessionDep
 from sqlmodels import LoginRequest, TokenResponse, User
+from sqlmodels.group import GroupClaims, GroupOptions
+from sqlmodels.user import UserStatus
 from utils import http_exceptions
 from utils.JWT import create_access_token, create_refresh_token
 from utils.password.pwd import Password, PasswordStatus
@@ -22,15 +24,13 @@ async def login(
 
     :return: TokenResponse 对象或状态码或 None
     """
-    # TODO: 验证码校验
-    # captcha_setting = await Setting.get(
-    #     session,
-    #     (Setting.type == "auth") & (Setting.name == "login_captcha")
-    # )
-    # is_captcha_required = captcha_setting and captcha_setting.value == "1"
-
-    # 获取用户信息
-    current_user: User = await User.get(session, User.email == login_request.email, fetch_mode="first")   #type: ignore
+    # 获取用户信息（预加载 group 关系）
+    current_user: User = await User.get(
+        session,
+        User.email == login_request.email,
+        fetch_mode="first",
+        load=User.group,
+    )   #type: ignore
 
     # 验证用户是否存在
     if not current_user:
@@ -42,8 +42,8 @@ async def login(
         logger.debug(f"Password verification failed for user: {login_request.email}")
         http_exceptions.raise_unauthorized("Invalid email or password")
 
-    # 验证用户是否可登录
-    if not current_user.status:
+    # 验证用户是否可登录（修复：显式枚举比较，StrEnum 永远 truthy）
+    if current_user.status != UserStatus.ACTIVE:
         http_exceptions.raise_forbidden("Your account is disabled")
 
     # 检查两步验证
@@ -58,10 +58,22 @@ async def login(
             logger.debug(f"Invalid 2FA code for user: {login_request.email}")
             http_exceptions.raise_unauthorized("Invalid 2FA code")
 
+    # 加载 GroupOptions
+    group_options: GroupOptions | None = await GroupOptions.get(
+        session,
+        GroupOptions.group_id == current_user.group_id,
+    )
+
+    # 构建权限快照
+    current_user.group.options = group_options
+    group_claims = GroupClaims.from_group(current_user.group)
+
     # 创建令牌
     access_token = create_access_token(
-        sub=current_user.id, 
-        jti=uuid4()
+        sub=current_user.id,
+        jti=uuid4(),
+        status=current_user.status.value,
+        group=group_claims,
     )
     refresh_token = create_refresh_token(
         sub=current_user.id,

@@ -5,7 +5,7 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from sqlmodels.user import User, ThemeType, UserPublic
+from sqlmodels.user import User, ThemeType, UserPublic, UserStatus
 from sqlmodels.group import Group
 
 
@@ -28,7 +28,7 @@ async def test_user_create(db_session: AsyncSession):
     assert user.id is not None
     assert user.email == "testuser@test.local"
     assert user.nickname == "测试用户"
-    assert user.status is True
+    assert user.status == UserStatus.ACTIVE
     assert user.storage == 0
     assert user.score == 0
 
@@ -131,7 +131,7 @@ async def test_user_status_default(db_session: AsyncSession):
     )
     user = await user.save(db_session)
 
-    assert user.status is True
+    assert user.status == UserStatus.ACTIVE
 
 
 @pytest.mark.asyncio

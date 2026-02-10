@@ -99,7 +99,7 @@ class LoginRequest(SQLModelBase):
     captcha: str | None = None
     """验证码"""
 
-    two_fa_code: int | None = Field(min_length=6, max_length=6)
+    two_fa_code: int | None = Field(default=None, min_length=6, max_length=6)
     """两步验证代码"""
 
 
@@ -150,6 +150,22 @@ class WebAuthnInfo(SQLModelBase):
 
     transports: list[str]
     """支持的传输方式"""
+
+class JWTPayload(SQLModelBase):
+    """JWT 访问令牌解析后的 claims"""
+
+    sub: UUID
+    """用户 ID"""
+
+    jti: UUID
+    """令牌唯一标识符"""
+
+    status: UserStatus
+    """用户状态"""
+
+    group: "GroupClaims"
+    """用户组权限快照"""
+
 
 class AccessTokenBase(BaseModel):
     """访问令牌响应 DTO"""
@@ -370,10 +386,11 @@ class UserAdminDetailResponse(UserPublic):
 
 
 # 前向引用导入
-from .group import GroupResponse  # noqa: E402
+from .group import GroupClaims, GroupResponse  # noqa: E402
 from .user_authn import AuthnResponse  # noqa: E402
 
 # 更新前向引用
+JWTPayload.model_rebuild()
 UserResponse.model_rebuild()
 UserSettingResponse.model_rebuild()
 

@@ -4,49 +4,79 @@ from uuid import UUID
 from fastapi import Depends
 import jwt
 
-from sqlmodels.user import User
+from sqlmodels.user import JWTPayload, User, UserStatus
 from utils import JWT
 from .dependencies import SessionDep
 from utils import http_exceptions
+from service.redis import RedisManager
+from service.redis.user_ban_store import UserBanStore
 
-async def auth_required(
+
+async def jwt_required(
     session: SessionDep,
     token: Annotated[str, Depends(JWT.oauth2_scheme)],
-) -> User:
+) -> JWTPayload:
     """
-    AuthRequired 需要登录
+    验证 JWT 并返回 claims。
+
+    封禁检查策略：
+    1. JWT 内嵌 status 检查（签发时快照）
+    2. Redis 黑名单检查（即时封禁，如果 Redis 可用）
+    3. Redis 不可用时查库检查 status（降级方案）
     """
     try:
         payload = jwt.decode(token, JWT.SECRET_KEY, algorithms=["HS256"])
-        user_id = payload.get("sub")
-
-        if user_id is None:
-            http_exceptions.raise_unauthorized("账号或密码错误")
-
-        user_id = UUID(user_id)
-
-        # 从数据库获取用户信息（预加载 group 关系）
-        user = await User.get(session, User.id == user_id, load=User.group)
-        if not user:
-            http_exceptions.raise_unauthorized("账号或密码错误")
-
-        return user
-
-    except jwt.InvalidTokenError:
+        claims = JWTPayload(
+            sub=payload["sub"],
+            jti=payload["jti"],
+            status=payload["status"],
+            group=payload["group"],
+        )
+    except (jwt.InvalidTokenError, KeyError, ValueError):
         http_exceptions.raise_unauthorized("凭据过期或无效")
 
+    # 1. JWT 内嵌 status 检查
+    if claims.status != UserStatus.ACTIVE:
+        http_exceptions.raise_forbidden("账户已被禁用")
+
+    # 2. 即时封禁检查
+    user_id_str = str(claims.sub)
+    if RedisManager.is_available():
+        # Redis 可用：查黑名单
+        if await UserBanStore.is_banned(user_id_str):
+            http_exceptions.raise_forbidden("账户已被禁用")
+    else:
+        # Redis 不可用：查库（仅 status 字段，不加载关系）
+        user = await User.get(session, User.id == claims.sub)
+        if not user or user.status != UserStatus.ACTIVE:
+            http_exceptions.raise_forbidden("账户已被禁用")
+
+    return claims
+
+
 async def admin_required(
-    user: Annotated[User, Depends(auth_required)],
-) -> User:
+    claims: Annotated[JWTPayload, Depends(jwt_required)],
+) -> JWTPayload:
     """
-    验证是否为管理员。
+    验证管理员权限（仅读取 JWT claims，不查库）。
 
     使用方法：
     >>> APIRouter(dependencies=[Depends(admin_required)])
     """
-    if user.group.admin:
-        return user
-    raise http_exceptions.raise_forbidden("Admin Required")
+    if not claims.group.admin:
+        http_exceptions.raise_forbidden("Admin Required")
+    return claims
+
+
+async def auth_required(
+    session: SessionDep,
+    claims: Annotated[JWTPayload, Depends(jwt_required)],
+) -> User:
+    """验证 JWT + 从数据库加载完整 User（含 group 关系）"""
+    user = await User.get(session, User.id == claims.sub, load=User.group)
+    if not user:
+        http_exceptions.raise_unauthorized("用户不存在")
+    return user
 
 
 def verify_download_token(token: str) -> tuple[str, UUID, UUID] | None:

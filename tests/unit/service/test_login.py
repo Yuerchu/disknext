@@ -4,7 +4,7 @@ Login 服务的单元测试
 import pytest
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from sqlmodels.user import User, LoginRequest, TokenResponse
+from sqlmodels.user import User, LoginRequest, TokenResponse, UserStatus
 from sqlmodels.group import Group
 from service.user.login import login
 from utils.password.pwd import Password
@@ -22,7 +22,7 @@ async def setup_user(db_session: AsyncSession):
     user = User(
         email="loginuser@test.local",
         password=Password.hash(plain_password),
-        status=True,
+        status=UserStatus.ACTIVE,
         group_id=group.id
     )
     user = await user.save(db_session)
@@ -43,7 +43,7 @@ async def setup_banned_user(db_session: AsyncSession):
     user = User(
         email="banneduser@test.local",
         password=Password.hash("password"),
-        status=False,  # 封禁状态
+        status=UserStatus.ADMIN_BANNED,  # 封禁状态
         group_id=group.id
     )
     user = await user.save(db_session)
@@ -63,7 +63,7 @@ async def setup_2fa_user(db_session: AsyncSession):
     user = User(
         email="2fauser@test.local",
         password=Password.hash("password"),
-        status=True,
+        status=UserStatus.ACTIVE,
         two_factor=secret,
         group_id=group.id
     )
