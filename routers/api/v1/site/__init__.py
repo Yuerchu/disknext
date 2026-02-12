@@ -4,7 +4,9 @@ from middleware.dependencies import SessionDep
 from sqlmodels import (
     ResponseBase, Setting, SettingsType, SiteConfigResponse,
     ThemePreset, ThemePresetResponse, ThemePresetListResponse,
+    AuthMethodConfig,
 )
+from sqlmodels.auth_identity import AuthProviderType
 from sqlmodels.setting import CaptchaType
 from utils import http_exceptions
 
@@ -70,7 +72,7 @@ async def router_site_config(session: SessionDep) -> SiteConfigResponse:
     获取站点全局配置
 
     无需认证。前端在初始化时调用此端点获取验证码类型、
-    登录/注册/找回密码是否需要验证码等配置。
+    登录/注册/找回密码是否需要验证码、可用的认证方式等配置。
     """
     # 批量查询所需设置
     settings: list[Setting] = await Setting.get(
@@ -78,7 +80,9 @@ async def router_site_config(session: SessionDep) -> SiteConfigResponse:
         (Setting.type == SettingsType.BASIC) |
         (Setting.type == SettingsType.LOGIN) |
         (Setting.type == SettingsType.REGISTER) |
-        (Setting.type == SettingsType.CAPTCHA),
+        (Setting.type == SettingsType.CAPTCHA) |
+        (Setting.type == SettingsType.AUTH) |
+        (Setting.type == SettingsType.OAUTH),
         fetch_mode="all",
     )
 
@@ -94,6 +98,16 @@ async def router_site_config(session: SessionDep) -> SiteConfigResponse:
     elif captcha_type == CaptchaType.CLOUD_FLARE_TURNSTILE:
         captcha_key = s.get("captcha_CloudflareKey") or None
 
+    # 构建认证方式列表
+    auth_methods: list[AuthMethodConfig] = [
+        AuthMethodConfig(provider=AuthProviderType.EMAIL_PASSWORD, is_enabled=s.get("auth_email_password_enabled") == "1"),
+        AuthMethodConfig(provider=AuthProviderType.PHONE_SMS, is_enabled=s.get("auth_phone_sms_enabled") == "1"),
+        AuthMethodConfig(provider=AuthProviderType.GITHUB, is_enabled=s.get("github_enabled") == "1"),
+        AuthMethodConfig(provider=AuthProviderType.QQ, is_enabled=s.get("qq_enabled") == "1"),
+        AuthMethodConfig(provider=AuthProviderType.PASSKEY, is_enabled=s.get("auth_passkey_enabled") == "1"),
+        AuthMethodConfig(provider=AuthProviderType.MAGIC_LINK, is_enabled=s.get("auth_magic_link_enabled") == "1"),
+    ]
+
     return SiteConfigResponse(
         title=s.get("siteName") or "DiskNext",
         register_enabled=s.get("register_enabled") == "1",
@@ -102,4 +116,11 @@ async def router_site_config(session: SessionDep) -> SiteConfigResponse:
         forget_captcha=s.get("forget_captcha") == "1",
         captcha_type=captcha_type,
         captcha_key=captcha_key,
+        auth_methods=auth_methods,
+        password_required=s.get("auth_password_required") == "1",
+        phone_binding_required=s.get("auth_phone_binding_required") == "1",
+        email_binding_required=s.get("auth_email_binding_required") == "1",
+        footer_code=s.get("footer_code"),
+        tos_url=s.get("tos_url"),
+        privacy_url=s.get("privacy_url"),
     )

@@ -84,6 +84,24 @@ async def test_site_config_captcha_settings(async_client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_site_config_auth_methods(async_client: AsyncClient):
+    """测试配置包含认证方式列表"""
+    response = await async_client.get("/api/site/config")
+    assert response.status_code == 200
+
+    data = response.json()
+    config = data["data"]
+    assert "authMethods" in config
+    assert isinstance(config["authMethods"], list)
+    assert len(config["authMethods"]) > 0
+
+    # 每个认证方式应包含 provider 和 isEnabled
+    for method in config["authMethods"]:
+        assert "provider" in method
+        assert "isEnabled" in method
+
+
+@pytest.mark.asyncio
 async def test_site_captcha_endpoint_exists(async_client: AsyncClient):
     """测试验证码端点存在（即使未实现也应返回有效响应）"""
     response = await async_client.get("/api/site/captcha")

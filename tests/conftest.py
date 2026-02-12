@@ -24,6 +24,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from main import app
 from sqlmodels.database import get_session
+from sqlmodels.auth_identity import AuthIdentity, AuthProviderType
 from sqlmodels.group import Group, GroupClaims, GroupOptions
 from sqlmodels.migration import migration
 from sqlmodels.object import Object, ObjectType
@@ -192,13 +193,23 @@ async def test_user(db_session: AsyncSession) -> dict[str, str | UUID]:
     user = User(
         email="testuser@test.local",
         nickname="测试用户",
-        password=Password.hash(password),
         status=UserStatus.ACTIVE,
         storage=0,
         score=100,
         group_id=group.id,
     )
     user = await user.save(db_session)
+
+    # 创建邮箱密码认证身份
+    identity = AuthIdentity(
+        provider=AuthProviderType.EMAIL_PASSWORD,
+        identifier="testuser@test.local",
+        credential=Password.hash(password),
+        is_primary=True,
+        is_verified=True,
+        user_id=user.id,
+    )
+    await identity.save(db_session)
 
     # 创建用户根目录
     root_folder = Object(
@@ -279,13 +290,23 @@ async def admin_user(db_session: AsyncSession) -> dict[str, str | UUID]:
     admin = User(
         email="admin@disknext.local",
         nickname="管理员",
-        password=Password.hash(password),
         status=UserStatus.ACTIVE,
         storage=0,
         score=9999,
         group_id=admin_group.id,
     )
     admin = await admin.save(db_session)
+
+    # 创建管理员邮箱密码认证身份
+    admin_identity = AuthIdentity(
+        provider=AuthProviderType.EMAIL_PASSWORD,
+        identifier="admin@disknext.local",
+        credential=Password.hash(password),
+        is_primary=True,
+        is_verified=True,
+        user_id=admin.id,
+    )
+    await admin_identity.save(db_session)
 
     # 创建管理员根目录
     root_folder = Object(

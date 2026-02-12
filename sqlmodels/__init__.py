@@ -1,9 +1,16 @@
+from .auth_identity import (
+    AuthIdentity,
+    AuthIdentityResponse,
+    AuthProviderType,
+    BindIdentityRequest,
+)
 from .user import (
     BatchDeleteRequest,
     JWTPayload,
-    LoginRequest,
+    MagicLinkRequest,
+    UnifiedLoginRequest,
+    UnifiedRegisterRequest,
     RefreshTokenRequest,
-    RegisterRequest,
     AccessTokenBase,
     RefreshTokenBase,
     TokenResponse,
@@ -89,7 +96,7 @@ from .policy import Policy, PolicyBase, PolicyOptions, PolicyOptionsBase, Policy
 from .redeem import Redeem, RedeemType
 from .report import Report, ReportReason
 from .setting import (
-    Setting, SettingsType, SiteConfigResponse,
+    Setting, SettingsType, SiteConfigResponse, AuthMethodConfig,
     # 管理员DTO
     SettingItem, SettingsListResponse, SettingsUpdateRequest, SettingsUpdateResponse,
 )

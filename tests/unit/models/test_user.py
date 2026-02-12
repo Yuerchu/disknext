@@ -20,7 +20,6 @@ async def test_user_create(db_session: AsyncSession):
     user = User(
         email="testuser@test.local",
         nickname="测试用户",
-        password="hashed_password",
         group_id=group.id
     )
     user = await user.save(db_session)
@@ -43,7 +42,6 @@ async def test_user_unique_email(db_session: AsyncSession):
     # 创建第一个用户
     user1 = User(
         email="duplicate@test.local",
-        password="password1",
         group_id=group.id
     )
     await user1.save(db_session)
@@ -51,7 +49,6 @@ async def test_user_unique_email(db_session: AsyncSession):
     # 尝试创建同名用户
     user2 = User(
         email="duplicate@test.local",
-        password="password2",
         group_id=group.id
     )
 
@@ -70,7 +67,6 @@ async def test_user_to_public(db_session: AsyncSession):
     user = User(
         email="publicuser@test.local",
         nickname="公开用户",
-        password="secret_password",
         storage=1024,
         avatar="avatar.jpg",
         group_id=group.id
@@ -88,8 +84,6 @@ async def test_user_to_public(db_session: AsyncSession):
     # 这是已知的设计问题，需要在 UserPublic 中添加别名或重命名字段
     assert public_user.nick is None  # 实际行为
     assert public_user.storage == 1024
-    # 密码不应该在公开数据中
-    assert not hasattr(public_user, 'password')
 
 
 @pytest.mark.asyncio
@@ -102,7 +96,6 @@ async def test_user_group_relationship(db_session: AsyncSession):
     # 创建用户
     user = User(
         email="vipuser@test.local",
-        password="password",
         group_id=group.id
     )
     user = await user.save(db_session)
@@ -126,7 +119,6 @@ async def test_user_status_default(db_session: AsyncSession):
 
     user = User(
         email="defaultuser@test.local",
-        password="password",
         group_id=group.id
     )
     user = await user.save(db_session)
@@ -142,7 +134,6 @@ async def test_user_storage_default(db_session: AsyncSession):
 
     user = User(
         email="storageuser@test.local",
-        password="password",
         group_id=group.id
     )
     user = await user.save(db_session)
@@ -159,7 +150,6 @@ async def test_user_theme_enum(db_session: AsyncSession):
     # 测试默认值
     user1 = User(
         email="user1@test.local",
-        password="password",
         group_id=group.id
     )
     user1 = await user1.save(db_session)
@@ -168,7 +158,6 @@ async def test_user_theme_enum(db_session: AsyncSession):
     # 测试设置为 LIGHT
     user2 = User(
         email="user2@test.local",
-        password="password",
         theme=ThemeType.LIGHT,
         group_id=group.id
     )
@@ -178,9 +167,40 @@ async def test_user_theme_enum(db_session: AsyncSession):
     # 测试设置为 DARK
     user3 = User(
         email="user3@test.local",
-        password="password",
         theme=ThemeType.DARK,
         group_id=group.id
     )
     user3 = await user3.save(db_session)
     assert user3.theme == ThemeType.DARK
+
+
+@pytest.mark.asyncio
+async def test_user_email_optional(db_session: AsyncSession):
+    """测试 email 可以为空（支持社交登录用户）"""
+    group = Group(name="默认组")
+    group = await group.save(db_session)
+
+    user = User(
+        nickname="社交用户",
+        group_id=group.id
+    )
+    user = await user.save(db_session)
+
+    assert user.id is not None
+    assert user.email is None
+
+
+@pytest.mark.asyncio
+async def test_user_phone_field(db_session: AsyncSession):
+    """测试 phone 字段"""
+    group = Group(name="默认组")
+    group = await group.save(db_session)
+
+    user = User(
+        email="phoneuser@test.local",
+        phone="13800138000",
+        group_id=group.id
+    )
+    user = await user.save(db_session)
+
+    assert user.phone == "13800138000"

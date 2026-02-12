@@ -15,9 +15,10 @@ async def test_user_login_success(
     """测试成功登录"""
     response = await async_client.post(
         "/api/user/session",
-        data={
-            "username": test_user_info["email"],
-            "password": test_user_info["password"],
+        json={
+            "provider": "email_password",
+            "identifier": test_user_info["email"],
+            "credential": test_user_info["password"],
         }
     )
     assert response.status_code == 200
@@ -37,9 +38,10 @@ async def test_user_login_wrong_password(
     """测试密码错误返回 401"""
     response = await async_client.post(
         "/api/user/session",
-        data={
-            "username": test_user_info["email"],
-            "password": "wrongpassword",
+        json={
+            "provider": "email_password",
+            "identifier": test_user_info["email"],
+            "credential": "wrongpassword",
         }
     )
     assert response.status_code == 401
@@ -50,9 +52,10 @@ async def test_user_login_nonexistent_user(async_client: AsyncClient):
     """测试不存在的用户返回 401"""
     response = await async_client.post(
         "/api/user/session",
-        data={
-            "username": "nonexistent@test.local",
-            "password": "anypassword",
+        json={
+            "provider": "email_password",
+            "identifier": "nonexistent@test.local",
+            "credential": "anypassword",
         }
     )
     assert response.status_code == 401
@@ -66,9 +69,10 @@ async def test_user_login_user_banned(
     """测试封禁用户返回 403"""
     response = await async_client.post(
         "/api/user/session",
-        data={
-            "username": banned_user_info["email"],
-            "password": banned_user_info["password"],
+        json={
+            "provider": "email_password",
+            "identifier": banned_user_info["email"],
+            "credential": banned_user_info["password"],
         }
     )
     assert response.status_code == 403
@@ -82,8 +86,9 @@ async def test_user_register_success(async_client: AsyncClient):
     response = await async_client.post(
         "/api/user/",
         json={
-            "email": "newuser@test.local",
-            "password": "newpass123",
+            "provider": "email_password",
+            "identifier": "newuser@test.local",
+            "credential": "newpass123",
         }
     )
     assert response.status_code == 200
@@ -104,8 +109,9 @@ async def test_user_register_duplicate_email(
     response = await async_client.post(
         "/api/user/",
         json={
-            "email": test_user_info["email"],
-            "password": "anypassword",
+            "provider": "email_password",
+            "identifier": test_user_info["email"],
+            "credential": "anypassword",
         }
     )
     assert response.status_code == 400

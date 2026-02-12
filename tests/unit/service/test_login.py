@@ -1,78 +1,154 @@
 """
 Login 服务的单元测试
+
+测试 unified_login() 各 provider 路径。
 """
 import pytest
+from fastapi import HTTPException
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from sqlmodels.user import User, LoginRequest, TokenResponse, UserStatus
-from sqlmodels.group import Group
-from service.user.login import login
+from sqlmodels.auth_identity import AuthIdentity, AuthProviderType
+from sqlmodels.setting import Setting, SettingsType
+from sqlmodels.user import User, UnifiedLoginRequest, TokenResponse, UserStatus
+from sqlmodels.group import Group, GroupOptions
+from service.user.login import unified_login
 from utils.password.pwd import Password
 
 
 @pytest.fixture
-async def setup_user(db_session: AsyncSession):
-    """创建测试用户"""
+async def setup_auth_settings(db_session: AsyncSession):
+    """创建认证相关的 Setting 配置"""
+    settings = [
+        Setting(type=SettingsType.AUTH, name="auth_email_password_enabled", value="1"),
+        Setting(type=SettingsType.AUTH, name="auth_phone_sms_enabled", value="0"),
+        Setting(type=SettingsType.AUTH, name="auth_passkey_enabled", value="0"),
+        Setting(type=SettingsType.AUTH, name="auth_magic_link_enabled", value="0"),
+        Setting(type=SettingsType.OAUTH, name="github_enabled", value="0"),
+        Setting(type=SettingsType.OAUTH, name="qq_enabled", value="0"),
+    ]
+    for s in settings:
+        await s.save(db_session)
+
+
+@pytest.fixture
+async def setup_user(db_session: AsyncSession, setup_auth_settings):
+    """创建测试用户和邮箱密码认证身份"""
     # 创建用户组
     group = Group(name="测试组")
     group = await group.save(db_session)
+
+    # 创建用户组选项
+    group_options = GroupOptions(
+        group_id=group.id,
+        share_download=True,
+        share_free=False,
+        relocate=False,
+    )
+    await group_options.save(db_session)
 
     # 创建正常用户
     plain_password = "secure_password_123"
     user = User(
         email="loginuser@test.local",
-        password=Password.hash(plain_password),
         status=UserStatus.ACTIVE,
-        group_id=group.id
+        group_id=group.id,
     )
     user = await user.save(db_session)
+
+    # 创建邮箱密码认证身份
+    identity = AuthIdentity(
+        provider=AuthProviderType.EMAIL_PASSWORD,
+        identifier="loginuser@test.local",
+        credential=Password.hash(plain_password),
+        is_primary=True,
+        is_verified=True,
+        user_id=user.id,
+    )
+    await identity.save(db_session)
 
     return {
         "user": user,
         "password": plain_password,
-        "group_id": group.id
+        "group_id": group.id,
     }
 
 
 @pytest.fixture
-async def setup_banned_user(db_session: AsyncSession):
+async def setup_banned_user(db_session: AsyncSession, setup_auth_settings):
     """创建被封禁的用户"""
     group = Group(name="测试组2")
     group = await group.save(db_session)
 
+    group_options = GroupOptions(
+        group_id=group.id,
+        share_download=True,
+        share_free=False,
+        relocate=False,
+    )
+    await group_options.save(db_session)
+
     user = User(
         email="banneduser@test.local",
-        password=Password.hash("password"),
-        status=UserStatus.ADMIN_BANNED,  # 封禁状态
-        group_id=group.id
+        status=UserStatus.ADMIN_BANNED,
+        group_id=group.id,
     )
     user = await user.save(db_session)
+
+    identity = AuthIdentity(
+        provider=AuthProviderType.EMAIL_PASSWORD,
+        identifier="banneduser@test.local",
+        credential=Password.hash("password"),
+        is_primary=True,
+        is_verified=True,
+        user_id=user.id,
+    )
+    await identity.save(db_session)
 
     return user
 
 
 @pytest.fixture
-async def setup_2fa_user(db_session: AsyncSession):
+async def setup_2fa_user(db_session: AsyncSession, setup_auth_settings):
     """创建启用了两步验证的用户"""
     import pyotp
 
     group = Group(name="测试组3")
     group = await group.save(db_session)
 
+    group_options = GroupOptions(
+        group_id=group.id,
+        share_download=True,
+        share_free=False,
+        relocate=False,
+    )
+    await group_options.save(db_session)
+
     secret = pyotp.random_base32()
     user = User(
         email="2fauser@test.local",
-        password=Password.hash("password"),
         status=UserStatus.ACTIVE,
-        two_factor=secret,
-        group_id=group.id
+        group_id=group.id,
     )
     user = await user.save(db_session)
+
+    # 创建带 2FA secret 的邮箱密码认证身份
+    import orjson
+    extra_data = orjson.dumps({"two_factor": secret}).decode('utf-8')
+    identity = AuthIdentity(
+        provider=AuthProviderType.EMAIL_PASSWORD,
+        identifier="2fauser@test.local",
+        credential=Password.hash("password"),
+        extra_data=extra_data,
+        is_primary=True,
+        is_verified=True,
+        user_id=user.id,
+    )
+    await identity.save(db_session)
 
     return {
         "user": user,
         "secret": secret,
-        "password": "password"
+        "password": "password",
     }
 
 
@@ -81,12 +157,13 @@ async def test_login_success(db_session: AsyncSession, setup_user):
     """测试正常登录"""
     user_data = setup_user
 
-    login_request = LoginRequest(
-        email="loginuser@test.local",
-        password=user_data["password"]
+    request = UnifiedLoginRequest(
+        provider=AuthProviderType.EMAIL_PASSWORD,
+        identifier="loginuser@test.local",
+        credential=user_data["password"],
     )
 
-    result = await login(db_session, login_request)
+    result = await unified_login(db_session, request)
 
     assert isinstance(result, TokenResponse)
     assert result.access_token is not None
@@ -96,42 +173,48 @@ async def test_login_success(db_session: AsyncSession, setup_user):
 
 
 @pytest.mark.asyncio
-async def test_login_user_not_found(db_session: AsyncSession):
+async def test_login_user_not_found(db_session: AsyncSession, setup_user):
     """测试用户不存在"""
-    login_request = LoginRequest(
-        email="nonexistent@test.local",
-        password="any_password"
+    request = UnifiedLoginRequest(
+        provider=AuthProviderType.EMAIL_PASSWORD,
+        identifier="nonexistent@test.local",
+        credential="any_password",
     )
 
-    result = await login(db_session, login_request)
+    with pytest.raises(HTTPException) as exc_info:
+        await unified_login(db_session, request)
 
-    assert result is None
+    assert exc_info.value.status_code == 401
 
 
 @pytest.mark.asyncio
 async def test_login_wrong_password(db_session: AsyncSession, setup_user):
     """测试密码错误"""
-    login_request = LoginRequest(
-        email="loginuser@test.local",
-        password="wrong_password"
+    request = UnifiedLoginRequest(
+        provider=AuthProviderType.EMAIL_PASSWORD,
+        identifier="loginuser@test.local",
+        credential="wrong_password",
     )
 
-    result = await login(db_session, login_request)
+    with pytest.raises(HTTPException) as exc_info:
+        await unified_login(db_session, request)
 
-    assert result is None
+    assert exc_info.value.status_code == 401
 
 
 @pytest.mark.asyncio
 async def test_login_user_banned(db_session: AsyncSession, setup_banned_user):
     """测试用户被封禁"""
-    login_request = LoginRequest(
-        email="banneduser@test.local",
-        password="password"
+    request = UnifiedLoginRequest(
+        provider=AuthProviderType.EMAIL_PASSWORD,
+        identifier="banneduser@test.local",
+        credential="password",
     )
 
-    result = await login(db_session, login_request)
+    with pytest.raises(HTTPException) as exc_info:
+        await unified_login(db_session, request)
 
-    assert result is False
+    assert exc_info.value.status_code == 403
 
 
 @pytest.mark.asyncio
@@ -139,15 +222,17 @@ async def test_login_2fa_required(db_session: AsyncSession, setup_2fa_user):
     """测试需要 2FA"""
     user_data = setup_2fa_user
 
-    login_request = LoginRequest(
-        email="2fauser@test.local",
-        password=user_data["password"]
+    request = UnifiedLoginRequest(
+        provider=AuthProviderType.EMAIL_PASSWORD,
+        identifier="2fauser@test.local",
+        credential=user_data["password"],
         # 未提供 two_fa_code
     )
 
-    result = await login(db_session, login_request)
+    with pytest.raises(HTTPException) as exc_info:
+        await unified_login(db_session, request)
 
-    assert result == "2fa_required"
+    assert exc_info.value.status_code == 428
 
 
 @pytest.mark.asyncio
@@ -155,15 +240,17 @@ async def test_login_2fa_invalid(db_session: AsyncSession, setup_2fa_user):
     """测试 2FA 错误"""
     user_data = setup_2fa_user
 
-    login_request = LoginRequest(
-        email="2fauser@test.local",
-        password=user_data["password"],
-        two_fa_code="000000"  # 错误的验证码
+    request = UnifiedLoginRequest(
+        provider=AuthProviderType.EMAIL_PASSWORD,
+        identifier="2fauser@test.local",
+        credential=user_data["password"],
+        two_fa_code="000000",
     )
 
-    result = await login(db_session, login_request)
+    with pytest.raises(HTTPException) as exc_info:
+        await unified_login(db_session, request)
 
-    assert result == "2fa_invalid"
+    assert exc_info.value.status_code == 401
 
 
 @pytest.mark.asyncio
@@ -178,56 +265,44 @@ async def test_login_2fa_success(db_session: AsyncSession, setup_2fa_user):
     totp = pyotp.TOTP(secret)
     valid_code = totp.now()
 
-    login_request = LoginRequest(
-        email="2fauser@test.local",
-        password=user_data["password"],
-        two_fa_code=valid_code
+    request = UnifiedLoginRequest(
+        provider=AuthProviderType.EMAIL_PASSWORD,
+        identifier="2fauser@test.local",
+        credential=user_data["password"],
+        two_fa_code=valid_code,
     )
 
-    result = await login(db_session, login_request)
+    result = await unified_login(db_session, request)
 
     assert isinstance(result, TokenResponse)
     assert result.access_token is not None
 
 
 @pytest.mark.asyncio
-async def test_login_returns_valid_tokens(db_session: AsyncSession, setup_user):
-    """测试返回的令牌可以被解码"""
-    import jwt as pyjwt
-
-    user_data = setup_user
-
-    login_request = LoginRequest(
-        email="loginuser@test.local",
-        password=user_data["password"]
+async def test_login_provider_disabled(db_session: AsyncSession, setup_user):
+    """测试未启用的 provider"""
+    request = UnifiedLoginRequest(
+        provider=AuthProviderType.PHONE_SMS,
+        identifier="13800138000",
+        credential="123456",
     )
 
-    result = await login(db_session, login_request)
+    with pytest.raises(HTTPException) as exc_info:
+        await unified_login(db_session, request)
 
-    assert isinstance(result, TokenResponse)
-
-    # 注意: 实际项目中需要使用正确的 SECRET_KEY
-    # 这里假设测试环境已经设置了 SECRET_KEY
-    # decoded = pyjwt.decode(
-    #     result.access_token,
-    #     SECRET_KEY,
-    #     algorithms=["HS256"]
-    # )
-    # assert decoded["sub"] == "loginuser"
+    assert exc_info.value.status_code == 400
 
 
 @pytest.mark.asyncio
-async def test_login_case_sensitive_email(db_session: AsyncSession, setup_user):
-    """测试邮箱大小写敏感"""
-    user_data = setup_user
-
-    # 使用大写邮箱登录
-    login_request = LoginRequest(
-        email="LOGINUSER@TEST.LOCAL",
-        password=user_data["password"]
+async def test_login_missing_password(db_session: AsyncSession, setup_user):
+    """测试邮箱密码登录缺少密码"""
+    request = UnifiedLoginRequest(
+        provider=AuthProviderType.EMAIL_PASSWORD,
+        identifier="loginuser@test.local",
+        # 未提供 credential
     )
 
-    result = await login(db_session, login_request)
+    with pytest.raises(HTTPException) as exc_info:
+        await unified_login(db_session, request)
 
-    # 应该失败，因为邮箱大小写不匹配
-    assert result is None
+    assert exc_info.value.status_code == 400

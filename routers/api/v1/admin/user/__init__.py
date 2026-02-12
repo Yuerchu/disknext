@@ -12,6 +12,7 @@ from sqlmodels import (
     Group, Object, ObjectType, Setting, SettingsType,
     BatchDeleteRequest,
 )
+from sqlmodels.auth_identity import AuthIdentity, AuthProviderType
 from sqlmodels.user import (
     UserAdminCreateRequest, UserAdminUpdateRequest, UserCalibrateResponse, UserStatus,
 )
@@ -83,13 +84,26 @@ async def router_admin_create_user(
     """
     创建一个新的用户，设置邮箱、密码、用户组等信息。
 
+    管理员创建用户时，若提供了 email + password，
+    会同时创建 AuthIdentity(provider=email_password)。
+
     :param session: 数据库会话
     :param request: 创建用户请求 DTO
     :return: 创建结果
     """
-    existing_user = await User.get(session, User.email == request.email)
-    if existing_user:
-        raise HTTPException(status_code=409, detail="该邮箱已被注册")
+    # 如果提供了邮箱，检查唯一性（User 表和 AuthIdentity 表）
+    if request.email:
+        existing_user = await User.get(session, User.email == request.email)
+        if existing_user:
+            raise HTTPException(status_code=409, detail="该邮箱已被注册")
+
+        existing_identity = await AuthIdentity.get(
+            session,
+            (AuthIdentity.provider == AuthProviderType.EMAIL_PASSWORD)
+            & (AuthIdentity.identifier == request.email),
+        )
+        if existing_identity:
+            raise HTTPException(status_code=409, detail="该邮箱已被绑定")
 
     # 验证用户组存在
     group = await Group.get(session, Group.id == request.group_id)
@@ -98,12 +112,24 @@ async def router_admin_create_user(
 
     user = User(
         email=request.email,
-        password=Password.hash(request.password),
         nickname=request.nickname,
         group_id=request.group_id,
         status=request.status,
     )
     user = await user.save(session)
+
+    # 如果提供了邮箱和密码，创建邮箱密码认证身份
+    if request.email and request.password:
+        identity = AuthIdentity(
+            provider=AuthProviderType.EMAIL_PASSWORD,
+            identifier=request.email,
+            credential=Password.hash(request.password),
+            is_primary=True,
+            is_verified=True,
+            user_id=user.id,
+        )
+        await identity.save(session)
+
     return user.to_public()
 
 
@@ -148,17 +174,7 @@ async def router_admin_update_user(
         if not group:
             raise HTTPException(status_code=400, detail="目标用户组不存在")
 
-    # 如果更新密码，需要加密
     update_data = request.model_dump(exclude_unset=True)
-    if 'password' in update_data and update_data['password']:
-        update_data['password'] = Password.hash(update_data['password'])
-    elif 'password' in update_data:
-        del update_data['password']  # 空密码不更新
-
-    # 验证两步验证密钥格式（如果提供了值且不为 None，长度必须为 32）
-    if 'two_factor' in update_data and update_data['two_factor'] is not None:
-        if len(update_data['two_factor']) != 32:
-            raise HTTPException(status_code=400, detail="两步验证密钥必须为32位字符串")
 
     # 记录旧 status 以便检测变更
     old_status = user.status
@@ -175,7 +191,7 @@ async def router_admin_update_user(
     elif old_status != UserStatus.ACTIVE and new_status == UserStatus.ACTIVE:
         await UserBanStore.unban(str(user_id))
 
-    l.info(f"管理员更新了用户: {request.email}")
+    l.info(f"管理员更新了用户: {user.email}")
 
 
 @admin_user_router.delete(

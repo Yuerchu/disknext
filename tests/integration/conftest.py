@@ -23,6 +23,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 from main import app
 from sqlmodels import Group, GroupClaims, GroupOptions, Object, ObjectType, Policy, PolicyType, Setting, SettingsType, User
+from sqlmodels.auth_identity import AuthIdentity, AuthProviderType
 from sqlmodels.user import UserStatus
 from utils import Password
 from utils.JWT import create_access_token
@@ -98,6 +99,15 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
         Setting(type=SettingsType.CAPTCHA, name="captcha_CloudflareKey", value=""),
         Setting(type=SettingsType.REGISTER, name="register_enabled", value="1"),
         Setting(type=SettingsType.AUTH, name="secret_key", value="test_secret_key_for_jwt_token_generation"),
+        Setting(type=SettingsType.AUTH, name="auth_email_password_enabled", value="1"),
+        Setting(type=SettingsType.AUTH, name="auth_phone_sms_enabled", value="0"),
+        Setting(type=SettingsType.AUTH, name="auth_passkey_enabled", value="0"),
+        Setting(type=SettingsType.AUTH, name="auth_magic_link_enabled", value="0"),
+        Setting(type=SettingsType.AUTH, name="auth_password_required", value="1"),
+        Setting(type=SettingsType.AUTH, name="auth_phone_binding_required", value="0"),
+        Setting(type=SettingsType.AUTH, name="auth_email_binding_required", value="1"),
+        Setting(type=SettingsType.OAUTH, name="github_enabled", value="0"),
+        Setting(type=SettingsType.OAUTH, name="qq_enabled", value="0"),
     ]
     for setting in settings:
         test_session.add(setting)
@@ -183,7 +193,6 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
     test_user = User(
         id=uuid4(),
         email="testuser@test.local",
-        password=Password.hash("testpass123"),
         nickname="测试用户",
         status=UserStatus.ACTIVE,
         storage=0,
@@ -196,7 +205,6 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
     admin_user = User(
         id=uuid4(),
         email="admin@disknext.local",
-        password=Password.hash("adminpass123"),
         nickname="管理员",
         status=UserStatus.ACTIVE,
         storage=0,
@@ -209,7 +217,6 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
     banned_user = User(
         id=uuid4(),
         email="banneduser@test.local",
-        password=Password.hash("banned123"),
         nickname="封禁用户",
         status=UserStatus.ADMIN_BANNED,
         storage=0,
@@ -226,7 +233,40 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
     await test_session.refresh(admin_user)
     await test_session.refresh(banned_user)
 
-    # 7. 创建用户根目录
+    # 7. 创建认证身份
+    test_user_identity = AuthIdentity(
+        provider=AuthProviderType.EMAIL_PASSWORD,
+        identifier="testuser@test.local",
+        credential=Password.hash("testpass123"),
+        is_primary=True,
+        is_verified=True,
+        user_id=test_user.id,
+    )
+    test_session.add(test_user_identity)
+
+    admin_user_identity = AuthIdentity(
+        provider=AuthProviderType.EMAIL_PASSWORD,
+        identifier="admin@disknext.local",
+        credential=Password.hash("adminpass123"),
+        is_primary=True,
+        is_verified=True,
+        user_id=admin_user.id,
+    )
+    test_session.add(admin_user_identity)
+
+    banned_user_identity = AuthIdentity(
+        provider=AuthProviderType.EMAIL_PASSWORD,
+        identifier="banneduser@test.local",
+        credential=Password.hash("banned123"),
+        is_primary=True,
+        is_verified=True,
+        user_id=banned_user.id,
+    )
+    test_session.add(banned_user_identity)
+
+    await test_session.commit()
+
+    # 8. 创建用户根目录
     test_user_root = Object(
         id=uuid4(),
         name="/",
@@ -251,7 +291,7 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
 
     await test_session.commit()
 
-    # 8. 设置JWT密钥（从数据库加载）
+    # 9. 设置JWT密钥（从数据库加载）
     JWT.SECRET_KEY = "test_secret_key_for_jwt_token_generation"
 
     # 刷新 group options

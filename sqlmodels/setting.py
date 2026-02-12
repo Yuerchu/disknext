@@ -2,6 +2,7 @@ from enum import StrEnum
 
 from sqlmodel import UniqueConstraint
 
+from .auth_identity import AuthProviderType
 from .base import SQLModelBase
 from .mixin import TableBaseMixin
 from .user import UserResponse
@@ -11,6 +12,19 @@ class CaptchaType(StrEnum):
     DEFAULT = "default"
     GCAPTCHA = "gcaptcha"
     CLOUD_FLARE_TURNSTILE = "cloudflare turnstile"
+
+
+# ==================== Auth 配置 DTO ====================
+
+class AuthMethodConfig(SQLModelBase):
+    """认证方式配置 DTO"""
+
+    provider: AuthProviderType
+    """提供者类型"""
+
+    is_enabled: bool
+    """是否启用"""
+
 
 # ==================== DTO 模型 ====================
 
@@ -49,6 +63,27 @@ class SiteConfigResponse(SQLModelBase):
 
     captcha_key: str | None = None
     """验证码 public key（DEFAULT 类型时为 None）"""
+
+    auth_methods: list[AuthMethodConfig] = []
+    """可用的登录方式列表"""
+
+    password_required: bool = True
+    """注册时是否必须设置密码"""
+
+    phone_binding_required: bool = False
+    """是否强制绑定手机号"""
+
+    email_binding_required: bool = True
+    """是否强制绑定邮箱"""
+
+    footer_code: str | None = None
+    """自定义页脚代码"""
+
+    tos_url: str | None = None
+    """服务条款 URL"""
+
+    privacy_url: str | None = None
+    """隐私政策 URL"""
 
 
 # ==================== 管理员设置 DTO ====================

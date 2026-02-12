@@ -9,6 +9,7 @@ from sqlmodel import Field, Relationship
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel.main import RelationshipInfo
 
+from .auth_identity import AuthProviderType
 from .base import SQLModelBase
 from .color import ChromaticColor, NeutralColor, ThemeColorsBase
 from .model_base import ResponseBase
@@ -17,6 +18,7 @@ from .mixin import UUIDTableBaseMixin, TableViewRequest, ListResponse
 T = TypeVar("T", bound="User")
 
 if TYPE_CHECKING:
+    from .auth_identity import AuthIdentity
     from .group import Group
     from .download import Download
     from .object import Object
@@ -30,7 +32,7 @@ if TYPE_CHECKING:
 
 class AvatarType(StrEnum):
     """头像类型枚举"""
-    
+
     DEFAULT = "default"
     GRAVATAR = "gravatar"
     FILE = "file"
@@ -69,8 +71,8 @@ class UserFilterParams(SQLModelBase):
 class UserBase(SQLModelBase):
     """用户基础字段，供数据库模型和 DTO 共享"""
 
-    email: str
-    """用户邮箱"""
+    email: str | None = None
+    """用户邮箱（社交登录用户可能没有邮箱）"""
 
     status: UserStatus = UserStatus.ACTIVE
     """用户状态"""
@@ -81,30 +83,42 @@ class UserBase(SQLModelBase):
 
 # ==================== DTO 模型 ====================
 
-class LoginRequest(SQLModelBase):
-    """登录请求 DTO"""
+class UnifiedLoginRequest(SQLModelBase):
+    """统一登录请求 DTO"""
 
-    email: str
-    """用户邮箱"""
+    provider: AuthProviderType
+    """登录方式"""
 
-    password: str
-    """用户密码"""
+    identifier: str
+    """标识符（邮箱 / OAuth code / Magic Link token）"""
 
-    captcha: str | None = None
-    """验证码"""
+    credential: str | None = None
+    """凭证（密码，provider=email_password 时必填）"""
 
     two_fa_code: str | None = Field(default=None, min_length=6, max_length=6)
     """两步验证代码"""
 
+    redirect_uri: str | None = None
+    """OAuth 回调地址"""
 
-class RegisterRequest(SQLModelBase):
-    """注册请求 DTO"""
+    captcha: str | None = None
+    """验证码"""
 
-    email: str
-    """用户邮箱，唯一"""
 
-    password: str
-    """用户密码"""
+class UnifiedRegisterRequest(SQLModelBase):
+    """统一注册请求 DTO"""
+
+    provider: AuthProviderType
+    """注册方式（email_password / phone_sms）"""
+
+    identifier: str
+    """标识符（邮箱 / 手机号）"""
+
+    credential: str | None = None
+    """凭证（密码 / 短信验证码）"""
+
+    nickname: str | None = Field(default=None, max_length=50)
+    """昵称"""
 
     captcha: str | None = None
     """验证码"""
@@ -190,7 +204,7 @@ class UserResponse(ResponseBase):
     id: UUID
     """用户UUID"""
 
-    email: str
+    email: str | None = None
     """用户邮箱"""
 
     nickname: str | None = None
@@ -216,10 +230,10 @@ class UserStorageResponse(SQLModelBase):
 
     used: int
     """已用存储空间（字节）"""
-    
+
     free: int
     """剩余存储空间（字节）"""
-    
+
     total: int
     """总存储空间（字节）"""
 
@@ -248,9 +262,6 @@ class UserPublic(UserBase):
     group_name: str | None = None
     """用户组名称"""
 
-    two_factor: str | None = None
-    """两步验证密钥（32位字符串，null 表示未启用）"""
-
     created_at: datetime | None = None
     """创建时间"""
 
@@ -264,21 +275,24 @@ class UserSettingResponse(SQLModelBase):
     id: UUID
     """用户UUID"""
 
-    email: str
+    email: str | None = None
     """用户邮箱"""
+
+    phone: str | None = None
+    """手机号"""
 
     nickname: str | None = None
     """昵称"""
-    
+
     created_at: datetime
     """用户注册时间"""
 
     group_name: str
     """用户所属用户组名称"""
-    
+
     language: str
     """语言偏好"""
-    
+
     timezone: int
     """时区"""
 
@@ -341,16 +355,26 @@ class UserTwoFactorResponse(SQLModelBase):
     """两步验证密钥"""
 
 
+class MagicLinkRequest(SQLModelBase):
+    """Magic Link 请求 DTO"""
+
+    email: str
+    """接收 Magic Link 的邮箱"""
+
+    captcha: str | None = None
+    """验证码"""
+
+
 # ==================== 管理员用户管理 DTO ====================
 
 class UserAdminCreateRequest(SQLModelBase):
     """管理员创建用户请求 DTO"""
 
-    email: str = Field(max_length=50)
+    email: str | None = Field(default=None, max_length=50)
     """用户邮箱"""
 
-    password: str
-    """用户密码（明文，由服务端加密）"""
+    password: str | None = None
+    """用户密码（明文，由服务端加密；为空则不创建邮箱密码身份）"""
 
     nickname: str | None = Field(default=None, max_length=50)
     """昵称"""
@@ -364,15 +388,15 @@ class UserAdminCreateRequest(SQLModelBase):
 
 class UserAdminUpdateRequest(SQLModelBase):
     """管理员更新用户请求 DTO"""
-    
-    email: str = Field(max_length=50)
+
+    email: str | None = Field(default=None, max_length=50)
     """邮箱"""
 
     nickname: str | None = Field(default=None, max_length=50)
     """昵称"""
 
-    password: str | None = None
-    """新密码（为空则不修改）"""
+    phone: str | None = None
+    """手机号"""
 
     group_id: UUID | None = None
     """用户组UUID"""
@@ -388,9 +412,6 @@ class UserAdminUpdateRequest(SQLModelBase):
 
     group_expires: datetime | None = None
     """用户组过期时间"""
-
-    two_factor: str | None = None
-    """两步验证密钥（32位字符串，传 null 可清除，不传则不修改）"""
 
 
 class UserCalibrateResponse(SQLModelBase):
@@ -414,9 +435,6 @@ class UserCalibrateResponse(SQLModelBase):
 
 class UserAdminDetailResponse(UserPublic):
     """管理员用户详情响应 DTO"""
-
-    two_factor_enabled: bool = False
-    """是否启用两步验证"""
 
     file_count: int = 0
     """文件数量"""
@@ -443,23 +461,20 @@ UserSettingResponse.model_rebuild()
 class User(UserBase, UUIDTableBaseMixin):
     """用户模型"""
 
-    email: str = Field(max_length=50, unique=True, index=True)
-    """用户邮箱，唯一"""
+    email: str | None = Field(default=None, max_length=50, unique=True, index=True)
+    """用户邮箱（社交登录用户可能没有邮箱）"""
 
     nickname: str | None = Field(default=None, max_length=50)
     """用于公开展示的名字，可使用真实姓名或昵称"""
 
-    password: str = Field(max_length=255)
-    """用户密码（加密后）"""
+    phone: str | None = Field(default=None, max_length=20, unique=True, index=True)
+    """手机号（预留）"""
 
     status: UserStatus = UserStatus.ACTIVE
     """用户状态"""
 
     storage: int = Field(default=0, sa_column_kwargs={"server_default": "0"}, ge=0)
     """已用存储空间（字节）"""
-
-    two_factor: str | None = Field(default=None, min_length=32, max_length=32)
-    """两步验证密钥"""
 
     avatar: str = Field(default="default", max_length=255)
     """头像地址"""
@@ -532,6 +547,12 @@ class User(UserBase, UUIDTableBaseMixin):
             "foreign_keys": "User.previous_group_id"
         }
     )
+
+    auth_identities: list["AuthIdentity"] = Relationship(
+        back_populates="user",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
+    """用户的认证身份列表"""
 
     downloads: list["Download"] = Relationship(
         back_populates="user",
@@ -634,4 +655,3 @@ class User(UserBase, UUIDTableBaseMixin):
             filter=filter,
             table_view=table_view,
         )
-    

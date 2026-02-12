@@ -28,7 +28,8 @@ default_settings: list[Setting] = [
     Setting(name="siteKeywords", value="网盘，网盘", type=SettingsType.BASIC),
     Setting(name="siteDes", value="DiskNext", type=SettingsType.BASIC),
     Setting(name="siteTitle", value="云星启智", type=SettingsType.BASIC),
-    Setting(name="site_notice", value="", type=SettingsType.BASIC),
+    Setting(name="site_notice_public", value="", type=SettingsType.BASIC),
+    Setting(name="site_notice_user", value="", type=SettingsType.BASIC),
     Setting(name="footer_code", value="", type=SettingsType.BASIC),
     Setting(name="tos_url", value="", type=SettingsType.BASIC),
     Setting(name="privacy_url", value="", type=SettingsType.BASIC),
@@ -58,7 +59,7 @@ default_settings: list[Setting] = [
     Setting(name="login_captcha", value="0", type=SettingsType.LOGIN),
     Setting(name="reg_captcha", value="0", type=SettingsType.LOGIN),
     Setting(name="reg_email_captcha", value="0", type=SettingsType.LOGIN),
-    Setting(name="email_active", value="0", type=SettingsType.REGISTER),
+    Setting(name="require_active", value="0", type=SettingsType.REGISTER),
     Setting(name="mail_activation_template", value="""<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html lang="zh-CN" xmlns="http://www.w3.org/1999/xhtml" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:v="urn:schemas-microsoft-com:vml"><head><title>验证码</title><meta charset="UTF-8"><meta content="text/html; charset=UTF-8" http-equiv="Content-Type"><meta content="IE=edge" http-equiv="X-UA-Compatible"><meta content="telephone=no, date=no, address=no, email=no, url=no" name="format-detection"><meta content="width=device-width, initial-scale=1.0" name="viewport"><style>body { margin: 0; padding: 0; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; background-color: #ffffff; }table { border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; width: 100%; }table td { border-collapse: collapse; }img { border: 0; height: auto; line-height: 100%; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic; }body, table, td, p, a, li, blockquote { -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; }@media only screen and (max-width: 480px) {    .mobile-hide { display: none !important; }    .mobile-padding { padding: 20px !important; }    .content-width { width: 100% !important; max-width: 100% !important; }    h1 { font-size: 24px !important; line-height: 1.2 !important; }}</style></head><body style="margin: 0; padding: 0; background-color: #ffffff;"><table border="0" cellpadding="0" cellspacing="0" width="100%" role="presentation"><tr><td align="center" style="background-color: #ffffff; padding-top: 40px; padding-bottom: 40px;"><table align="center" border="0" cellpadding="0" cellspacing="0" class="content-width" style="max-width: 600px; width: 100%; background-color: #ffffff; border: 1px solid #ebebeb; border-radius: 12px; overflow: hidden;"><tr><td class="mobile-padding" style="padding: 40px 40px 30px 40px;"><table border="0" cellpadding="0" cellspacing="0" width="100%"><tr><td align="left"><a href="{{ site_url }}" target="_blank" style="text-decoration: none;">                                                                                {% if logo_url %}<img src="{{ logo_url }}" alt="{{ site_name }}" width="120" style="display: block; width: 120px; max-width: 100%; border: 0;">                                        {% else %}<span style="font-size: 24px; font-weight: bold; color: #333333;">{{ site_name }}</span>                                        {% endif %}</a></td></tr><tr><td height="30" style="font-size: 1px; line-height: 30px;">&nbsp;</td></tr></table><h1 style="margin: 0; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 24px; font-weight: 700; color: #141414; line-height: 32px;">                            验证您的邮箱</h1><table border="0" cellpadding="0" cellspacing="0" width="100%"><tr><td height="15" style="font-size: 1px; line-height: 15px;">&nbsp;</td></tr><tr><td style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 15px; color: #141414; line-height: 24px;">                                    感谢您注册<strong>{{ site_name }}</strong>，您的验证码是：</td></tr><tr><td height="25" style="font-size: 1px; line-height: 25px;">&nbsp;</td></tr></table><table border="0" cellpadding="0" cellspacing="0" width="100%"><tr><td align="left"><table border="0" cellpadding="0" cellspacing="0" style="background-color: #f4f7fa; border-radius: 8px;"><tr><td align="center" style="padding: 15px 30px;"><span style="font-family: 'Courier New', Courier, monospace; font-size: 32px; font-weight: 700; color: #0666eb; letter-spacing: 4px; display: block;">                                                    {{ verify_code }}</span></td></tr></table></td></tr><tr><td height="25" style="font-size: 1px; line-height: 25px;">&nbsp;</td></tr></table><table border="0" cellpadding="0" cellspacing="0" width="100%"><tr><td style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 14px; color: #555555; line-height: 22px;"><p style="margin: 0 0 10px 0;">该验证码<strong>{{ valid_minutes }} 分钟内</strong>有效。</p><p style="margin: 0 0 10px 0; color: #d32f2f;">为保障您的账户安全，请勿将验证码告诉他人。</p></td></tr></table><table border="0" cellpadding="0" cellspacing="0" width="100%"><tr><td height="30" style="font-size: 1px; line-height: 30px; border-bottom: 1px solid #eeeeee;">&nbsp;</td></tr><tr><td height="20" style="font-size: 1px; line-height: 20px;">&nbsp;</td></tr></table><table border="0" cellpadding="0" cellspacing="0" width="100%"><tr><td style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 12px; color: #999999; line-height: 18px;"><p style="margin: 0;">此邮件由系统自动发送，请勿直接回复。</p><p style="margin: 5px 0 0 0;">&copy; {{ current_year }} {{ site_name }}. 保留所有权利。</p></td></tr></table></td></tr></table><div style="display:none; white-space:nowrap; font:15px courier; line-height:0;">                &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;                 &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;</div></td></tr></table></body></html>""", type=SettingsType.MAIL_TEMPLATE),
     Setting(name="mail_reset_pwd_template", value="""<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html lang="zh-CN" xmlns="http://www.w3.org/1999/xhtml" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:v="urn:schemas-microsoft-com:vml"><head><title>重置密码</title><meta charset="UTF-8"><meta content="text/html; charset=UTF-8" http-equiv="Content-Type"><meta content="IE=edge" http-equiv="X-UA-Compatible"><meta content="telephone=no, date=no, address=no, email=no, url=no" name="format-detection"><meta content="width=device-width, initial-scale=1.0" name="viewport"><style>body { margin: 0; padding: 0; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; background-color: #ffffff; }table { border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; width: 100%; }table td { border-collapse: collapse; }img { border: 0; height: auto; line-height: 100%; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic; }body, table, td, p, a, li, blockquote { -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; }@media only screen and (max-width: 480px) {    .mobile-hide { display: none !important; }    .mobile-padding { padding: 20px !important; }    .content-width { width: 100% !important; max-width: 100% !important; }    h1 { font-size: 24px !important; line-height: 1.2 !important; }}</style></head><body style="margin: 0; padding: 0; background-color: #ffffff;"><table border="0" cellpadding="0" cellspacing="0" width="100%" role="presentation"><tr><td align="center" style="background-color: #ffffff; padding-top: 40px; padding-bottom: 40px;"><table align="center" border="0" cellpadding="0" cellspacing="0" class="content-width" style="max-width: 600px; width: 100%; background-color: #ffffff; border: 1px solid #ebebeb; border-radius: 12px; overflow: hidden;"><tr><td class="mobile-padding" style="padding: 40px 40px 30px 40px;"><table border="0" cellpadding="0" cellspacing="0" width="100%"><tr><td align="left"><a href="{{ site_url }}" target="_blank" style="text-decoration: none;">                                        {% if logo_url %}<img src="{{ logo_url }}" alt="{{ site_name }}" width="120" style="display: block; width: 120px; max-width: 100%; border: 0;">                                        {% else %}<span style="font-size: 24px; font-weight: bold; color: #333333;">{{ site_name }}</span>                                        {% endif %}</a></td></tr><tr><td height="30" style="font-size: 1px; line-height: 30px;">&nbsp;</td></tr></table><h1 style="margin: 0; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 24px; font-weight: 700; color: #141414; line-height: 32px;">                            重置密码</h1><table border="0" cellpadding="0" cellspacing="0" width="100%"><tr><td height="15" style="font-size: 1px; line-height: 15px;">&nbsp;</td></tr><tr><td style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 15px; color: #141414; line-height: 24px;">                                    您正在申请重置<strong>{{ site_name }}</strong> 的登录密码。若确认是您本人操作，请使用下方验证码：</td></tr><tr><td height="25" style="font-size: 1px; line-height: 25px;">&nbsp;</td></tr></table><table border="0" cellpadding="0" cellspacing="0" width="100%"><tr><td align="left"><table border="0" cellpadding="0" cellspacing="0" style="background-color: #f4f7fa; border-radius: 8px;"><tr><td align="center" style="padding: 15px 30px;"><span style="font-family: 'Courier New', Courier, monospace; font-size: 32px; font-weight: 700; color: #0666eb; letter-spacing: 4px; display: block;">                                                    {{ verify_code }}</span></td></tr></table></td></tr><tr><td height="25" style="font-size: 1px; line-height: 25px;">&nbsp;</td></tr></table><table border="0" cellpadding="0" cellspacing="0" width="100%"><tr><td style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 14px; color: #555555; line-height: 22px;"><p style="margin: 0 0 10px 0;">该验证码<strong>{{ valid_minutes }} 分钟内</strong>有效。</p><p style="margin: 0 0 10px 0; color: #666666;">                                        如果您没有请求重置密码，请<strong>忽略此邮件</strong>，您的账户依然安全。</p></td></tr></table><table border="0" cellpadding="0" cellspacing="0" width="100%"><tr><td height="30" style="font-size: 1px; line-height: 30px; border-bottom: 1px solid #eeeeee;">&nbsp;</td></tr><tr><td height="20" style="font-size: 1px; line-height: 20px;">&nbsp;</td></tr></table><table border="0" cellpadding="0" cellspacing="0" width="100%"><tr><td style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 12px; color: #999999; line-height: 18px;"><p style="margin: 0;">此邮件由系统自动发送，请勿直接回复。</p><p style="margin: 5px 0 0 0;">&copy; {{ current_year }} {{ site_name }}. 保留所有权利。</p></td></tr></table></td></tr></table><div style="display:none; white-space:nowrap; font:15px courier; line-height:0;">                &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;                 &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;</div></td></tr></table></body></html>""", type=SettingsType.MAIL_TEMPLATE),
     Setting(name="forget_captcha", value="0", type=SettingsType.LOGIN),
@@ -107,6 +108,25 @@ default_settings: list[Setting] = [
     Setting(name="pwa_display", value="standalone", type=SettingsType.PWA),
     Setting(name="pwa_theme_color", value="#000000", type=SettingsType.PWA),
     Setting(name="pwa_background_color", value="#ffffff", type=SettingsType.PWA),
+    # ==================== 认证方式配置 ====================
+    Setting(name="auth_email_password_enabled", value="1", type=SettingsType.AUTH),
+    Setting(name="auth_phone_sms_enabled", value="0", type=SettingsType.AUTH),
+    Setting(name="auth_passkey_enabled", value="0", type=SettingsType.AUTH),
+    Setting(name="auth_magic_link_enabled", value="0", type=SettingsType.AUTH),
+    Setting(name="auth_password_required", value="1", type=SettingsType.AUTH),
+    Setting(name="auth_phone_binding_required", value="0", type=SettingsType.AUTH),
+    Setting(name="auth_email_binding_required", value="1", type=SettingsType.AUTH),
+    # ==================== OAuth 配置 ====================
+    Setting(name="github_enabled", value="0", type=SettingsType.OAUTH),
+    Setting(name="github_client_id", value="", type=SettingsType.OAUTH),
+    Setting(name="github_client_secret", value="", type=SettingsType.OAUTH),
+    Setting(name="qq_enabled", value="0", type=SettingsType.OAUTH),
+    Setting(name="qq_client_id", value="", type=SettingsType.OAUTH),
+    Setting(name="qq_client_secret", value="", type=SettingsType.OAUTH),
+    # ==================== 短信服务配置（预留） ====================
+    Setting(name="sms_provider", value="", type=SettingsType.MOBILE),
+    Setting(name="sms_access_key", value="", type=SettingsType.MOBILE),
+    Setting(name="sms_secret_key", value="", type=SettingsType.MOBILE),
 ]
 
 async def init_default_settings() -> None:
@@ -219,6 +239,7 @@ async def init_default_group() -> None:
             # 游客组不关联存储策略（无法上传）
 
 async def init_default_user() -> None:
+    from .auth_identity import AuthIdentity, AuthProviderType
     from .user import User
     from .group import Group
     from .object import Object, ObjectType
@@ -258,10 +279,19 @@ async def init_default_user() -> None:
                 email="admin@disknext.local",
                 nickname="admin",
                 group_id=admin_group.id,
-                password=hashed_admin_password,
             )
             admin_user_id = admin_user.id  # 在 save 前保存 UUID
             await admin_user.save(session)
+
+            # 创建 AuthIdentity（邮箱密码身份）
+            await AuthIdentity(
+                provider=AuthProviderType.EMAIL_PASSWORD,
+                identifier="admin@disknext.local",
+                credential=hashed_admin_password,
+                is_primary=True,
+                is_verified=True,
+                user_id=admin_user_id,
+            ).save(session)
 
             # 记录默认管理员 ID 到 Setting
             await Setting(

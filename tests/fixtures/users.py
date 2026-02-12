@@ -2,12 +2,14 @@
 用户测试数据工厂
 
 提供创建测试用户的便捷方法。
+用户密码凭证通过 AuthIdentity 管理，不再存储在 User 表中。
 """
 from uuid import UUID
 
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from sqlmodels.user import User
+from sqlmodels.auth_identity import AuthIdentity, AuthProviderType
+from sqlmodels.user import User, UserStatus
 from utils.password.pwd import Password
 
 
@@ -20,7 +22,7 @@ class UserFactory:
         group_id: UUID,
         email: str | None = None,
         password: str | None = None,
-        **kwargs
+        **kwargs,
     ) -> User:
         """
         创建普通用户
@@ -29,7 +31,7 @@ class UserFactory:
             session: 数据库会话
             group_id: 用户组UUID
             email: 用户邮箱（默认: test_user_{随机}@test.local）
-            password: 明文密码（默认: password123）
+            password: 明文密码（默认: password123），若提供则同时创建 AuthIdentity
             **kwargs: 其他用户字段
 
         返回:
@@ -46,12 +48,10 @@ class UserFactory:
         user = User(
             email=email,
             nickname=kwargs.get("nickname", email),
-            password=Password.hash(password),
-            status=kwargs.get("status", True),
+            status=kwargs.get("status", UserStatus.ACTIVE),
             storage=kwargs.get("storage", 0),
             score=kwargs.get("score", 100),
             group_id=group_id,
-            two_factor=kwargs.get("two_factor"),
             avatar=kwargs.get("avatar", "default"),
             group_expires=kwargs.get("group_expires"),
             theme=kwargs.get("theme", "system"),
@@ -61,6 +61,18 @@ class UserFactory:
         )
 
         user = await user.save(session)
+
+        # 创建邮箱密码认证身份
+        identity = AuthIdentity(
+            provider=AuthProviderType.EMAIL_PASSWORD,
+            identifier=email,
+            credential=Password.hash(password),
+            is_primary=True,
+            is_verified=True,
+            user_id=user.id,
+        )
+        await identity.save(session)
+
         return user
 
     @staticmethod
@@ -68,7 +80,7 @@ class UserFactory:
         session: AsyncSession,
         admin_group_id: UUID,
         email: str | None = None,
-        password: str | None = None
+        password: str | None = None,
     ) -> User:
         """
         创建管理员用户
@@ -93,8 +105,7 @@ class UserFactory:
         admin = User(
             email=email,
             nickname=f"管理员 {email}",
-            password=Password.hash(password),
-            status=True,
+            status=UserStatus.ACTIVE,
             storage=0,
             score=9999,
             group_id=admin_group_id,
@@ -102,13 +113,25 @@ class UserFactory:
         )
 
         admin = await admin.save(session)
+
+        # 创建邮箱密码认证身份
+        identity = AuthIdentity(
+            provider=AuthProviderType.EMAIL_PASSWORD,
+            identifier=email,
+            credential=Password.hash(password),
+            is_primary=True,
+            is_verified=True,
+            user_id=admin.id,
+        )
+        await identity.save(session)
+
         return admin
 
     @staticmethod
     async def create_banned(
         session: AsyncSession,
         group_id: UUID,
-        email: str | None = None
+        email: str | None = None,
     ) -> User:
         """
         创建被封禁用户
@@ -129,8 +152,7 @@ class UserFactory:
         banned_user = User(
             email=email,
             nickname=f"封禁用户 {email}",
-            password=Password.hash("banned_password"),
-            status=False,  # 封禁状态
+            status=UserStatus.ADMIN_BANNED,
             storage=0,
             score=0,
             group_id=group_id,
@@ -138,6 +160,18 @@ class UserFactory:
         )
 
         banned_user = await banned_user.save(session)
+
+        # 创建邮箱密码认证身份
+        identity = AuthIdentity(
+            provider=AuthProviderType.EMAIL_PASSWORD,
+            identifier=email,
+            credential=Password.hash("banned_password"),
+            is_primary=True,
+            is_verified=True,
+            user_id=banned_user.id,
+        )
+        await identity.save(session)
+
         return banned_user
 
     @staticmethod
@@ -145,7 +179,7 @@ class UserFactory:
         session: AsyncSession,
         group_id: UUID,
         storage_bytes: int,
-        email: str | None = None
+        email: str | None = None,
     ) -> User:
         """
         创建已使用指定存储空间的用户
@@ -167,8 +201,7 @@ class UserFactory:
         user = User(
             email=email,
             nickname=email,
-            password=Password.hash("password123"),
-            status=True,
+            status=UserStatus.ACTIVE,
             storage=storage_bytes,
             score=100,
             group_id=group_id,
@@ -176,4 +209,16 @@ class UserFactory:
         )
 
         user = await user.save(session)
+
+        # 创建邮箱密码认证身份
+        identity = AuthIdentity(
+            provider=AuthProviderType.EMAIL_PASSWORD,
+            identifier=email,
+            credential=Password.hash("password123"),
+            is_primary=True,
+            is_verified=True,
+            user_id=user.id,
+        )
+        await identity.save(session)
+
         return user
