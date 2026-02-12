@@ -10,6 +10,7 @@ from .download import download_router
 from .file import router as file_router
 from .object import object_router
 from .share import share_router
+from .trash import trash_router
 from .site import site_router
 from .slave import slave_router
 from .user import user_router
@@ -29,6 +30,7 @@ if appmeta.mode == "master":
     router.include_router(object_router)
     router.include_router(share_router)
     router.include_router(site_router)
+    router.include_router(trash_router)
     router.include_router(user_router)
     router.include_router(vas_router)
     router.include_router(webdav_router)

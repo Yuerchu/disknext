@@ -1,7 +1,10 @@
 from fastapi import APIRouter
 
 from middleware.dependencies import SessionDep
-from sqlmodels import ResponseBase, Setting, SettingsType, SiteConfigResponse
+from sqlmodels import (
+    ResponseBase, Setting, SettingsType, SiteConfigResponse,
+    ThemePreset, ThemePresetResponse, ThemePresetListResponse,
+)
 from sqlmodels.setting import CaptchaType
 from utils import http_exceptions
 
@@ -40,6 +43,22 @@ def router_site_captcha():
         str: A Base64 encoded string of the captcha image.
     """
     http_exceptions.raise_not_implemented()
+
+@site_router.get(
+    path='/themes',
+    summary='获取主题预设列表',
+)
+async def router_site_themes(session: SessionDep) -> ThemePresetListResponse:
+    """
+    获取所有主题预设列表
+
+    无需认证，前端初始化时调用。
+    """
+    presets: list[ThemePreset] = await ThemePreset.get(session, fetch_mode="all")
+    return ThemePresetListResponse(
+        themes=[ThemePresetResponse.from_preset(p) for p in presets]
+    )
+
 
 @site_router.get(
     path='/config',

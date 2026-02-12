@@ -3,13 +3,13 @@ from typing import Literal
 
 from loguru import logger
 from argon2 import PasswordHasher
-from argon2.exceptions import VerifyMismatchError
+from argon2.exceptions import VerifyMismatchError, VerificationError
 from enum import StrEnum
 import pyotp
 from itsdangerous import URLSafeTimedSerializer
 from pydantic import BaseModel, Field
 
-from utils.JWT import SECRET_KEY
+from utils import JWT
 from utils.conf import appmeta
 
 # FIRST RECOMMENDED option per RFC 9106.
@@ -57,7 +57,7 @@ class TwoFactorResponse(TwoFactorBase):
 class TwoFactorVerifyRequest(TwoFactorBase):
     """两步验证-验证请求 DTO"""
 
-    code: int = Field(..., ge=100000, le=999999)
+    code: str = Field(..., min_length=6, max_length=6, pattern=r'^\d{6}$')
     """6 位验证码"""
 
 class Password:
@@ -126,6 +126,9 @@ class Password:
             return PasswordStatus.VALID
         except VerifyMismatchError:
             return PasswordStatus.INVALID
+        except VerificationError:
+            logger.warning("密码哈希格式无效，无法解码，可能需要删库重建。")
+            return PasswordStatus.INVALID
     
     @staticmethod
     async def generate_totp(
@@ -138,7 +141,7 @@ class Password:
         :return: 包含 TOTP 密钥和 URI 的元组
         """
 
-        serializer = URLSafeTimedSerializer(SECRET_KEY)
+        serializer = URLSafeTimedSerializer(JWT.SECRET_KEY)
 
         secret = pyotp.random_base32()
 
@@ -159,7 +162,7 @@ class Password:
     @staticmethod
     def verify_totp(
             secret: str,
-            code: int,
+            code: str,
             *args, **kwargs
     ) -> PasswordStatus:
         """
@@ -173,7 +176,7 @@ class Password:
         :return: 验证是否成功
         """
         totp = pyotp.TOTP(secret)
-        if totp.verify(otp=str(code), *args, **kwargs):
+        if totp.verify(otp=code, *args, **kwargs):
             return PasswordStatus.VALID
         else:
             return PasswordStatus.INVALID

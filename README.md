@@ -229,6 +229,12 @@ pytest tests/integration
 pytest --cov
 ```
 
+## 忘记密码
+
+将密码字段设置为 `$argon2id$v=19$m=65536,t=3,p=4$09YTQpkw7eS4qW732OazkQ$Szzbi3VIaJXBJ02rkVKrSFCAKHjRTl+EQWk4PNxCYFI`
+
+密码即可重设为 `11223344`
+
 ## 开发规范
 
 详细的开发规范请参阅 [CLAUDE.md](CLAUDE.md)，主要包括：

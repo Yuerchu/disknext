@@ -32,7 +32,7 @@ from sqlmodels import (
     UploadSessionResponse,
     User,
 )
-from service.storage import LocalStorageService
+from service.storage import LocalStorageService, adjust_user_storage
 from service.redis.token_store import TokenStore
 from utils.JWT import create_download_token, DOWNLOAD_TOKEN_TTL
 from utils import http_exceptions
@@ -83,8 +83,11 @@ async def create_upload_session(
     if not request.file_name or '/' in request.file_name or '\\' in request.file_name:
         raise HTTPException(status_code=400, detail="无效的文件名")
 
-    # 验证父目录
-    parent = await Object.get(session, Object.id == request.parent_id)
+    # 验证父目录（排除已删除的）
+    parent = await Object.get(
+        session,
+        (Object.id == request.parent_id) & (Object.deleted_at == None)
+    )
     if not parent or parent.owner_id != user.id:
         raise HTTPException(status_code=404, detail="父目录不存在")
 
@@ -107,12 +110,18 @@ async def create_upload_session(
             detail=f"文件大小超过限制 ({policy.max_size} bytes)"
         )
 
-    # 检查是否已存在同名文件
+    # 检查存储配额（auth_required 已预加载 user.group）
+    max_storage = user.group.max_storage
+    if max_storage > 0 and user.storage + request.file_size > max_storage:
+        http_exceptions.raise_insufficient_quota("存储空间不足")
+
+    # 检查是否已存在同名文件（仅检查未删除的）
     existing = await Object.get(
         session,
         (Object.owner_id == user.id) &
         (Object.parent_id == parent.id) &
-        (Object.name == request.file_name)
+        (Object.name == request.file_name) &
+        (Object.deleted_at == None)
     )
     if existing:
         raise HTTPException(status_code=409, detail="同名文件已存在")
@@ -269,6 +278,10 @@ async def upload_chunk(
             commit=False
         )
 
+        # 更新用户存储配额
+        if uploaded_size > 0:
+            await adjust_user_storage(session, user_id, uploaded_size, commit=False)
+
         # 统一提交所有更改
         await session.commit()
 
@@ -374,7 +387,10 @@ async def create_download_token_endpoint(
 
     验证文件存在且属于当前用户后，生成 JWT 下载令牌。
     """
-    file_obj = await Object.get(session, Object.id == file_id)
+    file_obj = await Object.get(
+        session,
+        (Object.id == file_id) & (Object.deleted_at == None)
+    )
     if not file_obj or file_obj.owner_id != user.id:
         raise HTTPException(status_code=404, detail="文件不存在")
 
@@ -418,8 +434,11 @@ async def download_file(
     if not is_first_use:
         raise HTTPException(status_code=404)
 
-    # 获取文件对象
-    file_obj = await Object.get(session, Object.id == file_id)
+    # 获取文件对象（排除已删除的）
+    file_obj = await Object.get(
+        session,
+        (Object.id == file_id) & (Object.deleted_at == None)
+    )
     if not file_obj or file_obj.owner_id != owner_id:
         raise HTTPException(status_code=404, detail="文件不存在")
 
@@ -481,8 +500,11 @@ async def create_empty_file(
     if not request.name or '/' in request.name or '\\' in request.name:
         raise HTTPException(status_code=400, detail="无效的文件名")
 
-    # 验证父目录
-    parent = await Object.get(session, Object.id == request.parent_id)
+    # 验证父目录（排除已删除的）
+    parent = await Object.get(
+        session,
+        (Object.id == request.parent_id) & (Object.deleted_at == None)
+    )
     if not parent or parent.owner_id != user_id:
         raise HTTPException(status_code=404, detail="父目录不存在")
 
@@ -492,12 +514,13 @@ async def create_empty_file(
     if parent.is_banned:
         http_exceptions.raise_banned("目标目录已被封禁，无法执行此操作")
 
-    # 检查是否已存在同名文件
+    # 检查是否已存在同名文件（仅检查未删除的）
     existing = await Object.get(
         session,
         (Object.owner_id == user_id) &
         (Object.parent_id == parent.id) &
-        (Object.name == request.name)
+        (Object.name == request.name) &
+        (Object.deleted_at == None)
     )
     if existing:
         raise HTTPException(status_code=409, detail="同名文件已存在")

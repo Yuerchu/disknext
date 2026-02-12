@@ -10,7 +10,6 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger as l
-from sqlmodel.ext.asyncio.session import AsyncSession
 
 from middleware.auth import auth_required
 from middleware.dependencies import SessionDep
@@ -30,7 +29,12 @@ from sqlmodels import (
     ResponseBase,
     User,
 )
-from service.storage import LocalStorageService
+from service.storage import (
+    LocalStorageService,
+    adjust_user_storage,
+    copy_object_recursive,
+)
+from service.storage.object import soft_delete_objects
 from utils import http_exceptions
 
 object_router = APIRouter(
@@ -38,155 +42,17 @@ object_router = APIRouter(
     tags=["object"]
 )
 
-
-async def _delete_object_recursive(
-    session: AsyncSession,
-    obj: Object,
-    user_id: UUID,
-) -> int:
-    """
-    递归删除对象（软删除）
-
-    对于文件：
-    - 减少 PhysicalFile 引用计数
-    - 只有引用计数为0时才移动物理文件到回收站
-
-    对于目录：
-    - 递归处理所有子对象
-
-    :param session: 数据库会话
-    :param obj: 要删除的对象
-    :param user_id: 用户UUID
-    :return: 删除的对象数量
-    """
-    deleted_count = 0
-
-    # 在任何数据库操作前保存所有需要的属性，避免 commit 后对象过期导致懒加载失败
-    obj_id = obj.id
-    obj_name = obj.name
-    obj_is_folder = obj.is_folder
-    obj_is_file = obj.is_file
-    obj_physical_file_id = obj.physical_file_id
-
-    if obj_is_folder:
-        # 递归删除子对象
-        children = await Object.get_children(session, user_id, obj_id)
-        for child in children:
-            deleted_count += await _delete_object_recursive(session, child, user_id)
-
-    # 如果是文件，处理物理文件引用
-    if obj_is_file and obj_physical_file_id:
-        physical_file = await PhysicalFile.get(session, PhysicalFile.id == obj_physical_file_id)
-        if physical_file:
-            # 减少引用计数
-            new_count = physical_file.decrement_reference()
-
-            if physical_file.can_be_deleted:
-                # 引用计数为0，移动物理文件到回收站
-                policy = await Policy.get(session, Policy.id == physical_file.policy_id)
-                if policy and policy.type == PolicyType.LOCAL:
-                    try:
-                        storage_service = LocalStorageService(policy)
-                        await storage_service.move_to_trash(
-                            source_path=physical_file.storage_path,
-                            user_id=user_id,
-                            object_id=obj_id,
-                        )
-                        l.debug(f"物理文件已移动到回收站: {obj_name}")
-                    except Exception as e:
-                        l.warning(f"移动物理文件到回收站失败: {obj_name}, 错误: {e}")
-
-                # 删除 PhysicalFile 记录
-                await PhysicalFile.delete(session, physical_file)
-                l.debug(f"物理文件记录已删除: {physical_file.storage_path}")
-            else:
-                # 还有其他引用，只更新引用计数
-                await physical_file.save(session)
-                l.debug(f"物理文件仍有 {new_count} 个引用，不删除: {physical_file.storage_path}")
-
-    # 使用条件删除，避免访问过期的 obj 实例
-    await Object.delete(session, condition=Object.id == obj_id)
-    deleted_count += 1
-
-    return deleted_count
-
-
-async def _copy_object_recursive(
-    session: AsyncSession,
-    src: Object,
-    dst_parent_id: UUID,
-    user_id: UUID,
-) -> tuple[int, list[UUID]]:
-    """
-    递归复制对象
-
-    对于文件：
-    - 增加 PhysicalFile 引用计数
-    - 创建新的 Object 记录指向同一 PhysicalFile
-
-    对于目录：
-    - 创建新目录
-    - 递归复制所有子对象
-
-    :param session: 数据库会话
-    :param src: 源对象
-    :param dst_parent_id: 目标父目录UUID
-    :param user_id: 用户UUID
-    :return: (复制数量, 新对象UUID列表)
-    """
-    copied_count = 0
-    new_ids: list[UUID] = []
-
-    # 在 save() 之前保存需要的属性值，避免 commit 后对象过期导致懒加载失败
-    src_is_folder = src.is_folder
-    src_id = src.id
-
-    # 创建新的 Object 记录
-    new_obj = Object(
-        name=src.name,
-        type=src.type,
-        size=src.size,
-        password=src.password,
-        parent_id=dst_parent_id,
-        owner_id=user_id,
-        policy_id=src.policy_id,
-        physical_file_id=src.physical_file_id,
-    )
-
-    # 如果是文件，增加物理文件引用计数
-    if src.is_file and src.physical_file_id:
-        physical_file = await PhysicalFile.get(session, PhysicalFile.id == src.physical_file_id)
-        if physical_file:
-            physical_file.increment_reference()
-            await physical_file.save(session)
-
-    new_obj = await new_obj.save(session)
-    copied_count += 1
-    new_ids.append(new_obj.id)
-
-    # 如果是目录，递归复制子对象
-    if src_is_folder:
-        children = await Object.get_children(session, user_id, src_id)
-        for child in children:
-            child_count, child_ids = await _copy_object_recursive(
-                session, child, new_obj.id, user_id
-            )
-            copied_count += child_count
-            new_ids.extend(child_ids)
-
-    return copied_count, new_ids
-
-
 @object_router.post(
     path='/',
     summary='创建空白文件',
     description='在指定目录下创建空白文件。',
+    status_code=204,
 )
 async def router_object_create(
     session: SessionDep,
     user: Annotated[User, Depends(auth_required)],
     request: CreateFileRequest,
-) -> ResponseBase:
+) -> None:
     """
     创建空白文件端点
 
@@ -201,8 +67,11 @@ async def router_object_create(
     if not request.name or '/' in request.name or '\\' in request.name:
         raise HTTPException(status_code=400, detail="无效的文件名")
 
-    # 验证父目录
-    parent = await Object.get(session, Object.id == request.parent_id)
+    # 验证父目录（排除已删除的）
+    parent = await Object.get(
+        session,
+        (Object.id == request.parent_id) & (Object.deleted_at == None)
+    )
     if not parent or parent.owner_id != user_id:
         raise HTTPException(status_code=404, detail="父目录不存在")
 
@@ -212,12 +81,13 @@ async def router_object_create(
     if parent.is_banned:
         http_exceptions.raise_banned("目标目录已被封禁，无法执行此操作")
 
-    # 检查是否已存在同名文件
+    # 检查是否已存在同名文件（仅检查未删除的）
     existing = await Object.get(
         session,
         (Object.owner_id == user_id) &
         (Object.parent_id == parent.id) &
-        (Object.name == request.name)
+        (Object.name == request.name) &
+        (Object.deleted_at == None)
     )
     if existing:
         raise HTTPException(status_code=409, detail="同名文件已存在")
@@ -265,40 +135,41 @@ async def router_object_create(
 
     l.info(f"创建空白文件: {request.name}")
 
-    return ResponseBase()
-
 
 @object_router.delete(
     path='/',
     summary='删除对象',
     description='删除一个或多个对象（文件或目录），文件会移动到用户回收站。',
+    status_code=204,
 )
 async def router_object_delete(
     session: SessionDep,
     user: Annotated[User, Depends(auth_required)],
     request: ObjectDeleteRequest,
-) -> ResponseBase:
+) -> None:
     """
-    删除对象端点（软删除）
+    删除对象端点（软删除到回收站）
 
     流程：
     1. 验证对象存在且属于当前用户
-    2. 对于文件，减少物理文件引用计数
-    3. 如果引用计数为0，移动物理文件到 .trash 目录
-    4. 对于目录，递归处理子对象
-    5. 从数据库中删除记录
+    2. 设置 deleted_at 时间戳
+    3. 保存原 parent_id 到 deleted_original_parent_id
+    4. 将 parent_id 置 NULL 脱离文件树
+    5. 子对象和物理文件不做任何变更
 
     :param session: 数据库会话
     :param user: 当前登录用户
     :param request: 删除请求（包含待删除对象的UUID列表）
     :return: 删除结果
     """
-    # 存储 user.id，避免后续 save() 导致 user 过期后无法访问
     user_id = user.id
-    deleted_count = 0
+    objects_to_delete: list[Object] = []
 
     for obj_id in request.ids:
-        obj = await Object.get(session, Object.id == obj_id)
+        obj = await Object.get(
+            session,
+            (Object.id == obj_id) & (Object.deleted_at == None)
+        )
         if not obj or obj.owner_id != user_id:
             continue
 
@@ -307,30 +178,24 @@ async def router_object_delete(
             l.warning(f"尝试删除根目录被阻止: {obj.name}")
             continue
 
-        # 递归删除（包含引用计数逻辑）
-        count = await _delete_object_recursive(session, obj, user_id)
-        deleted_count += count
+        objects_to_delete.append(obj)
 
-    l.info(f"用户 {user_id} 删除了 {deleted_count} 个对象")
-
-    return ResponseBase(
-        data={
-            "deleted": deleted_count,
-            "total": len(request.ids),
-        }
-    )
+    if objects_to_delete:
+        deleted_count = await soft_delete_objects(session, objects_to_delete)
+        l.info(f"用户 {user_id} 软删除了 {deleted_count} 个对象到回收站")
 
 
 @object_router.patch(
     path='/',
     summary='移动对象',
     description='移动一个或多个对象到目标目录',
+    status_code=204,
 )
 async def router_object_move(
     session: SessionDep,
     user: Annotated[User, Depends(auth_required)],
     request: ObjectMoveRequest,
-) -> ResponseBase:
+) -> None:
     """
     移动对象端点
 
@@ -342,8 +207,11 @@ async def router_object_move(
     # 存储 user.id，避免后续 save() 导致 user 过期后无法访问
     user_id = user.id
 
-    # 验证目标目录
-    dst = await Object.get(session, Object.id == request.dst_id)
+    # 验证目标目录（排除已删除的）
+    dst = await Object.get(
+        session,
+        (Object.id == request.dst_id) & (Object.deleted_at == None)
+    )
     if not dst or dst.owner_id != user_id:
         raise HTTPException(status_code=404, detail="目标目录不存在")
 
@@ -360,7 +228,10 @@ async def router_object_move(
     moved_count = 0
 
     for src_id in request.src_ids:
-        src = await Object.get(session, Object.id == src_id)
+        src = await Object.get(
+            session,
+            (Object.id == src_id) & (Object.deleted_at == None)
+        )
         if not src or src.owner_id != user_id:
             continue
 
@@ -388,12 +259,13 @@ async def router_object_move(
             if is_cycle:
                 continue
 
-        # 检查目标目录下是否存在同名对象
+        # 检查目标目录下是否存在同名对象（仅检查未删除的）
         existing = await Object.get(
             session,
             (Object.owner_id == user_id) &
             (Object.parent_id == dst_id) &
-            (Object.name == src.name)
+            (Object.name == src.name) &
+            (Object.deleted_at == None)
         )
         if existing:
             continue  # 跳过重名对象
@@ -405,24 +277,18 @@ async def router_object_move(
     # 统一提交所有更改
     await session.commit()
 
-    return ResponseBase(
-        data={
-            "moved": moved_count,
-            "total": len(request.src_ids),
-        }
-    )
-
 
 @object_router.post(
     path='/copy',
     summary='复制对象',
     description='复制一个或多个对象到目标目录。文件复制仅增加物理文件引用计数，不复制物理文件。',
+    status_code=204,
 )
 async def router_object_copy(
     session: SessionDep,
     user: Annotated[User, Depends(auth_required)],
     request: ObjectCopyRequest,
-) -> ResponseBase:
+) -> None:
     """
     复制对象端点
 
@@ -443,8 +309,11 @@ async def router_object_copy(
     # 存储 user.id，避免后续 save() 导致 user 过期后无法访问
     user_id = user.id
 
-    # 验证目标目录
-    dst = await Object.get(session, Object.id == request.dst_id)
+    # 验证目标目录（排除已删除的）
+    dst = await Object.get(
+        session,
+        (Object.id == request.dst_id) & (Object.deleted_at == None)
+    )
     if not dst or dst.owner_id != user_id:
         raise HTTPException(status_code=404, detail="目标目录不存在")
 
@@ -456,20 +325,25 @@ async def router_object_copy(
 
     copied_count = 0
     new_ids: list[UUID] = []
+    total_copied_size = 0
 
     for src_id in request.src_ids:
-        src = await Object.get(session, Object.id == src_id)
+        src = await Object.get(
+            session,
+            (Object.id == src_id) & (Object.deleted_at == None)
+        )
         if not src or src.owner_id != user_id:
             continue
 
         if src.is_banned:
-            continue
+            http_exceptions.raise_banned("源对象已被封禁，无法执行此操作")
 
         # 不能复制根目录
         if src.parent_id is None:
-            continue
+            http_exceptions.raise_banned("无法复制根目录")
 
         # 不能复制到自身
+        # [TODO] 视为创建副本
         if src.id == dst.id:
             continue
 
@@ -485,42 +359,42 @@ async def router_object_copy(
             if is_cycle:
                 continue
 
-        # 检查目标目录下是否存在同名对象
+        # 检查目标目录下是否存在同名对象（仅检查未删除的）
         existing = await Object.get(
             session,
             (Object.owner_id == user_id) &
             (Object.parent_id == dst.id) &
-            (Object.name == src.name)
+            (Object.name == src.name) &
+            (Object.deleted_at == None)
         )
         if existing:
-            continue  # 跳过重名对象
+            # [TODO] 应当询问用户是否覆盖、跳过或创建副本
+            continue
 
         # 递归复制
-        count, ids = await _copy_object_recursive(session, src, dst.id, user_id)
+        count, ids, copied_size = await copy_object_recursive(session, src, dst.id, user_id)
         copied_count += count
         new_ids.extend(ids)
+        total_copied_size += copied_size
+
+    # 更新用户存储配额
+    if total_copied_size > 0:
+        await adjust_user_storage(session, user_id, total_copied_size)
 
     l.info(f"用户 {user_id} 复制了 {copied_count} 个对象")
-
-    return ResponseBase(
-        data={
-            "copied": copied_count,
-            "total": len(request.src_ids),
-            "new_ids": new_ids,
-        }
-    )
 
 
 @object_router.post(
     path='/rename',
     summary='重命名对象',
     description='重命名对象（文件或目录）。',
+    status_code=204,
 )
 async def router_object_rename(
     session: SessionDep,
     user: Annotated[User, Depends(auth_required)],
     request: ObjectRenameRequest,
-) -> ResponseBase:
+) -> None:
     """
     重命名对象端点
 
@@ -539,8 +413,11 @@ async def router_object_rename(
     # 存储 user.id，避免后续 save() 导致 user 过期后无法访问
     user_id = user.id
 
-    # 验证对象存在
-    obj = await Object.get(session, Object.id == request.id)
+    # 验证对象存在（排除已删除的）
+    obj = await Object.get(
+        session,
+        (Object.id == request.id) & (Object.deleted_at == None)
+    )
     if not obj:
         raise HTTPException(status_code=404, detail="对象不存在")
 
@@ -566,12 +443,13 @@ async def router_object_rename(
     if obj.name == new_name:
         return ResponseBase(data={"success": True})
 
-    # 检查同目录下是否存在同名对象
+    # 检查同目录下是否存在同名对象（仅检查未删除的）
     existing = await Object.get(
         session,
         (Object.owner_id == user_id) &
         (Object.parent_id == obj.parent_id) &
-        (Object.name == new_name)
+        (Object.name == new_name) &
+        (Object.deleted_at == None)
     )
     if existing:
         raise HTTPException(status_code=409, detail="同名对象已存在")
@@ -581,8 +459,6 @@ async def router_object_rename(
     await obj.save(session)
 
     l.info(f"用户 {user_id} 将对象 {obj.id} 重命名为 {new_name}")
-
-    return ResponseBase(data={"success": True})
 
 
 @object_router.get(
@@ -603,7 +479,10 @@ async def router_object_property(
     :param id: 对象UUID
     :return: 对象基本属性
     """
-    obj = await Object.get(session, Object.id == id)
+    obj = await Object.get(
+        session,
+        (Object.id == id) & (Object.deleted_at == None)
+    )
     if not obj:
         raise HTTPException(status_code=404, detail="对象不存在")
 
@@ -641,7 +520,7 @@ async def router_object_property_detail(
     """
     obj = await Object.get(
         session,
-        Object.id == id,
+        (Object.id == id) & (Object.deleted_at == None),
         load=Object.file_metadata,
     )
     if not obj:

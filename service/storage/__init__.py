@@ -18,3 +18,11 @@ from .exceptions import (
 )
 from .local_storage import LocalStorageService
 from .naming_rule import NamingContext, NamingRuleParser
+from .object import (
+    adjust_user_storage,
+    copy_object_recursive,
+    delete_object_recursive,
+    permanently_delete_objects,
+    restore_objects,
+    soft_delete_objects,
+)

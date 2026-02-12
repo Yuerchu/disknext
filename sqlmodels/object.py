@@ -5,7 +5,7 @@ from uuid import UUID
 
 from enum import StrEnum
 from sqlalchemy import BigInteger
-from sqlmodel import Field, Relationship, UniqueConstraint, CheckConstraint, Index, text
+from sqlmodel import Field, Relationship, CheckConstraint, Index, text
 
 from .base import SQLModelBase
 from .mixin import UUIDTableBaseMixin
@@ -195,8 +195,13 @@ class Object(ObjectBase, UUIDTableBaseMixin):
     """
 
     __table_args__ = (
-        # 同一父目录下名称唯一（包括 parent_id 为 NULL 的情况）
-        UniqueConstraint("owner_id", "parent_id", "name", name="uq_object_parent_name"),
+        # 同一父目录下名称唯一（仅对未删除记录生效）
+        Index(
+            "uq_object_parent_name_active",
+            "owner_id", "parent_id", "name",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
         # 名称不能包含斜杠（根目录 parent_id IS NULL 除外，因为根目录 name="/"）
         CheckConstraint(
             "parent_id IS NULL OR (name NOT LIKE '%/%' AND name NOT LIKE '%\\%')",
@@ -207,6 +212,8 @@ class Object(ObjectBase, UUIDTableBaseMixin):
         Index("ix_object_parent_updated", "parent_id", "updated_at"),
         Index("ix_object_owner_type", "owner_id", "type"),
         Index("ix_object_owner_size", "owner_id", "size"),
+        # 回收站查询索引
+        Index("ix_object_owner_deleted", "owner_id", "deleted_at"),
     )
 
     # ==================== 基础字段 ====================
@@ -280,6 +287,18 @@ class Object(ObjectBase, UUIDTableBaseMixin):
     ban_reason: str | None = Field(default=None, max_length=500)
     """封禁原因"""
 
+    # ==================== 软删除相关字段 ====================
+
+    deleted_at: datetime | None = Field(default=None, index=True)
+    """软删除时间戳，NULL 表示未删除"""
+
+    deleted_original_parent_id: UUID | None = Field(
+        default=None,
+        foreign_key="object.id",
+        ondelete="SET NULL",
+    )
+    """软删除前的原始父目录UUID（恢复时用于还原位置）"""
+
     # ==================== 关系 ====================
 
     owner: "User" = Relationship(
@@ -299,13 +318,19 @@ class Object(ObjectBase, UUIDTableBaseMixin):
     # 自引用关系
     parent: "Object" = Relationship(
         back_populates="children",
-        sa_relationship_kwargs={"remote_side": "Object.id"},
+        sa_relationship_kwargs={
+            "remote_side": "Object.id",
+            "foreign_keys": "[Object.parent_id]",
+        },
     )
     """父目录"""
 
     children: list["Object"] = Relationship(
         back_populates="parent",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+        sa_relationship_kwargs={
+            "cascade": "all, delete-orphan",
+            "foreign_keys": "[Object.parent_id]",
+        },
     )
     """子对象（文件和子目录）"""
 
@@ -367,7 +392,7 @@ class Object(ObjectBase, UUIDTableBaseMixin):
         """
         return await cls.get(
             session,
-            (cls.owner_id == user_id) & (cls.parent_id == None)
+            (cls.owner_id == user_id) & (cls.parent_id == None) & (cls.deleted_at == None)
         )
 
     @classmethod
@@ -416,7 +441,8 @@ class Object(ObjectBase, UUIDTableBaseMixin):
                 session,
                 (cls.owner_id == user_id) &
                 (cls.parent_id == current.id) &
-                (cls.name == part)
+                (cls.name == part) &
+                (cls.deleted_at == None)
             )
 
         return current
@@ -424,7 +450,23 @@ class Object(ObjectBase, UUIDTableBaseMixin):
     @classmethod
     async def get_children(cls, session, user_id: UUID, parent_id: UUID) -> list["Object"]:
         """
-        获取目录下的所有子对象
+        获取目录下的所有子对象（不包含已软删除的）
+
+        :param session: 数据库会话
+        :param user_id: 用户UUID
+        :param parent_id: 父目录UUID
+        :return: 子对象列表
+        """
+        return await cls.get(
+            session,
+            (cls.owner_id == user_id) & (cls.parent_id == parent_id) & (cls.deleted_at == None),
+            fetch_mode="all"
+        )
+
+    @classmethod
+    async def get_all_children(cls, session, user_id: UUID, parent_id: UUID) -> list["Object"]:
+        """
+        获取目录下的所有子对象（包含已软删除的，用于永久删除场景）
 
         :param session: 数据库会话
         :param user_id: 用户UUID
@@ -434,6 +476,24 @@ class Object(ObjectBase, UUIDTableBaseMixin):
         return await cls.get(
             session,
             (cls.owner_id == user_id) & (cls.parent_id == parent_id),
+            fetch_mode="all"
+        )
+
+    @classmethod
+    async def get_trash_items(cls, session, user_id: UUID) -> list["Object"]:
+        """
+        获取用户回收站中的顶层对象
+
+        只返回被直接软删除的顶层对象（deleted_at 非 NULL），
+        不返回其子对象（子对象的 deleted_at 为 NULL，通过 parent 关系间接处于回收站中）。
+
+        :param session: 数据库会话
+        :param user_id: 用户UUID
+        :return: 回收站顶层对象列表
+        """
+        return await cls.get(
+            session,
+            (cls.owner_id == user_id) & (cls.deleted_at != None),
             fetch_mode="all"
         )
 
@@ -805,3 +865,41 @@ class AdminFileListResponse(SQLModelBase):
 
     total: int = 0
     """总数"""
+
+
+# ==================== 回收站相关 DTO ====================
+
+class TrashItemResponse(SQLModelBase):
+    """回收站对象响应 DTO"""
+
+    id: UUID
+    """对象UUID"""
+
+    name: str
+    """对象名称"""
+
+    type: ObjectType
+    """对象类型"""
+
+    size: int
+    """文件大小（字节）"""
+
+    deleted_at: datetime
+    """删除时间"""
+
+    original_parent_id: UUID | None
+    """原始父目录UUID"""
+
+
+class TrashRestoreRequest(SQLModelBase):
+    """恢复对象请求 DTO"""
+
+    ids: list[UUID]
+    """待恢复对象UUID列表"""
+
+
+class TrashDeleteRequest(SQLModelBase):
+    """永久删除对象请求 DTO"""
+
+    ids: list[UUID]
+    """待永久删除对象UUID列表"""

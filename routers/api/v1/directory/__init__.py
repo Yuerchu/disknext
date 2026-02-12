@@ -139,12 +139,13 @@ async def router_directory_get(
 @directory_router.post(
     path="/",
     summary="创建目录",
+    status_code=204,
 )
 async def router_directory_create(
         session: SessionDep,
         user: Annotated[User, Depends(auth_required)],
         request: DirectoryCreateRequest
-) -> ResponseBase:
+) -> None:
     """
     创建目录
 
@@ -162,8 +163,11 @@ async def router_directory_create(
     if "/" in name or "\\" in name:
         raise HTTPException(status_code=400, detail="目录名称不能包含斜杠")
 
-    # 通过 UUID 获取父目录
-    parent = await Object.get(session, Object.id == request.parent_id)
+    # 通过 UUID 获取父目录（排除已删除的）
+    parent = await Object.get(
+        session,
+        (Object.id == request.parent_id) & (Object.deleted_at == None)
+    )
     if not parent or parent.owner_id != user.id:
         raise HTTPException(status_code=404, detail="父目录不存在")
 
@@ -173,12 +177,13 @@ async def router_directory_create(
     if parent.is_banned:
         http_exceptions.raise_banned("目标目录已被封禁，无法执行此操作")
 
-    # 检查是否已存在同名对象
+    # 检查是否已存在同名对象（仅检查未删除的）
     existing = await Object.get(
         session,
         (Object.owner_id == user.id) &
         (Object.parent_id == parent.id) &
-        (Object.name == name)
+        (Object.name == name) &
+        (Object.deleted_at == None)
     )
     if existing:
         raise HTTPException(status_code=409, detail="同名文件或目录已存在")
@@ -193,14 +198,4 @@ async def router_directory_create(
         parent_id=parent_id,
         policy_id=policy_id,
     )
-    new_folder_id = new_folder.id  # 在 save 前保存 UUID
-    new_folder_name = new_folder.name
     await new_folder.save(session)
-
-    return ResponseBase(
-        data={
-            "id": new_folder_id,
-            "name": new_folder_name,
-            "parent_id": parent_id,
-        }
-    )

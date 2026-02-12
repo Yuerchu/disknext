@@ -57,7 +57,7 @@ class CaptchaScene(StrEnum):
 async def verify_captcha_if_needed(
         session: AsyncSession,
         scene: CaptchaScene,
-        captcha_code: str | None,
+        captcha_code: str,
 ) -> None:
     """
     通用验证码校验：查询设置判断是否需要，需要则校验。
@@ -81,23 +81,19 @@ async def verify_captcha_if_needed(
     if not scene_setting or scene_setting.value != "1":
         return
 
-    # 2. 需要但未提供
-    if not captcha_code:
-        http_exceptions.raise_bad_request(detail="请完成验证码验证")
-
-    # 3. 查询验证码类型和密钥
+    # 2. 查询验证码类型和密钥
     captcha_settings: list[Setting] = await Setting.get(
         session, Setting.type == SettingsType.CAPTCHA, fetch_mode="all",
     )
     s: dict[str, str | None] = {item.name: item.value for item in captcha_settings}
     captcha_type = CaptchaType(s.get("captcha_type") or "default")
 
-    # 4. DEFAULT 图片验证码尚未实现，跳过
+    # 3. DEFAULT 图片验证码尚未实现，跳过
     if captcha_type == CaptchaType.DEFAULT:
         l.warning("DEFAULT 图片验证码尚未实现，跳过验证")
         return
 
-    # 5. 选择验证器和密钥
+    # 4. 选择验证器和密钥
     if captcha_type == CaptchaType.GCAPTCHA:
         secret = s.get("captcha_ReCaptchaSecret")
         verifier: CaptchaBase = GCaptcha()
@@ -112,7 +108,7 @@ async def verify_captcha_if_needed(
         l.error(f"验证码密钥未配置: captcha_type={captcha_type}")
         http_exceptions.raise_internal_error()
 
-    # 6. 调用第三方 API 校验
+    # 5. 调用第三方 API 校验
     is_valid = await verifier.verify_captcha(
         CaptchaRequestBase(response=captcha_code, secret=secret)
     )

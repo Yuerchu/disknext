@@ -1,5 +1,5 @@
 from typing import Annotated, Literal
-from uuid import uuid4
+from uuid import UUID, uuid4
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query, HTTPException
@@ -9,11 +9,14 @@ from middleware.auth import auth_required
 from middleware.dependencies import SessionDep
 from sqlmodels import ResponseBase
 from sqlmodels.user import User
-from sqlmodels.share import Share, ShareCreateRequest, ShareResponse
-from sqlmodels.object import Object
+from sqlmodels.share import (
+    Share, ShareCreateRequest, CreateShareResponse, ShareResponse,
+    ShareDetailResponse, ShareOwnerInfo, ShareObjectItem,
+)
+from sqlmodels.object import Object, ObjectType
 from sqlmodels.mixin import ListResponse, TableViewRequest
 from utils import http_exceptions
-from utils.password.pwd import Password
+from utils.password.pwd import Password, PasswordStatus
 
 share_router = APIRouter(
     prefix='/share',
@@ -22,21 +25,97 @@ share_router = APIRouter(
 
 @share_router.get(
     path='/{id}',
-    summary='获取分享',
-    description='Get shared content by info type and ID.',
+    summary='获取分享详情',
+    description='Get share detail by share ID. No authentication required.',
 )
-def router_share_get(info: str, id: str) -> ResponseBase:
+async def router_share_get(
+    session: SessionDep,
+    id: UUID,
+    password: str | None = Query(default=None),
+) -> ShareDetailResponse:
     """
-    Get shared content by info type and ID.
-    
-    Args:
-        info (str): The type of information being shared.
-        id (str): The ID of the shared content.
-    
-    Returns:
-        dict: A dictionary containing shared content information.
+    获取分享详情
+
+    认证：无需登录
+
+    流程：
+    1. 通过分享ID查找分享
+    2. 检查过期、封禁状态
+    3. 验证提取码（如果有）
+    4. 返回分享详情（含文件树和分享者信息）
     """
-    http_exceptions.raise_not_implemented()
+    # 1. 查询分享（预加载 user 和 object）
+    share = await Share.get(
+        session, Share.id == id,
+        load=[Share.user, Share.object],
+    )
+    if not share:
+        http_exceptions.raise_not_found(detail="分享不存在或已被取消")
+
+    # 2. 检查过期
+    now = datetime.now()
+    if share.expires and share.expires < now:
+        http_exceptions.raise_not_found(detail="分享已过期")
+
+    # 3. 获取关联对象
+    obj = await share.awaitable_attrs.object
+    user = await share.awaitable_attrs.user
+
+    # 4. 检查封禁和软删除
+    if obj and obj.is_banned:
+        http_exceptions.raise_banned()
+    if obj and obj.deleted_at:
+        http_exceptions.raise_not_found(detail="分享关联的文件已被删除")
+
+    # 5. 检查密码
+    if share.password:
+        if not password:
+            http_exceptions.raise_precondition_required(detail="请输入提取码")
+        if Password.verify(share.password, password) != PasswordStatus.VALID:
+            http_exceptions.raise_forbidden(detail="提取码错误")
+
+    # 6. 加载子对象（目录分享）
+    children_items: list[ShareObjectItem] = []
+    if obj and obj.type == ObjectType.FOLDER:
+        children = await Object.get_children(session, obj.owner_id, obj.id)
+        children_items = [
+            ShareObjectItem(
+                id=child.id,
+                name=child.name,
+                type=child.type,
+                size=child.size,
+                created_at=child.created_at,
+                updated_at=child.updated_at,
+            )
+            for child in children
+        ]
+
+    # 7. 构建响应（在 save 之前，避免 MissingGreenlet）
+    response = ShareDetailResponse(
+        expires=share.expires,
+        preview_enabled=share.preview_enabled,
+        score=share.score,
+        created_at=share.created_at,
+        owner=ShareOwnerInfo(
+            nickname=user.nickname if user else None,
+            avatar=user.avatar if user else "default",
+        ),
+        object=ShareObjectItem(
+            id=obj.id,
+            name=obj.name,
+            type=obj.type,
+            size=obj.size,
+            created_at=obj.created_at,
+            updated_at=obj.updated_at,
+        ),
+        children=children_items,
+    )
+
+    # 8. 递增浏览次数（最后执行，避免 MissingGreenlet）
+    share.views += 1
+    await share.save(session, refresh=False)
+
+    return response
 
 @share_router.put(
     path='/download/{id}',
@@ -226,7 +305,7 @@ async def router_share_create(
     session: SessionDep,
     user: Annotated[User, Depends(auth_required)],
     request: ShareCreateRequest,
-) -> ShareResponse:
+) -> CreateShareResponse:
     """
     创建新分享
 
@@ -237,10 +316,13 @@ async def router_share_create(
     2. 生成随机分享码（uuid4）
     3. 如果有密码则加密存储
     4. 创建 Share 记录并保存
-    5. 返回分享信息
+    5. 返回分享 ID
     """
-    # 验证对象存在且属于当前用户
-    obj = await Object.get(session, Object.id == request.object_id)
+    # 验证对象存在且属于当前用户（排除已删除的）
+    obj = await Object.get(
+        session,
+        (Object.id == request.object_id) & (Object.deleted_at == None)
+    )
     if not obj or obj.owner_id != user.id:
         raise HTTPException(status_code=404, detail="对象不存在或无权限")
 
@@ -256,11 +338,12 @@ async def router_share_create(
         hashed_password = Password.hash(request.password)
 
     # 创建分享记录
+    user_id = user.id
     share = Share(
         code=code,
         password=hashed_password,
         object_id=request.object_id,
-        user_id=user.id,
+        user_id=user_id,
         expires=request.expires,
         remain_downloads=request.remain_downloads,
         preview_enabled=request.preview_enabled,
@@ -269,24 +352,9 @@ async def router_share_create(
     )
     share = await share.save(session)
 
-    l.info(f"用户 {user.id} 创建分享: {share.code}")
+    l.info(f"用户 {user_id} 创建分享: {share.code}")
 
-    # 返回响应
-    return ShareResponse(
-        id=share.id,
-        code=share.code,
-        object_id=share.object_id,
-        source_name=share.source_name,
-        views=share.views,
-        downloads=share.downloads,
-        remain_downloads=share.remain_downloads,
-        expires=share.expires,
-        preview_enabled=share.preview_enabled,
-        score=share.score,
-        created_at=share.created_at,
-        is_expired=share.expires is not None and share.expires < datetime.now(),
-        has_password=share.password is not None,
-    )
+    return CreateShareResponse(share_id=share.id)
 
 @share_router.get(
     path='/',

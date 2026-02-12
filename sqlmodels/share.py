@@ -6,7 +6,9 @@ from uuid import UUID
 from sqlmodel import Field, Relationship, text, UniqueConstraint, Index
 
 from .base import SQLModelBase
-from .mixin import TableBaseMixin
+from .model_base import ResponseBase
+from .mixin import UUIDTableBaseMixin
+from .object import ObjectType
 
 if TYPE_CHECKING:
     from .user import User
@@ -34,13 +36,13 @@ class ShareBase(SQLModelBase):
     preview_enabled: bool = True
     """是否允许预览"""
 
-    score: int = 0
+    score: int = Field(default=0, ge=0)
     """兑换此分享所需的积分"""
 
 
 # ==================== 数据库模型 ====================
 
-class Share(SQLModelBase, TableBaseMixin):
+class Share(SQLModelBase, UUIDTableBaseMixin):
     """分享模型"""
 
     __table_args__ = (
@@ -81,7 +83,7 @@ class Share(SQLModelBase, TableBaseMixin):
     source_name: str | None = Field(default=None, max_length=255)
     """源名称（冗余字段，便于展示）"""
 
-    score: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
+    score: int = Field(default=0, ge=0)
     """兑换此分享所需的积分"""
 
     # 外键
@@ -119,10 +121,17 @@ class ShareCreateRequest(ShareBase):
     pass
 
 
-class ShareResponse(SQLModelBase):
-    """分享响应 DTO"""
+class CreateShareResponse(ResponseBase):
+    """创建分享响应 DTO"""
 
-    id: int
+    share_id: UUID
+    """新创建的分享记录 ID"""
+
+
+class ShareResponse(SQLModelBase):
+    """查看分享响应 DTO"""
+
+    id: UUID
     """分享ID"""
 
     code: str
@@ -162,10 +171,67 @@ class ShareResponse(SQLModelBase):
     """是否有密码"""
 
 
+class ShareOwnerInfo(SQLModelBase):
+    """分享者公开信息 DTO"""
+
+    nickname: str | None
+    """昵称"""
+
+    avatar: str
+    """头像"""
+
+
+class ShareObjectItem(SQLModelBase):
+    """分享中的文件/文件夹信息 DTO"""
+
+    id: UUID
+    """对象UUID"""
+
+    name: str
+    """名称"""
+
+    type: ObjectType
+    """类型：file 或 folder"""
+
+    size: int
+    """文件大小（字节），目录为 0"""
+
+    created_at: datetime
+    """创建时间"""
+
+    updated_at: datetime
+    """修改时间"""
+
+
+class ShareDetailResponse(SQLModelBase):
+    """获取分享详情响应 DTO（面向访客，隐藏内部统计数据）"""
+
+    expires: datetime | None
+    """过期时间"""
+
+    preview_enabled: bool
+    """是否允许预览"""
+
+    score: int
+    """积分"""
+
+    created_at: datetime
+    """创建时间"""
+
+    owner: ShareOwnerInfo
+    """分享者信息"""
+
+    object: ShareObjectItem
+    """分享的根对象"""
+
+    children: list[ShareObjectItem]
+    """子文件/文件夹列表（仅目录分享有内容）"""
+
+
 class ShareListItemBase(SQLModelBase):
     """分享列表项基础字段"""
 
-    id: int
+    id: UUID
     """分享ID"""
 
     code: str

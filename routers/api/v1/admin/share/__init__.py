@@ -53,7 +53,7 @@ async def router_admin_get_share_list(
 )
 async def router_admin_get_share(
     session: SessionDep,
-    share_id: int,
+    share_id: UUID,
 ) -> ResponseBase:
     """
     获取分享详情。
@@ -99,7 +99,7 @@ async def router_admin_get_share(
 )
 async def router_admin_delete_share(
     session: SessionDep,
-    share_id: int,
+    share_id: UUID,
 ) -> ResponseBase:
     """
     删除分享。

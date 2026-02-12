@@ -198,9 +198,17 @@ async def router_admin_delete_users(
     :param request: 批量删除请求，包含待删除用户的 UUID 列表
     :return: 删除结果（已删除数 / 总请求数）
     """
-    deleted = 0
     for uid in request.ids:
-        user = await User.get(session, User.id == uid)
+        user = await User.get(session, User.id == uid, load=User.group)
+        
+        # 安全检查：默认管理员不允许被删除（通过 Setting 中的 default_admin_id 识别）
+        default_admin_setting = await Setting.get(
+            session,
+            (Setting.type == SettingsType.AUTH) & (Setting.name == "default_admin_id")
+        )
+        if user and default_admin_setting and default_admin_setting.value == str(uid):
+            raise HTTPException(status_code=403, detail=f"默认管理员不允许被删除")
+        
         if user:
             await User.delete(session, user)
             l.info(f"管理员删除了用户: {user.email}")
@@ -235,6 +243,7 @@ async def router_admin_calibrate_storage(
     previous_storage = user.storage
 
     # 计算实际存储量 - 使用 SQL 聚合
+    # [TODO] 不应这么计算，看看 SQLModel_Ext 库怎么解决
     from sqlmodel import select
     result = await session.execute(
         select(func.sum(Object.size), func.count(Object.id)).where(

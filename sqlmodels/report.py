@@ -1,5 +1,6 @@
 from enum import StrEnum
 from typing import TYPE_CHECKING
+from uuid import UUID
 
 from sqlmodel import Field, Relationship
 
@@ -24,7 +25,7 @@ class Report(SQLModelBase, TableBaseMixin):
     description: str | None = Field(default=None, max_length=255, description="补充描述")
     
     # 外键
-    share_id: int = Field(
+    share_id: UUID = Field(
         foreign_key="share.id",
         index=True,
         ondelete="CASCADE"

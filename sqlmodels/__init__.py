@@ -13,14 +13,21 @@ from .user import (
     UserPublic,
     UserResponse,
     UserSettingResponse,
+    UserThemeUpdateRequest,
     WebAuthnInfo,
+    UserTwoFactorResponse,
     # 管理员DTO
     UserAdminUpdateRequest,
     UserCalibrateResponse,
     UserAdminDetailResponse,
 )
 from .user_authn import AuthnResponse, UserAuthn
-from .color import ThemeResponse
+from .color import ChromaticColor, NeutralColor, ThemeColorsBase, BUILTIN_DEFAULT_COLORS
+from .theme_preset import (
+    ThemePreset, ThemePresetBase,
+    ThemePresetCreateRequest, ThemePresetUpdateRequest,
+    ThemePresetResponse, ThemePresetListResponse,
+)
 
 from .download import (
     Download,
@@ -68,6 +75,10 @@ from .object import (
     AdminFileResponse,
     AdminFileListResponse,
     FileBanRequest,
+    # 回收站DTO
+    TrashItemResponse,
+    TrashRestoreRequest,
+    TrashDeleteRequest,
 )
 from .physical_file import PhysicalFile, PhysicalFileBase
 from .uri import DiskNextURI, FileSystemNamespace
@@ -80,7 +91,11 @@ from .setting import (
     # 管理员DTO
     SettingItem, SettingsListResponse, SettingsUpdateRequest, SettingsUpdateResponse,
 )
-from .share import Share, ShareBase, ShareCreateRequest, ShareResponse, AdminShareListItem
+from .share import (
+    Share, ShareBase, ShareCreateRequest, CreateShareResponse, ShareResponse,
+    ShareOwnerInfo, ShareObjectItem, ShareDetailResponse,
+    AdminShareListItem,
+)
 from .source_link import SourceLink
 from .storage_pack import StoragePack
 from .tag import Tag, TagType

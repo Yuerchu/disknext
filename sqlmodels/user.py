@@ -10,6 +10,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel.main import RelationshipInfo
 
 from .base import SQLModelBase
+from .color import ChromaticColor, NeutralColor, ThemeColorsBase
 from .model_base import ResponseBase
 from .mixin import UUIDTableBaseMixin, TableViewRequest, ListResponse
 
@@ -33,13 +34,6 @@ class AvatarType(StrEnum):
     DEFAULT = "default"
     GRAVATAR = "gravatar"
     FILE = "file"
-
-class ThemeType(StrEnum):
-    """主题类型枚举"""
-    
-    LIGHT = "light"
-    DARK = "dark"
-    SYSTEM = "system"
 
 class UserStatus(StrEnum):
     """用户状态枚举"""
@@ -99,7 +93,7 @@ class LoginRequest(SQLModelBase):
     captcha: str | None = None
     """验证码"""
 
-    two_fa_code: int | None = Field(default=None, min_length=6, max_length=6)
+    two_fa_code: str | None = Field(default=None, min_length=6, max_length=6)
     """两步验证代码"""
 
 
@@ -297,6 +291,29 @@ class UserSettingResponse(SQLModelBase):
     two_factor: bool = False
     """是否启用两步验证"""
 
+    theme_preset_id: UUID | None = None
+    """选用的主题预设UUID"""
+
+    theme_colors: ThemeColorsBase | None = None
+    """当前生效的颜色配置"""
+
+
+class UserThemeUpdateRequest(SQLModelBase):
+    """用户更新主题请求 DTO"""
+
+    theme_preset_id: UUID | None = None
+    """主题预设UUID"""
+
+    theme_colors: ThemeColorsBase | None = None
+    """颜色配置"""
+
+
+class UserTwoFactorResponse(SQLModelBase):
+    """用户两步验证信息 DTO"""
+
+    two_factor_key: str
+    """两步验证密钥"""
+
 
 # ==================== 管理员用户管理 DTO ====================
 
@@ -428,8 +445,31 @@ class User(UserBase, UUIDTableBaseMixin):
     """当前用户组过期时间"""
 
     # Option 相关字段
-    # theme: ThemeType = Field(default=ThemeType.SYSTEM)
-    # """主题类型: light/dark/system"""
+    theme_preset_id: UUID | None = Field(
+        default=None, foreign_key="themepreset.id", ondelete="SET NULL"
+    )
+    """选用的主题预设UUID"""
+
+    color_primary: ChromaticColor | None = None
+    """颜色快照：主色调"""
+
+    color_secondary: ChromaticColor | None = None
+    """颜色快照：辅助色"""
+
+    color_success: ChromaticColor | None = None
+    """颜色快照：成功色"""
+
+    color_info: ChromaticColor | None = None
+    """颜色快照：信息色"""
+
+    color_warning: ChromaticColor | None = None
+    """颜色快照：警告色"""
+
+    color_error: ChromaticColor | None = None
+    """颜色快照：错误色"""
+
+    color_neutral: NeutralColor | None = None
+    """颜色快照：中性色"""
 
     language: str = Field(default="zh-CN", max_length=5)
     """语言偏好"""
