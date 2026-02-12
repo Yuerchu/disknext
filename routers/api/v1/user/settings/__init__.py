@@ -8,6 +8,7 @@ from middleware.auth import auth_required
 from middleware.dependencies import SessionDep
 from sqlmodels import (
     BUILTIN_DEFAULT_COLORS, ThemePreset, UserThemeUpdateRequest,
+    SettingOption, UserSettingUpdateRequest,
 )
 from sqlmodels.color import ThemeColorsBase
 from utils import JWT, Password, http_exceptions
@@ -209,21 +210,35 @@ async def router_user_settings_theme(
 @user_settings_router.patch(
     path='/{option}',
     summary='更新用户设定',
-    description='Update user settings.',
-    dependencies=[Depends(auth_required)],
-    status_code=204,
+    status_code=status.HTTP_204_NO_CONTENT,
 )
-def router_user_settings_patch(option: str) -> None:
+async def router_user_settings_patch(
+        session: SessionDep,
+        user: Annotated[sqlmodels.user.User, Depends(auth_required)],
+        option: SettingOption,
+        request: UserSettingUpdateRequest,
+) -> None:
     """
-    Update user settings.
+    更新单个用户设置项
 
-    Args:
-        option (str): The setting option to update.
+    路径参数：
+    - option: 设置项名称（nickname / language / timezone）
 
-    Returns:
-        dict: A dictionary containing the result of the settings update.
+    请求体：
+    - 包含与 option 同名的字段及其新值
+
+    错误处理：
+    - 422: 无效的 option 或字段值不符合约束
+    - 400: 必填字段值缺失
     """
-    http_exceptions.raise_not_implemented()
+    value = getattr(request, option.value)
+
+    # language / timezone 不允许设为 null
+    if value is None and option != SettingOption.NICKNAME:
+        http_exceptions.raise_bad_request(f"设置项 {option.value} 不允许为空")
+
+    setattr(user, option.value, value)
+    await user.save(session)
 
 
 @user_settings_router.get(

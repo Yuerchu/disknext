@@ -308,6 +308,32 @@ class UserThemeUpdateRequest(SQLModelBase):
     """颜色配置"""
 
 
+class SettingOption(StrEnum):
+    """用户可自助修改的设置选项"""
+
+    NICKNAME = "nickname"
+    """昵称"""
+
+    LANGUAGE = "language"
+    """语言偏好"""
+
+    TIMEZONE = "timezone"
+    """时区"""
+
+
+class UserSettingUpdateRequest(SQLModelBase):
+    """用户设置更新请求 DTO，根据 option 路径参数仅使用对应字段"""
+
+    nickname: str | None = Field(default=None, max_length=50)
+    """昵称（传 null 可清除）"""
+
+    language: str | None = Field(default=None, max_length=5)
+    """语言偏好"""
+
+    timezone: int | None = Field(default=None, ge=-12, le=14)
+    """时区，UTC 偏移小时数"""
+
+
 class UserTwoFactorResponse(SQLModelBase):
     """用户两步验证信息 DTO"""
 
@@ -474,7 +500,7 @@ class User(UserBase, UUIDTableBaseMixin):
     language: str = Field(default="zh-CN", max_length=5)
     """语言偏好"""
 
-    timezone: int = Field(default=8, ge=-12, le=12)
+    timezone: int = Field(default=8, ge=-12, le=14)
     """时区，UTC 偏移小时数"""
 
     # 外键
