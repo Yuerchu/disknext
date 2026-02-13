@@ -1,20 +1,30 @@
 from typing import Annotated, Literal
 from uuid import UUID, uuid4
 
+import json
+
 import jwt
 from fastapi import APIRouter, Depends, HTTPException
 from itsdangerous import URLSafeTimedSerializer
 from loguru import logger
-from webauthn import generate_registration_options
-from webauthn.helpers import options_to_json_dict
+from webauthn import (
+    generate_authentication_options,
+    generate_registration_options,
+    verify_registration_response,
+)
+from webauthn.helpers import bytes_to_base64url, options_to_json
+from webauthn.helpers.structs import PublicKeyCredentialDescriptor
 
 import service
 import sqlmodels
 from middleware.auth import auth_required
 from middleware.dependencies import SessionDep, require_captcha
 from service.captcha import CaptchaScene
+from service.redis.challenge_store import ChallengeStore
+from service.webauthn import get_rp_config
 from sqlmodels.auth_identity import AuthIdentity, AuthProviderType
 from sqlmodels.user import UserStatus
+from sqlmodels.user_authn import UserAuthn
 from utils import JWT, Password, http_exceptions
 from .settings import user_settings_router
 
@@ -445,7 +455,7 @@ async def router_user_storage(
 async def router_user_authn_start(
     session: SessionDep,
     user: Annotated[sqlmodels.user.User, Depends(auth_required)],
-) -> sqlmodels.ResponseBase:
+) -> dict:
     """
     Passkey 注册初始化（需要登录）
 
@@ -456,43 +466,159 @@ async def router_user_authn_start(
     """
     authn_setting = await sqlmodels.Setting.get(
         session,
-        (sqlmodels.Setting.type == "authn") & (sqlmodels.Setting.name == "authn_enabled")
+        (sqlmodels.Setting.type == sqlmodels.SettingsType.AUTHN)
+        & (sqlmodels.Setting.name == "authn_enabled"),
     )
     if not authn_setting or authn_setting.value != "1":
-        raise HTTPException(status_code=400, detail="Passkey 未启用")
+        http_exceptions.raise_bad_request("Passkey 未启用")
 
-    site_url_setting = await sqlmodels.Setting.get(
+    rp_id, rp_name, _origin = await get_rp_config(session)
+
+    # 查询用户已注册凭证，用于 exclude_credentials
+    existing_authns: list[UserAuthn] = await UserAuthn.get(
         session,
-        (sqlmodels.Setting.type == "basic") & (sqlmodels.Setting.name == "siteURL")
+        UserAuthn.user_id == user.id,
+        fetch_mode="all",
     )
-    site_title_setting = await sqlmodels.Setting.get(
-        session,
-        (sqlmodels.Setting.type == "basic") & (sqlmodels.Setting.name == "siteTitle")
-    )
+    exclude_credentials: list[PublicKeyCredentialDescriptor] = [
+        PublicKeyCredentialDescriptor(
+            id=authn.credential_id,
+            transports=authn.transports.split(",") if authn.transports else [],
+        )
+        for authn in existing_authns
+    ]
 
     options = generate_registration_options(
-        rp_id=site_url_setting.value if site_url_setting else "",
-        rp_name=site_title_setting.value if site_title_setting else "",
+        rp_id=rp_id,
+        rp_name=rp_name,
+        user_id=user.id.bytes,
         user_name=user.email or str(user.id),
         user_display_name=user.nickname or user.email or str(user.id),
+        exclude_credentials=exclude_credentials if exclude_credentials else None,
     )
 
-    return sqlmodels.ResponseBase(data=options_to_json_dict(options))
+    # 存储 challenge
+    await ChallengeStore.store(f"reg:{user.id}", options.challenge)
+
+    return json.loads(options_to_json(options))
+
 
 @user_router.put(
     path='/authn/finish',
     summary='注册 Passkey 凭证（完成）',
     description='Finish Passkey registration for a user.',
     dependencies=[Depends(auth_required)],
+    status_code=201,
 )
-def router_user_authn_finish() -> sqlmodels.ResponseBase:
+async def router_user_authn_finish(
+    session: SessionDep,
+    user: Annotated[sqlmodels.user.User, Depends(auth_required)],
+    request: sqlmodels.AuthnFinishRequest,
+) -> sqlmodels.AuthnDetailResponse:
     """
     Passkey 注册完成（需要登录）
 
     接收前端 navigator.credentials.create() 返回的凭证数据，
-    创建 UserAuthn 行 + AuthIdentity(provider=passkey)。
+    验证后创建 UserAuthn 行 + AuthIdentity(provider=passkey)。
 
-    Returns:
-        dict: A dictionary containing Passkey registration information.
+    请求体：
+    - credential: navigator.credentials.create() 返回的 JSON 字符串
+    - name: 凭证名称（可选）
+
+    错误处理：
+    - 400: challenge 已过期或无效 / 验证失败
     """
-    http_exceptions.raise_not_implemented()
+    # 取出 challenge（一次性）
+    challenge: bytes | None = await ChallengeStore.retrieve_and_delete(f"reg:{user.id}")
+    if challenge is None:
+        http_exceptions.raise_bad_request("注册会话已过期，请重新开始")
+
+    rp_id, _rp_name, origin = await get_rp_config(session)
+
+    # 验证注册响应
+    try:
+        verification = verify_registration_response(
+            credential=request.credential,
+            expected_challenge=challenge,
+            expected_rp_id=rp_id,
+            expected_origin=origin,
+        )
+    except Exception as e:
+        logger.warning(f"WebAuthn 注册验证失败: {e}")
+        http_exceptions.raise_bad_request("Passkey 验证失败")
+
+    # 编码为 base64url 存储
+    credential_id_b64: str = bytes_to_base64url(verification.credential_id)
+    credential_public_key_b64: str = bytes_to_base64url(verification.credential_public_key)
+
+    # 提取 transports
+    credential_dict: dict = json.loads(request.credential)
+    response_dict: dict = credential_dict.get("response", {})
+    transports_list: list[str] = response_dict.get("transports", [])
+    transports_str: str | None = ",".join(transports_list) if transports_list else None
+
+    # 创建 UserAuthn 记录
+    authn = UserAuthn(
+        credential_id=credential_id_b64,
+        credential_public_key=credential_public_key_b64,
+        sign_count=verification.sign_count,
+        credential_device_type=verification.credential_device_type,
+        credential_backed_up=verification.credential_backed_up,
+        transports=transports_str,
+        name=request.name,
+        user_id=user.id,
+    )
+    authn = await authn.save(session)
+
+    # 创建 AuthIdentity（provider=passkey，identifier=credential_id_b64）
+    identity = AuthIdentity(
+        provider=AuthProviderType.PASSKEY,
+        identifier=credential_id_b64,
+        is_primary=False,
+        is_verified=True,
+        user_id=user.id,
+    )
+    await identity.save(session)
+
+    return authn.to_detail_response()
+
+
+@user_router.post(
+    path='/authn/options',
+    summary='获取 Passkey 登录 options（无需登录）',
+    description='Generate authentication options for Passkey login.',
+)
+async def router_user_authn_options(
+    session: SessionDep,
+) -> dict:
+    """
+    获取 Passkey 登录的 authentication options（无需登录）
+
+    前端调用此端点获取 options 后使用 navigator.credentials.get() 处理。
+    使用 Discoverable Credentials 模式（空 allow_credentials），
+    由浏览器/平台决定展示哪些凭证。
+
+    返回值包含 ``challenge_token`` 字段，前端在登录请求中作为 ``identifier`` 传入。
+
+    错误处理：
+    - 400: Passkey 未启用
+    """
+    authn_setting = await sqlmodels.Setting.get(
+        session,
+        (sqlmodels.Setting.type == sqlmodels.SettingsType.AUTHN)
+        & (sqlmodels.Setting.name == "authn_enabled"),
+    )
+    if not authn_setting or authn_setting.value != "1":
+        http_exceptions.raise_bad_request("Passkey 未启用")
+
+    rp_id, _rp_name, _origin = await get_rp_config(session)
+
+    options = generate_authentication_options(rp_id=rp_id)
+
+    # 生成 challenge_token 用于关联 challenge
+    challenge_token: str = str(uuid4())
+    await ChallengeStore.store(f"auth:{challenge_token}", options.challenge)
+
+    result: dict = json.loads(options_to_json(options))
+    result["challenge_token"] = challenge_token
+    return result

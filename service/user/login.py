@@ -276,52 +276,55 @@ async def _login_passkey(
     request: UnifiedLoginRequest,
 ) -> User:
     """
-    Passkey/WebAuthn 登录
+    Passkey/WebAuthn 登录（Discoverable Credentials 模式）
 
-    identifier 为 credential_id，credential 为 JSON 格式的 authenticator assertion response。
+    identifier 为 challenge_token（前端从 ``POST /authn/options`` 获取），
+    credential 为 JSON 格式的 authenticator assertion response。
     """
     from webauthn import verify_authentication_response
-    from webauthn.helpers.structs import AuthenticationCredential
+    from webauthn.helpers import base64url_to_bytes
+
+    from service.redis.challenge_store import ChallengeStore
+    from service.webauthn import get_rp_config
+    from sqlmodels.user_authn import UserAuthn
 
     if not request.credential:
         http_exceptions.raise_bad_request("WebAuthn assertion response 不能为空")
 
-    # 查找 AuthIdentity
-    identity: AuthIdentity | None = await AuthIdentity.get(
-        session,
-        (AuthIdentity.provider == AuthProviderType.PASSKEY)
-        & (AuthIdentity.identifier == request.identifier),
-    )
-    if not identity:
-        http_exceptions.raise_unauthorized("Passkey 凭证未注册")
+    if not request.identifier:
+        http_exceptions.raise_bad_request("challenge_token 不能为空")
 
-    # 加载对应的 UserAuthn 记录
-    from sqlmodels.user_authn import UserAuthn
+    # 从 ChallengeStore 取出 challenge（一次性，防重放）
+    challenge: bytes | None = await ChallengeStore.retrieve_and_delete(f"auth:{request.identifier}")
+    if challenge is None:
+        http_exceptions.raise_unauthorized("登录会话已过期，请重新获取 options")
+
+    # 从 assertion JSON 中解析 credential_id（Discoverable Credentials 模式）
+    import orjson
+    credential_dict: dict = orjson.loads(request.credential)
+    credential_id_b64: str | None = credential_dict.get("id")
+    if not credential_id_b64:
+        http_exceptions.raise_bad_request("缺少凭证 ID")
+
+    # 查找 UserAuthn 记录
     authn: UserAuthn | None = await UserAuthn.get(
         session,
-        UserAuthn.credential_id == request.identifier,
+        UserAuthn.credential_id == credential_id_b64,
     )
     if not authn:
-        http_exceptions.raise_unauthorized("Passkey 凭证数据不存在")
+        http_exceptions.raise_unauthorized("Passkey 凭证未注册")
 
-    # 获取 RP ID
-    site_url_setting = await Setting.get(
-        session,
-        (Setting.type == SettingsType.BASIC) & (Setting.name == "siteURL"),
-    )
-    rp_id = site_url_setting.value if site_url_setting else "localhost"
+    # 获取 RP 配置
+    rp_id, _rp_name, origin = await get_rp_config(session)
 
     # 验证 WebAuthn assertion
-    import orjson
-    credential = AuthenticationCredential.model_validate(orjson.loads(request.credential))
-
     try:
         verification = verify_authentication_response(
-            credential=credential,
+            credential=request.credential,
             expected_rp_id=rp_id,
-            expected_origin=f"https://{rp_id}",
-            expected_challenge=b"",  # TODO: 从 session/cache 中获取 challenge
-            credential_public_key=bytes.fromhex(authn.credential_public_key),
+            expected_origin=origin,
+            expected_challenge=challenge,
+            credential_public_key=base64url_to_bytes(authn.credential_public_key),
             credential_current_sign_count=authn.sign_count,
         )
     except Exception as e:
@@ -333,7 +336,7 @@ async def _login_passkey(
     await authn.save(session)
 
     # 加载用户
-    user: User = await User.get(session, User.id == identity.user_id, load=User.group)
+    user: User = await User.get(session, User.id == authn.user_id, load=User.group)
     if not user:
         http_exceptions.raise_unauthorized("用户不存在")
     if user.status != UserStatus.ACTIVE:

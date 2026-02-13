@@ -11,8 +11,10 @@ from sqlmodels import (
     BUILTIN_DEFAULT_COLORS, ThemePreset, UserThemeUpdateRequest,
     SettingOption, UserSettingUpdateRequest,
     AuthIdentity, AuthIdentityResponse, AuthProviderType, BindIdentityRequest,
+    AuthnDetailResponse, AuthnRenameRequest,
 )
 from sqlmodels.color import ThemeColorsBase
+from sqlmodels.user_authn import UserAuthn
 from utils import JWT, Password, http_exceptions
 from utils.password.pwd import PasswordStatus, TwoFactorResponse, TwoFactorVerifyRequest
 
@@ -449,3 +451,105 @@ async def router_user_settings_unbind_identity(
             http_exceptions.raise_bad_request("站长要求必须绑定手机号，不能解绑")
 
     await AuthIdentity.delete(session, identity)
+
+
+# ==================== WebAuthn 凭证管理 ====================
+
+@user_settings_router.get(
+    path='/authns',
+    summary='列出用户所有 WebAuthn 凭证',
+)
+async def router_user_settings_authns(
+    session: SessionDep,
+    user: Annotated[sqlmodels.user.User, Depends(auth_required)],
+) -> list[AuthnDetailResponse]:
+    """
+    列出当前用户所有已注册的 WebAuthn 凭证
+
+    返回：
+    - 凭证列表，包含 credential_id、name、device_type 等
+    """
+    authns: list[UserAuthn] = await UserAuthn.get(
+        session,
+        UserAuthn.user_id == user.id,
+        fetch_mode="all",
+    )
+    return [authn.to_detail_response() for authn in authns]
+
+
+@user_settings_router.patch(
+    path='/authn/{authn_id}',
+    summary='重命名 WebAuthn 凭证',
+)
+async def router_user_settings_rename_authn(
+    session: SessionDep,
+    user: Annotated[sqlmodels.user.User, Depends(auth_required)],
+    authn_id: int,
+    request: AuthnRenameRequest,
+) -> AuthnDetailResponse:
+    """
+    重命名一个 WebAuthn 凭证
+
+    错误处理：
+    - 404: 凭证不存在或不属于当前用户
+    """
+    authn: UserAuthn | None = await UserAuthn.get(
+        session,
+        (UserAuthn.id == authn_id) & (UserAuthn.user_id == user.id),
+    )
+    if not authn:
+        http_exceptions.raise_not_found("WebAuthn 凭证不存在")
+
+    authn.name = request.name
+    authn = await authn.save(session)
+    return authn.to_detail_response()
+
+
+@user_settings_router.delete(
+    path='/authn/{authn_id}',
+    summary='删除 WebAuthn 凭证',
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def router_user_settings_delete_authn(
+    session: SessionDep,
+    user: Annotated[sqlmodels.user.User, Depends(auth_required)],
+    authn_id: int,
+) -> None:
+    """
+    删除一个 WebAuthn 凭证
+
+    同时删除对应的 AuthIdentity(provider=passkey) 记录。
+    如果这是用户最后一个认证身份，拒绝删除。
+
+    错误处理：
+    - 404: 凭证不存在或不属于当前用户
+    - 400: 不能删除最后一个认证身份
+    """
+    authn: UserAuthn | None = await UserAuthn.get(
+        session,
+        (UserAuthn.id == authn_id) & (UserAuthn.user_id == user.id),
+    )
+    if not authn:
+        http_exceptions.raise_not_found("WebAuthn 凭证不存在")
+
+    # 检查是否为最后一个认证身份
+    all_identities: list[AuthIdentity] = await AuthIdentity.get(
+        session,
+        AuthIdentity.user_id == user.id,
+        fetch_mode="all",
+    )
+    if len(all_identities) <= 1:
+        http_exceptions.raise_bad_request("不能删除最后一个认证身份")
+
+    # 删除对应的 AuthIdentity
+    passkey_identity: AuthIdentity | None = await AuthIdentity.get(
+        session,
+        (AuthIdentity.provider == AuthProviderType.PASSKEY)
+        & (AuthIdentity.identifier == authn.credential_id)
+        & (AuthIdentity.user_id == user.id),
+    )
+    if passkey_identity:
+        await AuthIdentity.delete(session, passkey_identity, commit=False)
+
+    # 删除 UserAuthn
+    await UserAuthn.delete(session, authn)

@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
 
@@ -13,14 +14,46 @@ if TYPE_CHECKING:
 
 # ==================== DTO 模型 ====================
 
-class AuthnResponse(SQLModelBase):
-    """WebAuthn 响应 DTO"""
+class AuthnFinishRequest(SQLModelBase):
+    """WebAuthn 注册完成请求 DTO"""
 
-    id: str
-    """凭证ID"""
+    credential: str
+    """前端 navigator.credentials.create() 返回的 JSON 字符串"""
 
-    fingerprint: str
-    """凭证指纹"""
+    name: str | None = None
+    """用户自定义的凭证名称"""
+
+
+class AuthnDetailResponse(SQLModelBase):
+    """WebAuthn 凭证详情响应 DTO"""
+
+    id: int
+    """凭证数据库 ID"""
+
+    credential_id: str
+    """凭证 ID（Base64URL 编码）"""
+
+    name: str | None = None
+    """用户自定义的凭证名称"""
+
+    credential_device_type: str
+    """凭证设备类型"""
+
+    credential_backed_up: bool
+    """凭证是否已备份"""
+
+    transports: str | None = None
+    """支持的传输方式"""
+
+    created_at: datetime
+    """创建时间"""
+
+
+class AuthnRenameRequest(SQLModelBase):
+    """WebAuthn 凭证重命名请求 DTO"""
+
+    name: str = Field(max_length=100)
+    """新的凭证名称"""
 
 
 # ==================== 数据库模型 ====================
@@ -29,10 +62,10 @@ class UserAuthn(SQLModelBase, TableBaseMixin):
     """用户 WebAuthn 凭证模型，与 User 为多对一关系"""
 
     credential_id: str = Field(max_length=255, unique=True, index=True)
-    """凭证 ID，Base64 编码"""
+    """凭证 ID，Base64URL 编码"""
 
     credential_public_key: str = Field(sa_column=Column(Text))
-    """凭证公钥，Base64 编码"""
+    """凭证公钥，Base64URL 编码"""
 
     sign_count: int = Field(default=0, ge=0)
     """签名计数器，用于防重放攻击"""
@@ -59,3 +92,15 @@ class UserAuthn(SQLModelBase, TableBaseMixin):
 
     # 关系
     user: "User" = Relationship(back_populates="authns")
+
+    def to_detail_response(self) -> AuthnDetailResponse:
+        """转换为详情响应 DTO"""
+        return AuthnDetailResponse(
+            id=self.id,
+            credential_id=self.credential_id,
+            name=self.name,
+            credential_device_type=self.credential_device_type,
+            credential_backed_up=self.credential_backed_up,
+            transports=self.transports,
+            created_at=self.created_at,
+        )

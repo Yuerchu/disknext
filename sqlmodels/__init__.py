@@ -30,7 +30,12 @@ from .user import (
     UserCalibrateResponse,
     UserAdminDetailResponse,
 )
-from .user_authn import AuthnResponse, UserAuthn
+from .user_authn import (
+    AuthnDetailResponse,
+    AuthnFinishRequest,
+    AuthnRenameRequest,
+    UserAuthn,
+)
 from .color import ChromaticColor, NeutralColor, ThemeColorsBase, BUILTIN_DEFAULT_COLORS
 from .theme_preset import (
     ThemePreset, ThemePresetBase,

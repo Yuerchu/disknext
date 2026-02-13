@@ -296,7 +296,7 @@ class UserSettingResponse(SQLModelBase):
     timezone: int
     """时区"""
 
-    authn: "list[AuthnResponse] | None" = None
+    authn: "list[AuthnDetailResponse] | None" = None
     """认证信息"""
 
     group_expires: datetime | None = None
@@ -448,7 +448,7 @@ class UserAdminDetailResponse(UserPublic):
 
 # 前向引用导入
 from .group import GroupClaims, GroupResponse  # noqa: E402
-from .user_authn import AuthnResponse  # noqa: E402
+from .user_authn import AuthnDetailResponse  # noqa: E402
 
 # 更新前向引用
 JWTPayload.model_rebuild()
