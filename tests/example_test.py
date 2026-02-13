@@ -32,7 +32,8 @@ async def test_user_factory(db_session: AsyncSession):
     assert user.id is not None
     assert user.email == "testuser@test.local"
     assert user.group_id == group.id
-    assert user.status is True
+    from sqlmodels.user import UserStatus
+    assert user.status == UserStatus.ACTIVE
 
 
 @pytest.mark.unit

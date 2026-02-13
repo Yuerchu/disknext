@@ -23,15 +23,19 @@ from sqlalchemy.orm import sessionmaker
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from main import app
-from sqlmodels.database import get_session
+from sqlmodels.database_connection import DatabaseManager
 from sqlmodels.auth_identity import AuthIdentity, AuthProviderType
 from sqlmodels.group import Group, GroupClaims, GroupOptions
 from sqlmodels.migration import migration
 from sqlmodels.object import Object, ObjectType
 from sqlmodels.policy import Policy, PolicyType
 from sqlmodels.user import User, UserStatus
+import utils.JWT as JWT
 from utils.JWT import create_access_token
 from utils.password.pwd import Password
+
+# 设置测试用 JWT 密钥
+JWT.SECRET_KEY = "test_secret_key_for_jwt_token_generation"
 
 
 # ==================== 事件循环 ====================
@@ -146,7 +150,7 @@ def override_get_session(db_session: AsyncSession):
     async def _override():
         yield db_session
 
-    app.dependency_overrides[get_session] = _override
+    app.dependency_overrides[DatabaseManager.get_session] = _override
 
 
 # ==================== 测试用户 ====================

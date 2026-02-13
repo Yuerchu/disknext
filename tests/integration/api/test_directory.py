@@ -11,7 +11,7 @@ from uuid import UUID
 @pytest.mark.asyncio
 async def test_directory_requires_auth(async_client: AsyncClient):
     """测试获取目录需要认证"""
-    response = await async_client.get("/api/directory/")
+    response = await async_client.get("/api/v1/directory/")
     assert response.status_code == 401
 
 
@@ -24,7 +24,7 @@ async def test_directory_get_root(
 ):
     """测试获取用户根目录"""
     response = await async_client.get(
-        "/api/directory/",
+        "/api/v1/directory/",
         headers=auth_headers
     )
     assert response.status_code == 200
@@ -45,7 +45,7 @@ async def test_directory_get_nested(
 ):
     """测试获取嵌套目录"""
     response = await async_client.get(
-        "/api/directory/docs",
+        "/api/v1/directory/docs",
         headers=auth_headers
     )
     assert response.status_code == 200
@@ -63,7 +63,7 @@ async def test_directory_get_contains_children(
 ):
     """测试目录包含子对象"""
     response = await async_client.get(
-        "/api/directory/docs",
+        "/api/v1/directory/docs",
         headers=auth_headers
     )
     assert response.status_code == 200
@@ -82,7 +82,7 @@ async def test_directory_not_found(
 ):
     """测试目录不存在返回 404"""
     response = await async_client.get(
-        "/api/directory/nonexistent",
+        "/api/v1/directory/nonexistent",
         headers=auth_headers
     )
     assert response.status_code == 404
@@ -95,7 +95,7 @@ async def test_directory_root_returns_200(
 ):
     """测试根目录端点返回 200"""
     response = await async_client.get(
-        "/api/directory/",
+        "/api/v1/directory/",
         headers=auth_headers
     )
     assert response.status_code == 200
@@ -108,7 +108,7 @@ async def test_directory_response_includes_policy(
 ):
     """测试目录响应包含存储策略"""
     response = await async_client.get(
-        "/api/directory/",
+        "/api/v1/directory/",
         headers=auth_headers
     )
     assert response.status_code == 200
@@ -126,8 +126,8 @@ async def test_directory_response_includes_policy(
 @pytest.mark.asyncio
 async def test_directory_create_requires_auth(async_client: AsyncClient):
     """测试创建目录需要认证"""
-    response = await async_client.put(
-        "/api/directory/",
+    response = await async_client.post(
+        "/api/v1/directory/",
         json={
             "parent_id": "00000000-0000-0000-0000-000000000000",
             "name": "newfolder"
@@ -145,22 +145,15 @@ async def test_directory_create_success(
     """测试成功创建目录"""
     parent_id = test_directory_structure["root_id"]
 
-    response = await async_client.put(
-        "/api/directory/",
+    response = await async_client.post(
+        "/api/v1/directory/",
         headers=auth_headers,
         json={
             "parent_id": str(parent_id),
             "name": "newfolder"
         }
     )
-    assert response.status_code == 200
-
-    data = response.json()
-    assert "data" in data
-    folder_data = data["data"]
-    assert "id" in folder_data
-    assert "name" in folder_data
-    assert folder_data["name"] == "newfolder"
+    assert response.status_code == 204
 
 
 @pytest.mark.asyncio
@@ -172,8 +165,8 @@ async def test_directory_create_duplicate_name(
     """测试重名目录返回 409"""
     parent_id = test_directory_structure["root_id"]
 
-    response = await async_client.put(
-        "/api/directory/",
+    response = await async_client.post(
+        "/api/v1/directory/",
         headers=auth_headers,
         json={
             "parent_id": str(parent_id),
@@ -191,8 +184,8 @@ async def test_directory_create_invalid_parent(
     """测试无效父目录返回 404"""
     invalid_uuid = "00000000-0000-0000-0000-000000000001"
 
-    response = await async_client.put(
-        "/api/directory/",
+    response = await async_client.post(
+        "/api/v1/directory/",
         headers=auth_headers,
         json={
             "parent_id": invalid_uuid,
@@ -211,8 +204,8 @@ async def test_directory_create_empty_name(
     """测试空目录名返回 400"""
     parent_id = test_directory_structure["root_id"]
 
-    response = await async_client.put(
-        "/api/directory/",
+    response = await async_client.post(
+        "/api/v1/directory/",
         headers=auth_headers,
         json={
             "parent_id": str(parent_id),
@@ -231,8 +224,8 @@ async def test_directory_create_name_with_slash(
     """测试目录名包含斜杠返回 400"""
     parent_id = test_directory_structure["root_id"]
 
-    response = await async_client.put(
-        "/api/directory/",
+    response = await async_client.post(
+        "/api/v1/directory/",
         headers=auth_headers,
         json={
             "parent_id": str(parent_id),
@@ -251,8 +244,8 @@ async def test_directory_create_parent_is_file(
     """测试父路径是文件返回 400"""
     file_id = test_directory_structure["file_id"]
 
-    response = await async_client.put(
-        "/api/directory/",
+    response = await async_client.post(
+        "/api/v1/directory/",
         headers=auth_headers,
         json={
             "parent_id": str(file_id),
@@ -271,15 +264,15 @@ async def test_directory_create_other_user_parent(
     """测试在他人目录下创建目录返回 404"""
     # 先用管理员账号获取管理员的根目录ID
     admin_response = await async_client.get(
-        "/api/directory/",
+        "/api/v1/directory/",
         headers=admin_headers
     )
     assert admin_response.status_code == 200
     admin_root_id = admin_response.json()["id"]
 
     # 普通用户尝试在管理员目录下创建文件夹
-    response = await async_client.put(
-        "/api/directory/",
+    response = await async_client.post(
+        "/api/v1/directory/",
         headers=auth_headers,
         json={
             "parent_id": admin_root_id,

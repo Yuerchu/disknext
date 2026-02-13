@@ -417,12 +417,12 @@ async def async_client(initialized_db: AsyncSession) -> AsyncGenerator[AsyncClie
     """异步HTTP测试客户端"""
 
     # 覆盖依赖项，使用测试数据库
-    from middleware.dependencies import get_session
+    from sqlmodels.database_connection import DatabaseManager
 
     async def override_get_session():
         yield initialized_db
 
-    app.dependency_overrides[get_session] = override_get_session
+    app.dependency_overrides[DatabaseManager.get_session] = override_get_session
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:

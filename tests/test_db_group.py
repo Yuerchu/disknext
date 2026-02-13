@@ -1,39 +1,38 @@
+"""
+用户组模型 CRUD 测试（使用 db_session fixture）
+"""
 import pytest
+from sqlmodel.ext.asyncio.session import AsyncSession
+
+from sqlmodels.group import Group
+
 
 @pytest.mark.asyncio
-async def test_group_curd():
+async def test_group_curd(db_session: AsyncSession):
     """测试数据库的增删改查"""
-    from sqlmodels import database, migration
-    from sqlmodels.group import Group
+    # 测试增 Create
+    test_group = Group(name='test_group')
+    created_group = await test_group.save(db_session)
 
-    await database.init_db(url='sqlite+aiosqlite:///:memory:')
+    assert created_group is not None
+    assert created_group.id is not None
+    assert created_group.name == 'test_group'
 
-    await migration.migration()
+    # 测试查 Read
+    fetched_group = await Group.get(db_session, Group.id == created_group.id)
+    assert fetched_group is not None
+    assert fetched_group.id == created_group.id
+    assert fetched_group.name == 'test_group'
 
-    async for session in database.get_session():
-        # 测试增 Create
-        test_group = Group(name='test_group')
-        created_group = await test_group.save(session)
+    # 测试更新 Update
+    update_data = Group(name="updated_group")
+    updated_group = await fetched_group.update(db_session, update_data)
 
-        assert created_group is not None
-        assert created_group.id is not None
-        assert created_group.name == 'test_group'
+    assert updated_group is not None
+    assert updated_group.id == fetched_group.id
+    assert updated_group.name == 'updated_group'
 
-        # 测试查 Read
-        fetched_group = await Group.get(session, Group.id == created_group.id)
-        assert fetched_group is not None
-        assert fetched_group.id == created_group.id
-        assert fetched_group.name == 'test_group'
-
-        # 测试更新 Update
-        updated_group = await fetched_group.update(session, {"name": "updated_group"})
-
-        assert updated_group is not None
-        assert updated_group.id == fetched_group.id
-        assert updated_group.name == 'updated_group'
-
-        # 测试删除 Delete
-        await updated_group.delete(session)
-        deleted_group = await Group.get(session, Group.id == updated_group.id)
-        assert deleted_group is None
-        break
+    # 测试删除 Delete
+    await Group.delete(db_session, instances=updated_group)
+    deleted_group = await Group.get(db_session, Group.id == updated_group.id)
+    assert deleted_group is None

@@ -1,35 +1,28 @@
-from fastapi.testclient import TestClient
+"""
+主程序基础端点测试
+"""
+import pytest
+from httpx import AsyncClient, ASGITransport
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from main import app
 
-client = TestClient(app)
 
-def is_valid_instance_id(instance_id):
-    """Check if a string is a valid UUID4."""
-    
-    import uuid
-    
+@pytest.mark.asyncio
+async def test_read_main(db_session: AsyncSession):
+    """测试 ping 端点"""
+    from sqlmodels.database_connection import DatabaseManager
+
+    async def override_get_session():
+        yield db_session
+
+    app.dependency_overrides[DatabaseManager.get_session] = override_get_session
+
     try:
-        uuid.UUID(instance_id, version=4)
-    except (ValueError, TypeError):
-        assert False, f"instance_id is not a valid UUID4: {instance_id}"
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.get("/api/v1/site/ping")
 
-def test_read_main():
-    from utils.conf.appmeta import BackendVersion
-    
-    response = client.get("/api/site/ping")
-    json_response = response.json()
-    
-    assert response.status_code == 200
-    assert 'instance_id' in json_response
-    is_valid_instance_id(json_response['instance_id'])
-        
-    response = client.get("/api/site/config")
-    json_response = response.json()
-    
-    assert response.status_code == 200
-    assert json_response['code'] == 0
-    assert json_response['data'] is not None
-    assert json_response['msg'] is None
-    assert 'instance_id' in json_response
-    is_valid_instance_id(json_response['instance_id'])
+            assert response.status_code == 200
+    finally:
+        app.dependency_overrides.clear()

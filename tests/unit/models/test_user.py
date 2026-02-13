@@ -5,7 +5,7 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from sqlmodels.user import User, ThemeType, UserPublic, UserStatus
+from sqlmodels.user import User, UserPublic, UserStatus
 from sqlmodels.group import Group
 
 
@@ -73,16 +73,20 @@ async def test_user_to_public(db_session: AsyncSession):
     )
     user = await user.save(db_session)
 
+    # to_public() 需要预加载 group 关系
+    loaded_user = await User.get(
+        db_session,
+        User.id == user.id,
+        load=User.group
+    )
+
     # 转换为公开 DTO
-    public_user = user.to_public()
+    public_user = loaded_user.to_public()
 
     assert isinstance(public_user, UserPublic)
-    assert public_user.id == user.id
+    assert public_user.id == loaded_user.id
     assert public_user.email == "publicuser@test.local"
-    # 注意: UserPublic.nick 字段名与 User.nickname 不同，
-    # model_validate 不会自动映射，所以 nick 为 None
-    # 这是已知的设计问题，需要在 UserPublic 中添加别名或重命名字段
-    assert public_user.nick is None  # 实际行为
+    assert public_user.nickname == "公开用户"
     assert public_user.storage == 1024
 
 
@@ -142,36 +146,17 @@ async def test_user_storage_default(db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_user_theme_enum(db_session: AsyncSession):
-    """测试 ThemeType 枚举"""
+async def test_user_theme_preset(db_session: AsyncSession):
+    """测试 theme_preset_id 字段默认为 None"""
     group = Group(name="默认组")
     group = await group.save(db_session)
 
-    # 测试默认值
-    user1 = User(
+    user = User(
         email="user1@test.local",
         group_id=group.id
     )
-    user1 = await user1.save(db_session)
-    assert user1.theme == ThemeType.SYSTEM
-
-    # 测试设置为 LIGHT
-    user2 = User(
-        email="user2@test.local",
-        theme=ThemeType.LIGHT,
-        group_id=group.id
-    )
-    user2 = await user2.save(db_session)
-    assert user2.theme == ThemeType.LIGHT
-
-    # 测试设置为 DARK
-    user3 = User(
-        email="user3@test.local",
-        theme=ThemeType.DARK,
-        group_id=group.id
-    )
-    user3 = await user3.save(db_session)
-    assert user3.theme == ThemeType.DARK
+    user = await user.save(db_session)
+    assert user.theme_preset_id is None
 
 
 @pytest.mark.asyncio

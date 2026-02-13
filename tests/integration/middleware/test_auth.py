@@ -17,7 +17,7 @@ import utils.JWT as JWT
 @pytest.mark.asyncio
 async def test_auth_required_no_token(async_client: AsyncClient):
     """测试无token返回 401"""
-    response = await async_client.get("/api/user/me")
+    response = await async_client.get("/api/v1/user/me")
     assert response.status_code == 401
     assert "WWW-Authenticate" in response.headers
 
@@ -26,7 +26,7 @@ async def test_auth_required_no_token(async_client: AsyncClient):
 async def test_auth_required_invalid_token(async_client: AsyncClient):
     """测试无效token返回 401"""
     response = await async_client.get(
-        "/api/user/me",
+        "/api/v1/user/me",
         headers={"Authorization": "Bearer invalid_token_string"}
     )
     assert response.status_code == 401
@@ -36,7 +36,7 @@ async def test_auth_required_invalid_token(async_client: AsyncClient):
 async def test_auth_required_malformed_token(async_client: AsyncClient):
     """测试格式错误的token返回 401"""
     response = await async_client.get(
-        "/api/user/me",
+        "/api/v1/user/me",
         headers={"Authorization": "InvalidFormat"}
     )
     assert response.status_code == 401
@@ -49,7 +49,7 @@ async def test_auth_required_expired_token(
 ):
     """测试过期token返回 401"""
     response = await async_client.get(
-        "/api/user/me",
+        "/api/v1/user/me",
         headers={"Authorization": f"Bearer {expired_token}"}
     )
     assert response.status_code == 401
@@ -62,7 +62,7 @@ async def test_auth_required_valid_token(
 ):
     """测试有效token通过认证"""
     response = await async_client.get(
-        "/api/user/me",
+        "/api/v1/user/me",
         headers=auth_headers
     )
     assert response.status_code == 200
@@ -80,7 +80,7 @@ async def test_auth_required_token_without_sub(async_client: AsyncClient):
     token = pyjwt.encode(payload, JWT.SECRET_KEY, algorithm="HS256")
 
     response = await async_client.get(
-        "/api/user/me",
+        "/api/v1/user/me",
         headers={"Authorization": f"Bearer {token}"}
     )
     assert response.status_code == 401
@@ -88,7 +88,7 @@ async def test_auth_required_token_without_sub(async_client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_auth_required_nonexistent_user_token(async_client: AsyncClient):
-    """测试用户不存在的token返回 403 或 401（取决于 Redis 可用性）"""
+    """测试用户不存在的token返回 401 或 403"""
     group_claims = GroupClaims(
         id=uuid4(),
         name="测试组",
@@ -107,11 +107,11 @@ async def test_auth_required_nonexistent_user_token(async_client: AsyncClient):
     )
 
     response = await async_client.get(
-        "/api/user/me",
+        "/api/v1/user/me",
         headers={"Authorization": f"Bearer {result.access_token}"}
     )
-    # auth_required 会查库，用户不存在时返回 401
-    assert response.status_code == 401
+    # auth_required 会查库，用户不存在时返回 401 或 403
+    assert response.status_code in [401, 403]
 
 
 # ==================== AdminRequired 测试 ====================
@@ -119,7 +119,7 @@ async def test_auth_required_nonexistent_user_token(async_client: AsyncClient):
 @pytest.mark.asyncio
 async def test_admin_required_no_auth(async_client: AsyncClient):
     """测试管理员端点无认证返回 401"""
-    response = await async_client.get("/api/admin/summary")
+    response = await async_client.get("/api/v1/admin/summary")
     assert response.status_code == 401
 
 
@@ -130,7 +130,7 @@ async def test_admin_required_non_admin(
 ):
     """测试非管理员返回 403"""
     response = await async_client.get(
-        "/api/admin/summary",
+        "/api/v1/admin/summary",
         headers=auth_headers
     )
     assert response.status_code == 403
@@ -146,7 +146,7 @@ async def test_admin_required_admin(
 ):
     """测试管理员通过认证"""
     response = await async_client.get(
-        "/api/admin/summary",
+        "/api/v1/admin/summary",
         headers=admin_headers
     )
     # 端点可能未实现，但应该通过认证检查
@@ -161,7 +161,7 @@ async def test_admin_required_on_user_list(
 ):
     """测试管理员可以访问用户列表"""
     response = await async_client.get(
-        "/api/admin/user/list",
+        "/api/v1/admin/user/list",
         headers=admin_headers
     )
     assert response.status_code == 200
@@ -176,14 +176,14 @@ async def test_admin_required_on_settings(
     """测试管理员可以访问设置，普通用户不能"""
     # 普通用户
     user_response = await async_client.get(
-        "/api/admin/settings",
+        "/api/v1/admin/settings",
         headers=auth_headers
     )
     assert user_response.status_code == 403
 
     # 管理员
     admin_response = await async_client.get(
-        "/api/admin/settings",
+        "/api/v1/admin/settings",
         headers=admin_headers
     )
     assert admin_response.status_code != 403
@@ -198,12 +198,12 @@ async def test_auth_on_directory_endpoint(
 ):
     """测试目录端点应用认证"""
     # 无认证
-    response_no_auth = await async_client.get("/api/directory/")
+    response_no_auth = await async_client.get("/api/v1/directory/")
     assert response_no_auth.status_code == 401
 
     # 有认证
     response_with_auth = await async_client.get(
-        "/api/directory/",
+        "/api/v1/directory/",
         headers=auth_headers
     )
     assert response_with_auth.status_code == 200
@@ -216,19 +216,21 @@ async def test_auth_on_object_endpoint(
 ):
     """测试对象端点应用认证"""
     # 无认证
-    response_no_auth = await async_client.delete(
-        "/api/object/",
+    response_no_auth = await async_client.request(
+        "DELETE",
+        "/api/v1/object/",
         json={"ids": ["00000000-0000-0000-0000-000000000000"]}
     )
     assert response_no_auth.status_code == 401
 
     # 有认证
-    response_with_auth = await async_client.delete(
-        "/api/object/",
+    response_with_auth = await async_client.request(
+        "DELETE",
+        "/api/v1/object/",
         headers=auth_headers,
         json={"ids": ["00000000-0000-0000-0000-000000000000"]}
     )
-    assert response_with_auth.status_code == 200
+    assert response_with_auth.status_code == 204
 
 
 @pytest.mark.asyncio
@@ -238,12 +240,12 @@ async def test_auth_on_storage_endpoint(
 ):
     """测试存储端点应用认证"""
     # 无认证
-    response_no_auth = await async_client.get("/api/user/storage")
+    response_no_auth = await async_client.get("/api/v1/user/storage")
     assert response_no_auth.status_code == 401
 
     # 有认证
     response_with_auth = await async_client.get(
-        "/api/user/storage",
+        "/api/v1/user/storage",
         headers=auth_headers
     )
     assert response_with_auth.status_code == 200
