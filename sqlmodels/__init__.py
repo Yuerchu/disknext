@@ -3,6 +3,7 @@ from .auth_identity import (
     AuthIdentityResponse,
     AuthProviderType,
     BindIdentityRequest,
+    ChangePasswordRequest,
 )
 from .user import (
     BatchDeleteRequest,

@@ -11,6 +11,7 @@ from sqlmodels import (
     BUILTIN_DEFAULT_COLORS, ThemePreset, UserThemeUpdateRequest,
     SettingOption, UserSettingUpdateRequest,
     AuthIdentity, AuthIdentityResponse, AuthProviderType, BindIdentityRequest,
+    ChangePasswordRequest,
     AuthnDetailResponse, AuthnRenameRequest,
 )
 from sqlmodels.color import ThemeColorsBase
@@ -224,6 +225,43 @@ async def router_user_settings_theme(
         user.color_neutral = request.theme_colors.neutral
 
     await user.save(session)
+
+
+@user_settings_router.patch(
+    path='/password',
+    summary='修改密码',
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def router_user_settings_change_password(
+        session: SessionDep,
+        user: Annotated[sqlmodels.user.User, Depends(auth_required)],
+        request: ChangePasswordRequest,
+) -> None:
+    """
+    修改当前用户密码
+
+    请求体：
+    - old_password: 当前密码
+    - new_password: 新密码（至少 8 位）
+
+    错误处理：
+    - 400: 用户没有邮箱密码认证身份
+    - 403: 当前密码错误
+    """
+    email_identity: AuthIdentity | None = await AuthIdentity.get(
+        session,
+        (AuthIdentity.user_id == user.id)
+        & (AuthIdentity.provider == AuthProviderType.EMAIL_PASSWORD),
+    )
+    if not email_identity or not email_identity.credential:
+        http_exceptions.raise_bad_request("未找到邮箱密码认证身份")
+
+    verify_result = Password.verify(email_identity.credential, request.old_password)
+    if verify_result == PasswordStatus.INVALID:
+        http_exceptions.raise_forbidden("当前密码错误")
+
+    email_identity.credential = Password.hash(request.new_password)
+    await email_identity.save(session)
 
 
 @user_settings_router.patch(

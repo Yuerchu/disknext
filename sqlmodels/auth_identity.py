@@ -81,6 +81,16 @@ class BindIdentityRequest(SQLModelBase):
     """OAuth 回调地址"""
 
 
+class ChangePasswordRequest(SQLModelBase):
+    """修改密码请求 DTO"""
+
+    old_password: str = Field(min_length=1)
+    """当前密码"""
+
+    new_password: str = Field(min_length=8, max_length=128)
+    """新密码（至少 8 位）"""
+
+
 # ==================== 数据库模型 ====================
 
 class AuthIdentity(SQLModelBase, UUIDTableBaseMixin):
