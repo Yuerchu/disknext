@@ -2,7 +2,7 @@
 from enum import StrEnum
 from urllib.parse import urlparse, parse_qs, urlencode, quote, unquote
 
-from .base import SQLModelBase
+from sqlmodel_ext import SQLModelBase
 
 
 class FileSystemNamespace(StrEnum):

@@ -113,7 +113,7 @@ async def test_setting_update_value(db_session: AsyncSession):
     setting = await setting.save(db_session)
 
     # 更新值
-    from sqlmodels.base import SQLModelBase
+    from sqlmodel_ext import SQLModelBase
 
     class SettingUpdate(SQLModelBase):
         value: str | None = None

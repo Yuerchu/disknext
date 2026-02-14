@@ -9,7 +9,7 @@ from sqlmodels import (
     User, ResponseBase,
     Setting, Object, ObjectType, Share, AdminSummaryResponse, MetricsSummary, LicenseInfo, VersionInfo,
 )
-from sqlmodels.base import SQLModelBase
+from sqlmodel_ext import SQLModelBase
 from sqlmodels.setting import (
     SettingItem, SettingsListResponse, SettingsUpdateRequest, SettingsUpdateResponse,
 )
@@ -17,6 +17,7 @@ from sqlmodels.setting import SettingsType
 from utils import http_exceptions
 from utils.conf import appmeta
 from .file import admin_file_router
+from .file_app import admin_file_app_router
 from .group import admin_group_router
 from .policy import admin_policy_router
 from .share import admin_share_router
@@ -44,6 +45,7 @@ admin_router = APIRouter(
 admin_router.include_router(admin_group_router)
 admin_router.include_router(admin_user_router)
 admin_router.include_router(admin_file_router)
+admin_router.include_router(admin_file_app_router)
 admin_router.include_router(admin_policy_router)
 admin_router.include_router(admin_share_router)
 admin_router.include_router(admin_task_router)

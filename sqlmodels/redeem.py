@@ -2,8 +2,7 @@ from enum import StrEnum
 
 from sqlmodel import Field, text
 
-from .base import SQLModelBase
-from .mixin import TableBaseMixin
+from sqlmodel_ext import SQLModelBase, TableBaseMixin
 
 
 class RedeemType(StrEnum):

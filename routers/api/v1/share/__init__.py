@@ -14,7 +14,7 @@ from sqlmodels.share import (
     ShareDetailResponse, ShareOwnerInfo, ShareObjectItem,
 )
 from sqlmodels.object import Object, ObjectType
-from sqlmodels.mixin import ListResponse, TableViewRequest
+from sqlmodel_ext import ListResponse, TableViewRequest
 from utils import http_exceptions
 from utils.password.pwd import Password, PasswordStatus
 

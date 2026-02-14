@@ -4,8 +4,7 @@ from uuid import UUID
 from enum import StrEnum
 from sqlmodel import Field, Relationship, text
 
-from .base import SQLModelBase
-from .mixin import UUIDTableBaseMixin
+from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin
 
 if TYPE_CHECKING:
     from .object import Object

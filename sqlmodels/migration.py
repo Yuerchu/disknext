@@ -17,6 +17,7 @@ async def migration() -> None:
     await init_default_group()
     await init_default_user()
     await init_default_theme_presets()
+    await init_default_file_apps()
 
     log.info('数据库初始化结束')
 
@@ -372,3 +373,146 @@ async def init_default_theme_presets() -> None:
         )
         await default_preset.save(session)
         log.info('已创建默认主题预设')
+
+
+# ==================== 默认文件查看器应用种子数据 ====================
+
+_DEFAULT_FILE_APPS: list[dict] = [
+    # 内置应用（type=builtin，默认启用）
+    {
+        "name": "PDF 阅读器",
+        "app_key": "pdfjs",
+        "type": "builtin",
+        "icon": "file-pdf",
+        "description": "基于 pdf.js 的 PDF 在线阅读器",
+        "is_enabled": True,
+        "extensions": ["pdf"],
+    },
+    {
+        "name": "代码编辑器",
+        "app_key": "monaco",
+        "type": "builtin",
+        "icon": "code",
+        "description": "基于 Monaco Editor 的代码编辑器",
+        "is_enabled": True,
+        "extensions": [
+            "txt", "md", "json", "xml", "yaml", "yml",
+            "py", "js", "ts", "jsx", "tsx",
+            "html", "css", "scss", "less",
+            "sh", "bash", "zsh",
+            "c", "cpp", "h", "hpp",
+            "java", "kt", "go", "rs", "rb",
+            "sql", "graphql",
+            "toml", "ini", "cfg", "conf",
+            "env", "gitignore", "dockerfile",
+            "vue", "svelte",
+        ],
+    },
+    {
+        "name": "Markdown 预览",
+        "app_key": "markdown",
+        "type": "builtin",
+        "icon": "markdown",
+        "description": "Markdown 实时预览",
+        "is_enabled": True,
+        "extensions": ["md", "markdown", "mdx"],
+    },
+    {
+        "name": "图片查看器",
+        "app_key": "image_viewer",
+        "type": "builtin",
+        "icon": "image",
+        "description": "图片在线查看器",
+        "is_enabled": True,
+        "extensions": ["jpg", "jpeg", "png", "gif", "bmp", "webp", "svg", "ico", "avif"],
+    },
+    {
+        "name": "视频播放器",
+        "app_key": "video_player",
+        "type": "builtin",
+        "icon": "video",
+        "description": "HTML5 视频播放器",
+        "is_enabled": True,
+        "extensions": ["mp4", "webm", "ogg", "mov", "mkv", "m3u8"],
+    },
+    {
+        "name": "音频播放器",
+        "app_key": "audio_player",
+        "type": "builtin",
+        "icon": "audio",
+        "description": "HTML5 音频播放器",
+        "is_enabled": True,
+        "extensions": ["mp3", "wav", "ogg", "flac", "aac", "m4a", "opus"],
+    },
+    # iframe 应用（默认禁用）
+    {
+        "name": "Office 在线预览",
+        "app_key": "office_viewer",
+        "type": "iframe",
+        "icon": "file-word",
+        "description": "使用 Microsoft Office Online 预览文档",
+        "is_enabled": False,
+        "iframe_url_template": "https://view.officeapps.live.com/op/embed.aspx?src={file_url}",
+        "extensions": ["doc", "docx", "xls", "xlsx", "ppt", "pptx"],
+    },
+    # WOPI 应用（默认禁用）
+    {
+        "name": "Collabora Online",
+        "app_key": "collabora",
+        "type": "wopi",
+        "icon": "file-text",
+        "description": "Collabora Online 文档编辑器（需自行部署）",
+        "is_enabled": False,
+        "extensions": ["doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp"],
+    },
+    {
+        "name": "OnlyOffice",
+        "app_key": "onlyoffice",
+        "type": "wopi",
+        "icon": "file-text",
+        "description": "OnlyOffice 文档编辑器（需自行部署）",
+        "is_enabled": False,
+        "extensions": ["doc", "docx", "xls", "xlsx", "ppt", "pptx"],
+    },
+]
+
+
+async def init_default_file_apps() -> None:
+    """初始化默认文件查看器应用"""
+    from .file_app import FileApp, FileAppExtension, FileAppType
+    from .database_connection import DatabaseManager
+
+    log.info('初始化文件查看器应用...')
+
+    async for session in DatabaseManager.get_session():
+        # 已存在应用则跳过
+        existing_count = await FileApp.count(session)
+        if existing_count > 0:
+            return
+
+        for app_data in _DEFAULT_FILE_APPS:
+            extensions = app_data.pop("extensions")
+
+            app = FileApp(
+                name=app_data["name"],
+                app_key=app_data["app_key"],
+                type=FileAppType(app_data["type"]),
+                icon=app_data.get("icon"),
+                description=app_data.get("description"),
+                is_enabled=app_data.get("is_enabled", True),
+                iframe_url_template=app_data.get("iframe_url_template"),
+                wopi_discovery_url=app_data.get("wopi_discovery_url"),
+                wopi_editor_url_template=app_data.get("wopi_editor_url_template"),
+            )
+            app = await app.save(session)
+            app_id = app.id
+
+            for i, ext in enumerate(extensions):
+                ext_record = FileAppExtension(
+                    app_id=app_id,
+                    extension=ext.lower(),
+                    priority=i,
+                )
+                await ext_record.save(session)
+
+        log.info(f'已创建 {len(_DEFAULT_FILE_APPS)} 个默认文件查看器应用')

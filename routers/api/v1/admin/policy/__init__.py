@@ -9,7 +9,7 @@ from middleware.dependencies import SessionDep, TableViewRequestDep
 from sqlmodels import (
     Policy, PolicyBase, PolicyType, PolicySummary, ResponseBase,
     ListResponse, Object, )
-from sqlmodels.base import SQLModelBase
+from sqlmodel_ext import SQLModelBase
 from service.storage import DirectoryCreationError, LocalStorageService
 
 admin_policy_router = APIRouter(

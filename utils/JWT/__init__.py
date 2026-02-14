@@ -25,11 +25,11 @@ async def load_secret_key() -> None:
     从数据库读取 JWT 的密钥。
     """
     # 延迟导入以避免循环依赖
-    from sqlmodels.database import get_session
+    from sqlmodels.database_connection import DatabaseManager
     from sqlmodels.setting import Setting
 
     global SECRET_KEY
-    async for session in get_session():
+    async for session in DatabaseManager.get_session():
         setting: Setting = await Setting.get(
             session,
             (Setting.type == "auth") & (Setting.name == "secret_key")

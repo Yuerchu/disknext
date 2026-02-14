@@ -4,8 +4,7 @@ from uuid import UUID
 
 from sqlmodel import Field, Relationship, UniqueConstraint, Index
 
-from .base import SQLModelBase
-from .mixin import UUIDTableBaseMixin, TableBaseMixin
+from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, TableBaseMixin
 
 if TYPE_CHECKING:
     from .user import User

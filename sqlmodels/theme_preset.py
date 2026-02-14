@@ -3,9 +3,9 @@ from uuid import UUID
 
 from sqlmodel import Field
 
-from .base import SQLModelBase
+from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin
+
 from .color import ChromaticColor, NeutralColor, ThemeColorsBase
-from .mixin import UUIDTableBaseMixin
 
 
 class ThemePresetBase(SQLModelBase):

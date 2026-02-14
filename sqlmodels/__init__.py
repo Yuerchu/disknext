@@ -115,6 +115,14 @@ from .storage_pack import StoragePack
 from .tag import Tag, TagType
 from .task import Task, TaskProps, TaskPropsBase, TaskStatus, TaskType, TaskSummary
 from .webdav import WebDAV
+from .file_app import (
+    FileApp, FileAppType, FileAppExtension, FileAppGroupLink, UserFileAppDefault,
+    # DTO
+    FileAppSummary, FileViewersResponse, SetDefaultViewerRequest, UserFileAppDefaultResponse,
+    FileAppCreateRequest, FileAppUpdateRequest, FileAppResponse, FileAppListResponse,
+    ExtensionUpdateRequest, GroupAccessUpdateRequest, WopiSessionResponse,
+)
+from .wopi import WopiFileInfo, WopiAccessTokenPayload
 
 from .database_connection import DatabaseManager
 
@@ -131,5 +139,5 @@ from .model_base import (
     AdminSummaryResponse,
 )
 
-# mixin 中的通用分页模型
-from .mixin import ListResponse
+# 通用分页模型
+from sqlmodel_ext import ListResponse

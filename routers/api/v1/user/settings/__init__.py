@@ -17,12 +17,14 @@ from sqlmodels.color import ThemeColorsBase
 from sqlmodels.user_authn import UserAuthn
 from utils import JWT, Password, http_exceptions
 from utils.password.pwd import PasswordStatus, TwoFactorResponse, TwoFactorVerifyRequest
+from .file_viewers import file_viewers_router
 
 user_settings_router = APIRouter(
     prefix='/settings',
     tags=["user", "user_settings"],
     dependencies=[Depends(auth_required)],
 )
+user_settings_router.include_router(file_viewers_router)
 
 
 @user_settings_router.get(

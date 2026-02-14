@@ -5,9 +5,9 @@ from uuid import UUID
 
 from sqlmodel import Field, Relationship, text, UniqueConstraint, Index
 
-from .base import SQLModelBase
+from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin
+
 from .model_base import ResponseBase
-from .mixin import UUIDTableBaseMixin
 from .object import ObjectType
 
 if TYPE_CHECKING:

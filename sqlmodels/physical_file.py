@@ -15,8 +15,7 @@ from uuid import UUID
 from sqlalchemy import BigInteger
 from sqlmodel import Field, Relationship, Index
 
-from .base import SQLModelBase
-from .mixin import UUIDTableBaseMixin
+from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin
 
 if TYPE_CHECKING:
     from .object import Object

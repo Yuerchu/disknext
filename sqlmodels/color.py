@@ -1,6 +1,6 @@
 from enum import StrEnum
 
-from .base import SQLModelBase
+from sqlmodel_ext import SQLModelBase
 
 
 class ChromaticColor(StrEnum):

@@ -7,8 +7,7 @@ from enum import StrEnum
 from sqlalchemy import BigInteger
 from sqlmodel import Field, Relationship, CheckConstraint, Index, text
 
-from .base import SQLModelBase
-from .mixin import UUIDTableBaseMixin
+from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin
 
 if TYPE_CHECKING:
     from .user import User

@@ -2,9 +2,9 @@ from enum import StrEnum
 
 from sqlmodel import UniqueConstraint
 
+from sqlmodel_ext import SQLModelBase, TableBaseMixin
+
 from .auth_identity import AuthProviderType
-from .base import SQLModelBase
-from .mixin import TableBaseMixin
 from .user import UserResponse
 
 class CaptchaType(StrEnum):

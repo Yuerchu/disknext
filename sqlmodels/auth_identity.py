@@ -10,8 +10,7 @@ from uuid import UUID
 
 from sqlmodel import Field, Relationship, UniqueConstraint
 
-from .base import SQLModelBase
-from .mixin import UUIDTableBaseMixin
+from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin
 
 if TYPE_CHECKING:
     from .user import User

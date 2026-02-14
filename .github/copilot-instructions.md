@@ -449,13 +449,13 @@ return device  # 此时device已过期
 ```python
 import asyncio
 from sqlmodel import Field
-from sqlmodels.base import UUIDTableBase, SQLModelBase
+from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin
 
 class CharacterBase(SQLModelBase):
     name: str
     """角色名称"""
 
-class Character(CharacterBase, UUIDTableBase):
+class Character(CharacterBase, UUIDTableBaseMixin):
     """充血模型：包含数据和业务逻辑"""
 
     # ==================== 运行时属性（在model_post_init初始化） ====================
@@ -570,11 +570,11 @@ async with character.init(session):
 from abc import ABC, abstractmethod
 from uuid import UUID
 from sqlmodel import Field
-from sqlmodels.base import (
+from sqlmodel_ext import (
     SQLModelBase,
-    UUIDTableBase,
+    UUIDTableBaseMixin,
     create_subclass_id_mixin,
-    AutoPolymorphicIdentityMixin
+    AutoPolymorphicIdentityMixin,
 )
 
 # 1. 定义Base类（只有字段，无表）
@@ -591,7 +591,7 @@ class ASRBase(SQLModelBase):
 # 2. 定义抽象父类（有表）
 class ASR(
     ASRBase,
-    UUIDTableBase,
+    UUIDTableBaseMixin,
     ABC,
     polymorphic_on='__polymorphic_name',
     polymorphic_abstract=True
@@ -1148,7 +1148,7 @@ from sqlmodel import Field
 # 3. 本地应用导入（从项目根目录的包开始）
 from dependencies import SessionDep
 from sqlmodels.user import User
-from sqlmodels.base import UUIDTableBase
+from sqlmodel_ext import UUIDTableBaseMixin
 
 # 4. 相对导入（同包内的模块）
 from .base import BaseClass

@@ -40,6 +40,10 @@ def raise_conflict(detail: str | None = None) -> NoReturn:
     """Raises an HTTP 409 Conflict exception."""
     raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
 
+def raise_unprocessable_entity(detail: str | None = None) -> NoReturn:
+    """Raises an HTTP 422 Unprocessable Content exception."""
+    raise HTTPException(status_code=422, detail=detail)
+
 def raise_precondition_required(detail: str | None = None) -> NoReturn:
     """Raises an HTTP 428 Precondition required exception."""
     raise HTTPException(status_code=status.HTTP_428_PRECONDITION_REQUIRED, detail=detail)

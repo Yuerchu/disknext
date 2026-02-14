@@ -4,7 +4,7 @@ from enum import StrEnum
 
 from sqlmodel import Field
 
-from .base import SQLModelBase
+from sqlmodel_ext import SQLModelBase
 
 
 class ResponseBase(SQLModelBase):

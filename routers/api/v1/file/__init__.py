@@ -8,46 +8,91 @@
 - /file/upload - 上传相关操作
 - /file/download - 下载相关操作
 """
+import hashlib
 from datetime import datetime, timedelta
 from typing import Annotated
 from uuid import UUID
 
+import whatthepatch
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from loguru import logger as l
+from sqlmodel_ext import SQLModelBase
+from whatthepatch.exceptions import HunkApplyException
 
 from middleware.auth import auth_required, verify_download_token
 from middleware.dependencies import SessionDep
 from sqlmodels import (
     CreateFileRequest,
     CreateUploadSessionRequest,
+    FileApp,
+    FileAppExtension,
+    FileAppGroupLink,
+    FileAppType,
     Object,
     ObjectType,
     PhysicalFile,
     Policy,
     PolicyType,
     ResponseBase,
+    Setting,
+    SettingsType,
     UploadChunkResponse,
     UploadSession,
     UploadSessionResponse,
     User,
+    WopiSessionResponse,
 )
 from service.storage import LocalStorageService, adjust_user_storage
-from service.redis.token_store import TokenStore
 from utils.JWT import create_download_token, DOWNLOAD_TOKEN_TTL
+from utils.JWT.wopi_token import create_wopi_token
 from utils import http_exceptions
+from .viewers import viewers_router
 
 
 # DTO
 
 class DownloadTokenModel(ResponseBase):
     """下载Token响应模型"""
-    
+
     access_token: str
     """JWT 令牌"""
-    
+
     expires_in: int
     """过期时间（秒）"""
+
+
+class TextContentResponse(ResponseBase):
+    """文本文件内容响应"""
+
+    content: str
+    """文件文本内容（UTF-8）"""
+
+    hash: str
+    """SHA-256 hex"""
+
+    size: int
+    """文件字节大小"""
+
+
+class PatchContentRequest(SQLModelBase):
+    """增量保存请求"""
+
+    patch: str
+    """unified diff 文本"""
+
+    base_hash: str
+    """原始内容的 SHA-256 hex（64字符）"""
+
+
+class PatchContentResponse(ResponseBase):
+    """增量保存响应"""
+
+    new_hash: str
+    """新内容的 SHA-256 hex"""
+
+    new_size: int
+    """新文件字节大小"""
 
 # ==================== 主路由 ====================
 
@@ -410,7 +455,7 @@ async def create_download_token_endpoint(
 @_download_router.get(
     path='/{token}',
     summary='下载文件',
-    description='使用下载令牌下载文件（一次性令牌，仅可使用一次）。',
+    description='使用下载令牌下载文件，令牌在有效期内可重复使用。',
 )
 async def download_file(
     session: SessionDep,
@@ -420,19 +465,14 @@ async def download_file(
     下载文件端点
 
     验证 JWT 令牌后返回文件内容。
-    令牌为一次性使用，下载后即失效。
+    令牌在有效期内可重复使用（支持浏览器 range 请求等场景）。
     """
     # 验证令牌
     result = verify_download_token(token)
     if not result:
         raise HTTPException(status_code=401, detail="下载令牌无效或已过期")
 
-    jti, file_id, owner_id = result
-
-    # 检查并标记令牌已使用（原子操作）
-    is_first_use = await TokenStore.mark_used(jti, DOWNLOAD_TOKEN_TTL)
-    if not is_first_use:
-        raise HTTPException(status_code=404)
+    _, file_id, owner_id = result
 
     # 获取文件对象（排除已删除的）
     file_obj = await Object.get(
@@ -478,6 +518,7 @@ async def download_file(
 
 router.include_router(_upload_router)
 router.include_router(_download_router)
+router.include_router(viewers_router)
 
 
 # ==================== 创建空白文件 ====================
@@ -574,6 +615,113 @@ async def create_empty_file(
     })
 
 
+# ==================== WOPI 会话 ====================
+
+@router.post(
+    path='/{file_id}/wopi-session',
+    summary='创建 WOPI 会话',
+    description='为 WOPI 类型的查看器创建编辑会话，返回编辑器 URL 和访问令牌。',
+)
+async def create_wopi_session(
+    session: SessionDep,
+    user: Annotated[User, Depends(auth_required)],
+    file_id: UUID,
+) -> WopiSessionResponse:
+    """
+    创建 WOPI 会话端点
+
+    流程：
+    1. 验证文件存在且属于当前用户
+    2. 查找文件扩展名对应的 WOPI 类型应用
+    3. 检查用户组权限
+    4. 生成 WOPI access token
+    5. 构建 editor URL
+
+    认证：JWT token 必填
+
+    错误处理：
+    - 404: 文件不存在 / 无可用 WOPI 应用
+    - 403: 用户组无权限
+    """
+    # 验证文件
+    file_obj: Object | None = await Object.get(
+        session,
+        Object.id == file_id,
+    )
+    if not file_obj or file_obj.owner_id != user.id:
+        http_exceptions.raise_not_found("文件不存在")
+
+    if not file_obj.is_file:
+        http_exceptions.raise_bad_request("对象不是文件")
+
+    # 获取文件扩展名
+    name_parts = file_obj.name.rsplit('.', 1)
+    if len(name_parts) < 2:
+        http_exceptions.raise_bad_request("文件无扩展名，无法使用 WOPI 查看器")
+    ext = name_parts[1].lower()
+
+    # 查找 WOPI 类型的应用
+    from sqlalchemy import and_, select
+    ext_records: list[FileAppExtension] = await FileAppExtension.get(
+        session,
+        FileAppExtension.extension == ext,
+        fetch_mode="all",
+        load=FileAppExtension.app,
+    )
+
+    wopi_app: FileApp | None = None
+    for ext_record in ext_records:
+        app = ext_record.app
+        if app.type == FileAppType.WOPI and app.is_enabled:
+            # 检查用户组权限（FileAppGroupLink 是纯关联表，使用 session 查询）
+            if app.is_restricted:
+                stmt = select(FileAppGroupLink).where(
+                    and_(
+                        FileAppGroupLink.app_id == app.id,
+                        FileAppGroupLink.group_id == user.group_id,
+                    )
+                )
+                result = await session.exec(stmt)
+                if not result.first():
+                    continue
+            wopi_app = app
+            break
+
+    if not wopi_app:
+        http_exceptions.raise_not_found("无可用的 WOPI 查看器")
+
+    if not wopi_app.wopi_editor_url_template:
+        http_exceptions.raise_bad_request("WOPI 应用未配置编辑器 URL 模板")
+
+    # 获取站点 URL
+    site_url_setting: Setting | None = await Setting.get(
+        session,
+        (Setting.type == SettingsType.BASIC) & (Setting.name == "siteURL"),
+    )
+    site_url = site_url_setting.value if site_url_setting else "http://localhost"
+
+    # 生成 WOPI token
+    can_write = file_obj.owner_id == user.id
+    token, access_token_ttl = create_wopi_token(file_id, user.id, can_write)
+
+    # 构建 wopi_src
+    wopi_src = f"{site_url}/wopi/files/{file_id}"
+
+    # 构建 editor URL
+    editor_url = wopi_app.wopi_editor_url_template.format(
+        wopi_src=wopi_src,
+        access_token=token,
+        access_token_ttl=access_token_ttl,
+    )
+
+    return WopiSessionResponse(
+        wopi_src=wopi_src,
+        access_token=token,
+        access_token_ttl=access_token_ttl,
+        editor_url=editor_url,
+    )
+
+
 # ==================== 文件外链（保留原有端点结构） ====================
 
 @router.get(
@@ -612,36 +760,171 @@ async def file_update(id: str) -> ResponseBase:
 
 
 @router.get(
-    path='/preview/{id}',
-    summary='预览文件',
-    description='获取文件预览。',
-    dependencies=[Depends(auth_required)]
-)
-async def file_preview(id: str) -> ResponseBase:
-    """预览文件"""
-    raise HTTPException(status_code=501, detail="预览功能暂未实现")
-
-
-@router.get(
-    path='/content/{id}',
+    path='/content/{file_id}',
     summary='获取文本文件内容',
-    description='获取文本文件内容。',
-    dependencies=[Depends(auth_required)]
+    description='获取文本文件的 UTF-8 内容和 SHA-256 哈希值。',
 )
-async def file_content(id: str) -> ResponseBase:
-    """获取文本文件内容"""
-    raise HTTPException(status_code=501, detail="文本内容功能暂未实现")
+async def file_content(
+    session: SessionDep,
+    user: Annotated[User, Depends(auth_required)],
+    file_id: UUID,
+) -> TextContentResponse:
+    """
+    获取文本文件内容端点
+
+    返回文件的 UTF-8 文本内容和基于规范化内容的 SHA-256 哈希值。
+    换行符统一规范化为 ``\\n``。
+
+    认证：JWT token 必填
+
+    错误处理：
+    - 400: 文件不是有效的 UTF-8 文本
+    - 404: 文件不存在
+    """
+    file_obj = await Object.get(
+        session,
+        (Object.id == file_id) & (Object.deleted_at == None)
+    )
+    if not file_obj or file_obj.owner_id != user.id:
+        http_exceptions.raise_not_found("文件不存在")
+
+    if not file_obj.is_file:
+        http_exceptions.raise_bad_request("对象不是文件")
+
+    physical_file = await file_obj.awaitable_attrs.physical_file
+    if not physical_file or not physical_file.storage_path:
+        http_exceptions.raise_internal_error("文件存储路径丢失")
+
+    policy = await Policy.get(session, Policy.id == file_obj.policy_id)
+    if not policy:
+        http_exceptions.raise_internal_error("存储策略不存在")
+
+    if policy.type != PolicyType.LOCAL:
+        http_exceptions.raise_not_implemented("S3 存储暂未实现")
+
+    storage_service = LocalStorageService(policy)
+    raw_bytes = await storage_service.read_file(physical_file.storage_path)
+
+    try:
+        content = raw_bytes.decode('utf-8')
+    except UnicodeDecodeError:
+        http_exceptions.raise_bad_request("文件不是有效的 UTF-8 文本")
+
+    # 换行符规范化
+    content = content.replace('\r\n', '\n').replace('\r', '\n')
+    normalized_bytes = content.encode('utf-8')
+    hash_hex = hashlib.sha256(normalized_bytes).hexdigest()
+
+    return TextContentResponse(
+        content=content,
+        hash=hash_hex,
+        size=len(normalized_bytes),
+    )
 
 
-@router.get(
-    path='/doc/{id}',
-    summary='获取Office文档预览地址',
-    description='获取Office文档在线预览地址。',
-    dependencies=[Depends(auth_required)]
+@router.patch(
+    path='/content/{file_id}',
+    summary='增量保存文本文件',
+    description='使用 unified diff 增量更新文本文件内容。',
 )
-async def file_doc(id: str) -> ResponseBase:
-    """获取Office文档预览地址"""
-    raise HTTPException(status_code=501, detail="Office预览功能暂未实现")
+async def patch_file_content(
+    session: SessionDep,
+    user: Annotated[User, Depends(auth_required)],
+    file_id: UUID,
+    request: PatchContentRequest,
+) -> PatchContentResponse:
+    """
+    增量保存文本文件端点
+
+    接收 unified diff 和 base_hash，验证无并发冲突后应用 patch。
+
+    认证：JWT token 必填
+
+    错误处理：
+    - 400: 文件不是有效的 UTF-8 文本
+    - 404: 文件不存在
+    - 409: base_hash 不匹配（并发冲突）
+    - 422: 无效的 patch 格式或 patch 应用失败
+    """
+    file_obj = await Object.get(
+        session,
+        (Object.id == file_id) & (Object.deleted_at == None)
+    )
+    if not file_obj or file_obj.owner_id != user.id:
+        http_exceptions.raise_not_found("文件不存在")
+
+    if not file_obj.is_file:
+        http_exceptions.raise_bad_request("对象不是文件")
+
+    if file_obj.is_banned:
+        http_exceptions.raise_banned()
+
+    physical_file = await file_obj.awaitable_attrs.physical_file
+    if not physical_file or not physical_file.storage_path:
+        http_exceptions.raise_internal_error("文件存储路径丢失")
+
+    storage_path = physical_file.storage_path
+
+    policy = await Policy.get(session, Policy.id == file_obj.policy_id)
+    if not policy:
+        http_exceptions.raise_internal_error("存储策略不存在")
+
+    if policy.type != PolicyType.LOCAL:
+        http_exceptions.raise_not_implemented("S3 存储暂未实现")
+
+    storage_service = LocalStorageService(policy)
+    raw_bytes = await storage_service.read_file(storage_path)
+
+    # 解码 + 规范化
+    original_text = raw_bytes.decode('utf-8')
+    original_text = original_text.replace('\r\n', '\n').replace('\r', '\n')
+    normalized_bytes = original_text.encode('utf-8')
+
+    # 冲突检测（hash 基于规范化后的内容，与 GET 端点一致）
+    current_hash = hashlib.sha256(normalized_bytes).hexdigest()
+    if current_hash != request.base_hash:
+        http_exceptions.raise_conflict("文件内容已被修改，请刷新后重试")
+
+    # 解析并应用 patch
+    diffs = list(whatthepatch.parse_patch(request.patch))
+    if not diffs:
+        http_exceptions.raise_unprocessable_entity("无效的 patch 格式")
+
+    try:
+        result = whatthepatch.apply_diff(diffs[0], original_text)
+    except HunkApplyException:
+        http_exceptions.raise_unprocessable_entity("Patch 应用失败，差异内容与当前文件不匹配")
+
+    new_text = '\n'.join(result)
+
+    # 保持尾部换行符一致
+    if original_text.endswith('\n') and not new_text.endswith('\n'):
+        new_text += '\n'
+
+    new_bytes = new_text.encode('utf-8')
+
+    # 写入文件
+    await storage_service.write_file(storage_path, new_bytes)
+
+    # 更新数据库
+    owner_id = file_obj.owner_id
+    old_size = file_obj.size
+    new_size = len(new_bytes)
+    size_diff = new_size - old_size
+
+    file_obj.size = new_size
+    file_obj = await file_obj.save(session, commit=False)
+    physical_file.size = new_size
+    physical_file = await physical_file.save(session, commit=False)
+    if size_diff != 0:
+        await adjust_user_storage(session, owner_id, size_diff, commit=False)
+    await session.commit()
+
+    new_hash = hashlib.sha256(new_bytes).hexdigest()
+
+    l.info(f"文本文件增量保存: file_id={file_id}, size={old_size}->{new_size}")
+
+    return PatchContentResponse(new_hash=new_hash, new_size=new_size)
 
 
 @router.get(

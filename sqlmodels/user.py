@@ -9,11 +9,11 @@ from sqlmodel import Field, Relationship
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel.main import RelationshipInfo
 
+from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, TableViewRequest, ListResponse
+
 from .auth_identity import AuthProviderType
-from .base import SQLModelBase
 from .color import ChromaticColor, NeutralColor, ThemeColorsBase
 from .model_base import ResponseBase
-from .mixin import UUIDTableBaseMixin, TableViewRequest, ListResponse
 
 T = TypeVar("T", bound="User")
 

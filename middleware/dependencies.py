@@ -17,7 +17,7 @@ from fastapi import Depends, Form, Query
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from sqlmodels.database_connection import DatabaseManager
-from sqlmodels.mixin import TimeFilterRequest, TableViewRequest
+from sqlmodel_ext import TimeFilterRequest, TableViewRequest
 from sqlmodels.user import UserFilterParams, UserStatus
 
 

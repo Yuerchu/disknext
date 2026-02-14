@@ -69,3 +69,13 @@ data/
 # JB 的运行配置（换设备用不了）
 .run/
 .xml
+
+# 前端构建产物（Docker 构建时复制）
+statics/
+
+# Cython 编译产物
+*.c
+
+# 许可证密钥（保密）
+license_private.pem
+license.key

@@ -3,8 +3,7 @@ from typing import TYPE_CHECKING
 
 from sqlmodel import Field, Relationship, text, Index
 
-from .base import SQLModelBase
-from .mixin import TableBaseMixin
+from sqlmodel_ext import SQLModelBase, TableBaseMixin
 
 if TYPE_CHECKING:
     from .download import Download

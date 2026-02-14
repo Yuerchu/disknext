@@ -5,8 +5,7 @@ from datetime import datetime
 
 from sqlmodel import Field, Relationship, CheckConstraint, Index
 
-from .base import SQLModelBase
-from .mixin import TableBaseMixin
+from sqlmodel_ext import SQLModelBase, TableBaseMixin
 
 if TYPE_CHECKING:
     from .download import Download
