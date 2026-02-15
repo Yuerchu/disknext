@@ -283,16 +283,17 @@ async def router_admin_get_settings(
     path='/test',
     summary='测试 Aria2 连接',
     description='Test Aria2 RPC connection',
-    dependencies=[Depends(admin_required)]
+    dependencies=[Depends(admin_required)],
+    status_code=204,
 )
 async def router_admin_aira2_test(
     request: Aria2TestRequest,
-) -> ResponseBase:
+) -> None:
     """
     测试 Aria2 RPC 连接。
 
     :param request: 测试请求
-    :return: 测试结果
+    :raises HTTPException: 连接失败时抛出 400
     """
     import aiohttp
 
@@ -307,22 +308,18 @@ async def router_admin_aira2_test(
         async with aiohttp.ClientSession() as client:
             async with client.post(request.rpc_url, json=payload, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                 if resp.status != 200:
-                    return ResponseBase(
-                        code=400,
-                        msg=f"连接失败，HTTP {resp.status}"
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"连接失败，HTTP {resp.status}",
                     )
 
                 result = await resp.json()
                 if "error" in result:
-                    return ResponseBase(
-                        code=400,
-                        msg=f"Aria2 错误: {result['error']['message']}"
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Aria2 错误: {result['error']['message']}",
                     )
-
-                version = result.get("result", {}).get("version", "unknown")
-                return ResponseBase(data={
-                    "connected": True,
-                    "version": version,
-                })
+    except HTTPException:
+        raise
     except Exception as e:
-        return ResponseBase(code=400, msg=f"连接失败: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"连接失败: {str(e)}")

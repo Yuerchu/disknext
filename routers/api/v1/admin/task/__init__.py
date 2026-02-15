@@ -1,3 +1,4 @@
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -6,9 +7,44 @@ from loguru import logger as l
 from middleware.auth import admin_required
 from middleware.dependencies import SessionDep, TableViewRequestDep
 from sqlmodels import (
-    ResponseBase, ListResponse,
+    ListResponse,
     Task, TaskSummary,
 )
+from sqlmodel_ext import SQLModelBase
+
+
+class TaskDetailResponse(SQLModelBase):
+    """任务详情响应"""
+
+    id: int
+    """任务ID"""
+
+    status: int
+    """任务状态"""
+
+    type: int
+    """任务类型"""
+
+    progress: int
+    """任务进度"""
+
+    error: str | None
+    """错误信息"""
+
+    user_id: str
+    """用户UUID"""
+
+    username: str | None
+    """用户名"""
+
+    props: dict[str, Any] | None
+    """任务属性"""
+
+    created_at: str
+    """创建时间"""
+
+    updated_at: str
+    """更新时间"""
 
 admin_task_router = APIRouter(
     prefix='/task',
@@ -67,7 +103,7 @@ async def router_admin_get_task_list(
 async def router_admin_get_task(
     session: SessionDep,
     task_id: int,
-) -> ResponseBase:
+) -> TaskDetailResponse:
     """
     获取任务详情。
 
@@ -82,30 +118,31 @@ async def router_admin_get_task(
     user = await task.awaitable_attrs.user
     props = await task.awaitable_attrs.props
 
-    return ResponseBase(data={
-        "id": task.id,
-        "status": task.status,
-        "type": task.type,
-        "progress": task.progress,
-        "error": task.error,
-        "user_id": str(task.user_id),
-        "username": user.email if user else None,
-        "props": props.model_dump() if props else None,
-        "created_at": task.created_at.isoformat(),
-        "updated_at": task.updated_at.isoformat(),
-    })
+    return TaskDetailResponse(
+        id=task.id,
+        status=task.status,
+        type=task.type,
+        progress=task.progress,
+        error=task.error,
+        user_id=str(task.user_id),
+        username=user.email if user else None,
+        props=props.model_dump() if props else None,
+        created_at=task.created_at.isoformat(),
+        updated_at=task.updated_at.isoformat(),
+    )
 
 
 @admin_task_router.delete(
     path='/{task_id}',
     summary='删除任务',
     description='Delete task by ID',
-    dependencies=[Depends(admin_required)]
+    dependencies=[Depends(admin_required)],
+    status_code=204,
 )
 async def router_admin_delete_task(
     session: SessionDep,
     task_id: int,
-) -> ResponseBase:
+) -> None:
     """
     删除任务。
 
@@ -120,4 +157,3 @@ async def router_admin_delete_task(
     await Task.delete(session, task)
 
     l.info(f"管理员删除了任务: {task_id}")
-    return ResponseBase(data={"deleted": True})

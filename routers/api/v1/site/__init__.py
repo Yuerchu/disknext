@@ -110,6 +110,8 @@ async def router_site_config(session: SessionDep) -> SiteConfigResponse:
 
     return SiteConfigResponse(
         title=s.get("siteName") or "DiskNext",
+        logo_light=s.get("logo_light") or None,
+        logo_dark=s.get("logo_dark") or None,
         register_enabled=s.get("register_enabled") == "1",
         login_captcha=s.get("login_captcha") == "1",
         reg_captcha=s.get("reg_captcha") == "1",

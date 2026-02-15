@@ -15,7 +15,7 @@ from uuid import UUID
 
 import whatthepatch
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from loguru import logger as l
 from sqlmodel_ext import SQLModelBase
 from whatthepatch.exceptions import HunkApplyException
@@ -37,6 +37,7 @@ from sqlmodels import (
     ResponseBase,
     Setting,
     SettingsType,
+    SourceLink,
     UploadChunkResponse,
     UploadSession,
     UploadSessionResponse,
@@ -94,6 +95,41 @@ class PatchContentResponse(ResponseBase):
     new_size: int
     """新文件字节大小"""
 
+
+class SourceLinkResponse(ResponseBase):
+    """外链响应"""
+
+    url: str
+    """外链地址（永久有效，/source/ 端点自动 302 适配存储策略）"""
+
+    downloads: int
+    """历史下载次数"""
+
+
+def _check_policy_size_limit(policy: Policy, file_size: int) -> None:
+    """
+    检查文件大小是否超过策略限制
+
+    :param policy: 存储策略
+    :param file_size: 文件大小（字节）
+    :raises HTTPException: 413 Payload Too Large
+    """
+    if policy.max_size > 0 and file_size > policy.max_size:
+        raise HTTPException(
+            status_code=413,
+            detail=f"文件大小超过限制 ({policy.max_size} bytes)",
+        )
+
+
+async def _get_site_url(session: SessionDep) -> str:
+    """获取站点 URL"""
+    site_url_setting = await Setting.get(
+        session,
+        (Setting.type == SettingsType.BASIC) & (Setting.name == "siteURL"),
+    )
+    return site_url_setting.value if site_url_setting else "http://localhost"
+
+
 # ==================== 主路由 ====================
 
 router = APIRouter(prefix="/file", tags=["file"])
@@ -149,11 +185,7 @@ async def create_upload_session(
         raise HTTPException(status_code=404, detail="存储策略不存在")
 
     # 验证文件大小限制
-    if policy.max_size > 0 and request.file_size > policy.max_size:
-        raise HTTPException(
-            status_code=413,
-            detail=f"文件大小超过限制 ({policy.max_size} bytes)"
-        )
+    _check_policy_size_limit(policy, request.file_size)
 
     # 检查存储配额（auth_required 已预加载 user.group）
     max_storage = user.group.max_storage
@@ -344,12 +376,13 @@ async def upload_chunk(
     path='/{session_id}',
     summary='删除上传会话',
     description='取消上传并删除会话及已上传的临时文件。',
+    status_code=204,
 )
 async def delete_upload_session(
     session: SessionDep,
     user: Annotated[User, Depends(auth_required)],
     session_id: UUID,
-) -> ResponseBase:
+) -> None:
     """删除上传会话端点"""
     upload_session = await UploadSession.get(session, UploadSession.id == session_id)
     if not upload_session or upload_session.owner_id != user.id:
@@ -366,18 +399,17 @@ async def delete_upload_session(
 
     l.info(f"删除上传会话: {session_id}")
 
-    return ResponseBase(data={"deleted": True})
-
 
 @_upload_router.delete(
     path='/',
     summary='清除所有上传会话',
     description='清除当前用户的所有上传会话。',
+    status_code=204,
 )
 async def clear_upload_sessions(
     session: SessionDep,
     user: Annotated[User, Depends(auth_required)],
-) -> ResponseBase:
+) -> None:
     """清除所有上传会话端点"""
     # 获取所有会话
     sessions = await UploadSession.get(
@@ -398,8 +430,6 @@ async def clear_upload_sessions(
         deleted_count += 1
 
     l.info(f"清除用户 {user.id} 的所有上传会话，共 {deleted_count} 个")
-
-    return ResponseBase(data={"deleted": deleted_count})
 
 
 @_upload_router.get(
@@ -527,12 +557,13 @@ router.include_router(viewers_router)
     path='/create',
     summary='创建空白文件',
     description='在指定目录下创建空白文件。',
+    status_code=204,
 )
 async def create_empty_file(
     session: SessionDep,
     user: Annotated[User, Depends(auth_required)],
     request: CreateFileRequest,
-) -> ResponseBase:
+) -> None:
     """创建空白文件端点"""
     # 存储 user.id，避免后续 save() 导致 user 过期后无法访问
     user_id = user.id
@@ -607,12 +638,6 @@ async def create_empty_file(
     file_object = await file_object.save(session)
 
     l.info(f"创建空白文件: {file_object.name}, id={file_object.id}")
-
-    return ResponseBase(data={
-        "id": str(file_object.id),
-        "name": file_object.name,
-        "size": file_object.size,
-    })
 
 
 # ==================== WOPI 会话 ====================
@@ -724,28 +749,145 @@ async def create_wopi_session(
 
 # ==================== 文件外链（保留原有端点结构） ====================
 
+async def _validate_source_link(
+    session: SessionDep,
+    file_id: UUID,
+) -> tuple[Object, SourceLink, PhysicalFile, Policy]:
+    """
+    验证外链访问的完整链路
+
+    :returns: (file_obj, link, physical_file, policy)
+    :raises HTTPException: 验证失败
+    """
+    file_obj = await Object.get(
+        session,
+        (Object.id == file_id) & (Object.deleted_at == None),
+    )
+    if not file_obj:
+        http_exceptions.raise_not_found("文件不存在")
+
+    if not file_obj.is_file:
+        http_exceptions.raise_bad_request("对象不是文件")
+
+    if file_obj.is_banned:
+        http_exceptions.raise_banned()
+
+    policy = await Policy.get(session, Policy.id == file_obj.policy_id)
+    if not policy:
+        http_exceptions.raise_internal_error("存储策略不存在")
+
+    if not policy.is_origin_link_enable:
+        http_exceptions.raise_forbidden("当前存储策略未启用外链功能")
+
+    # SourceLink 必须存在（只有主动创建过外链的文件才能通过外链访问）
+    link: SourceLink | None = await SourceLink.get(
+        session,
+        SourceLink.object_id == file_id,
+    )
+    if not link:
+        http_exceptions.raise_not_found("外链不存在")
+
+    physical_file = await file_obj.awaitable_attrs.physical_file
+    if not physical_file or not physical_file.storage_path:
+        http_exceptions.raise_internal_error("文件存储路径丢失")
+
+    return file_obj, link, physical_file, policy
+
+
 @router.get(
-    path='/get/{id}/{name}',
+    path='/get/{file_id}/{name}',
     summary='文件外链（直接输出文件数据）',
-    description='通过外链直接获取文件内容。',
+    description='通过外链直接获取文件内容，公开访问无需认证。',
 )
 async def file_get(
     session: SessionDep,
-    id: str,
+    file_id: UUID,
     name: str,
 ) -> FileResponse:
-    """文件外链端点（直接输出）"""
-    raise HTTPException(status_code=501, detail="外链功能暂未实现")
+    """
+    文件外链端点（直接输出）
+
+    公开访问，无需认证。通过 UUID 定位文件，URL 中的 name 仅用于 Content-Disposition。
+
+    错误处理：
+    - 403: 存储策略未启用外链 / 文件被封禁
+    - 404: 文件不存在 / 外链不存在 / 物理文件不存在
+    """
+    file_obj, link, physical_file, policy = await _validate_source_link(session, file_id)
+
+    if policy.type != PolicyType.LOCAL:
+        http_exceptions.raise_not_implemented("S3 存储暂未实现")
+
+    storage_service = LocalStorageService(policy)
+    if not await storage_service.file_exists(physical_file.storage_path):
+        http_exceptions.raise_not_found("物理文件不存在")
+
+    # 缓存物理路径（save 后对象属性会过期）
+    file_path = physical_file.storage_path
+
+    # 递增下载次数
+    link.downloads += 1
+    await link.save(session)
+
+    return FileResponse(
+        path=file_path,
+        filename=name,
+        media_type="application/octet-stream",
+    )
 
 
 @router.get(
-    path='/source/{id}/{name}',
-    summary='文件外链(301跳转)',
-    description='通过外链获取文件重定向地址。',
+    path='/source/{file_id}/{name}',
+    summary='文件外链（302重定向或直接输出）',
+    description='通过外链获取文件，公有存储 302 重定向，私有存储直接输出。',
+    response_model=None,
 )
-async def file_source_redirect(id: str, name: str) -> ResponseBase:
-    """文件外链端点（301跳转）"""
-    raise HTTPException(status_code=501, detail="外链功能暂未实现")
+async def file_source_redirect(
+    session: SessionDep,
+    file_id: UUID,
+    name: str,
+) -> FileResponse | RedirectResponse:
+    """
+    文件外链端点（重定向/直接输出）
+
+    公开访问，无需认证。根据 policy.is_private 决定服务方式：
+    - is_private=False 且 base_url 非空：302 临时重定向
+    - is_private=True 或 base_url 为空：直接返回文件内容
+
+    错误处理：
+    - 403: 存储策略未启用外链 / 文件被封禁
+    - 404: 文件不存在 / 外链不存在 / 物理文件不存在
+    """
+    file_obj, link, physical_file, policy = await _validate_source_link(session, file_id)
+
+    if policy.type != PolicyType.LOCAL:
+        http_exceptions.raise_not_implemented("S3 存储暂未实现")
+
+    storage_service = LocalStorageService(policy)
+    if not await storage_service.file_exists(physical_file.storage_path):
+        http_exceptions.raise_not_found("物理文件不存在")
+
+    # 缓存所有需要的值（save 后对象属性会过期）
+    file_path = physical_file.storage_path
+    is_private = policy.is_private
+    base_url = policy.base_url
+
+    # 递增下载次数
+    link.downloads += 1
+    await link.save(session)
+
+    # 公有存储：302 重定向到 base_url
+    if not is_private and base_url:
+        relative_path = storage_service.get_relative_path(file_path)
+        redirect_url = f"{base_url}/{relative_path}"
+        return RedirectResponse(url=redirect_url, status_code=302)
+
+    # 私有存储或 base_url 为空：通过应用代理文件
+    return FileResponse(
+        path=file_path,
+        filename=name,
+        media_type="application/octet-stream",
+    )
 
 
 @router.put(
@@ -903,6 +1045,9 @@ async def patch_file_content(
 
     new_bytes = new_text.encode('utf-8')
 
+    # 验证文件大小限制
+    _check_policy_size_limit(policy, len(new_bytes))
+
     # 写入文件
     await storage_service.write_file(storage_path, new_bytes)
 
@@ -939,14 +1084,65 @@ async def file_thumb(id: str) -> ResponseBase:
 
 
 @router.post(
-    path='/source/{id}',
-    summary='取得文件外链',
-    description='获取文件的外链地址。',
-    dependencies=[Depends(auth_required)]
+    path='/source/{file_id}',
+    summary='创建/获取文件外链',
+    description='为指定文件创建或获取已有的外链地址。',
 )
-async def file_source(id: str) -> ResponseBase:
-    """获取文件外链"""
-    raise HTTPException(status_code=501, detail="外链功能暂未实现")
+async def file_source(
+    session: SessionDep,
+    user: Annotated[User, Depends(auth_required)],
+    file_id: UUID,
+) -> SourceLinkResponse:
+    """
+    创建/获取文件外链端点
+
+    检查 policy 是否启用外链，查找或创建 SourceLink，返回外链 URL。
+
+    认证：JWT token 必填
+
+    错误处理：
+    - 403: 存储策略未启用外链
+    - 404: 文件不存在
+    """
+    file_obj = await Object.get(
+        session,
+        (Object.id == file_id) & (Object.deleted_at == None),
+    )
+    if not file_obj or file_obj.owner_id != user.id:
+        http_exceptions.raise_not_found("文件不存在")
+
+    if not file_obj.is_file:
+        http_exceptions.raise_bad_request("对象不是文件")
+
+    if file_obj.is_banned:
+        http_exceptions.raise_banned()
+
+    policy = await Policy.get(session, Policy.id == file_obj.policy_id)
+    if not policy:
+        http_exceptions.raise_internal_error("存储策略不存在")
+
+    if not policy.is_origin_link_enable:
+        http_exceptions.raise_forbidden("当前存储策略未启用外链功能")
+
+    # 缓存文件名（save 后对象属性会过期）
+    file_name = file_obj.name
+
+    # 查找已有 SourceLink
+    link: SourceLink | None = await SourceLink.get(
+        session,
+        (SourceLink.object_id == file_id) & (SourceLink.name == file_name),
+    )
+    if not link:
+        link = SourceLink(
+            name=file_name,
+            object_id=file_id,
+        )
+        link = await link.save(session)
+
+    site_url = await _get_site_url(session)
+    url = f"{site_url}/api/v1/file/source/{file_id}/{file_name}"
+
+    return SourceLinkResponse(url=url, downloads=link.downloads)
 
 
 @router.post(

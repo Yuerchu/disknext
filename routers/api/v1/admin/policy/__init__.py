@@ -1,3 +1,4 @@
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -8,7 +9,8 @@ from middleware.auth import admin_required
 from middleware.dependencies import SessionDep, TableViewRequestDep
 from sqlmodels import (
     Policy, PolicyBase, PolicyType, PolicySummary, ResponseBase,
-    ListResponse, Object, )
+    ListResponse, Object,
+)
 from sqlmodel_ext import SQLModelBase
 from service.storage import DirectoryCreationError, LocalStorageService
 
@@ -16,6 +18,78 @@ admin_policy_router = APIRouter(
     prefix='/policy',
     tags=['admin', 'admin_policy']
 )
+
+
+class PathTestResponse(SQLModelBase):
+    """路径测试响应"""
+
+    path: str
+    """解析后的路径"""
+
+    is_exists: bool
+    """路径是否存在"""
+
+    is_writable: bool
+    """路径是否可写"""
+
+
+class PolicyGroupInfo(SQLModelBase):
+    """策略关联的用户组信息"""
+
+    id: str
+    """用户组UUID"""
+
+    name: str
+    """用户组名称"""
+
+
+class PolicyDetailResponse(SQLModelBase):
+    """存储策略详情响应"""
+
+    id: str
+    """策略UUID"""
+
+    name: str
+    """策略名称"""
+
+    type: str
+    """策略类型"""
+
+    server: str | None
+    """服务器地址"""
+
+    bucket_name: str | None
+    """存储桶名称"""
+
+    is_private: bool
+    """是否私有"""
+
+    base_url: str | None
+    """基础URL"""
+
+    max_size: int
+    """最大文件尺寸"""
+
+    auto_rename: bool
+    """是否自动重命名"""
+
+    dir_name_rule: str | None
+    """目录命名规则"""
+
+    file_name_rule: str | None
+    """文件命名规则"""
+
+    is_origin_link_enable: bool
+    """是否启用外链"""
+
+    options: dict[str, Any] | None
+    """策略选项"""
+
+    groups: list[PolicyGroupInfo]
+    """关联的用户组"""
+
+    object_count: int
+    """使用此策略的对象数量"""
 
 class PolicyTestPathRequest(SQLModelBase):
     """测试本地路径请求 DTO"""
@@ -70,7 +144,7 @@ async def router_policy_list(
 )
 async def router_policy_test_path(
     request: PolicyTestPathRequest,
-) -> ResponseBase:
+) -> PathTestResponse:
     """
     测试本地存储路径是否可用。
 
@@ -97,22 +171,23 @@ async def router_policy_test_path(
         except Exception:
             pass
 
-    return ResponseBase(data={
-        "path": str(path),
-        "exists": is_exists,
-        "writable": is_writable,
-    })
+    return PathTestResponse(
+        path=str(path),
+        is_exists=is_exists,
+        is_writable=is_writable,
+    )
 
 
 @admin_policy_router.post(
     path='/test/slave',
     summary='测试从机通信',
     description='Test slave node communication',
-    dependencies=[Depends(admin_required)]
+    dependencies=[Depends(admin_required)],
+    status_code=204,
 )
 async def router_policy_test_slave(
     request: PolicyTestSlaveRequest,
-) -> ResponseBase:
+) -> None:
     """
     测试从机RPC通信。
 
@@ -129,25 +204,28 @@ async def router_policy_test_slave(
                 timeout=aiohttp.ClientTimeout(total=10)
             ) as resp:
                 if resp.status == 200:
-                    return ResponseBase(data={"connected": True})
+                    return
                 else:
-                    return ResponseBase(
-                        code=400,
-                        msg=f"从机响应错误，HTTP {resp.status}"
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"从机响应错误，HTTP {resp.status}",
                     )
+    except HTTPException:
+        raise
     except Exception as e:
-        return ResponseBase(code=400, msg=f"连接失败: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"连接失败: {str(e)}")
 
 @admin_policy_router.post(
     path='/',
     summary='创建存储策略',
     description='创建新的存储策略。对于本地存储策略，会自动创建物理目录。',
-    dependencies=[Depends(admin_required)]
+    dependencies=[Depends(admin_required)],
+    status_code=204,
 )
 async def router_policy_add_policy(
     session: SessionDep,
     request: PolicyCreateRequest,
-) -> ResponseBase:
+) -> None:
     """
     创建存储策略端点
 
@@ -199,14 +277,7 @@ async def router_policy_add_policy(
             raise HTTPException(status_code=500, detail=f"创建存储目录失败: {e}")
 
     # 保存到数据库
-    policy = await policy.save(session)
-
-    return ResponseBase(data={
-        "id": str(policy.id),
-        "name": policy.name,
-        "type": policy.type.value,
-        "server": policy.server,
-    })
+    await policy.save(session)
 
 @admin_policy_router.post(
     path='/cors',
@@ -274,7 +345,7 @@ async def router_policy_onddrive_oauth(
 async def router_policy_get_policy(
     session: SessionDep,
     policy_id: UUID,
-) -> ResponseBase:
+) -> PolicyDetailResponse:
     """
     获取存储策略详情。
 
@@ -292,35 +363,36 @@ async def router_policy_get_policy(
     # 统计使用此策略的对象数量
     object_count = await Object.count(session, Object.policy_id == policy_id)
 
-    return ResponseBase(data={
-        "id": str(policy.id),
-        "name": policy.name,
-        "type": policy.type.value,
-        "server": policy.server,
-        "bucket_name": policy.bucket_name,
-        "is_private": policy.is_private,
-        "base_url": policy.base_url,
-        "max_size": policy.max_size,
-        "auto_rename": policy.auto_rename,
-        "dir_name_rule": policy.dir_name_rule,
-        "file_name_rule": policy.file_name_rule,
-        "is_origin_link_enable": policy.is_origin_link_enable,
-        "options": policy.options.model_dump() if policy.options else None,
-        "groups": [{"id": str(g.id), "name": g.name} for g in groups],
-        "object_count": object_count,
-    })
+    return PolicyDetailResponse(
+        id=str(policy.id),
+        name=policy.name,
+        type=policy.type.value,
+        server=policy.server,
+        bucket_name=policy.bucket_name,
+        is_private=policy.is_private,
+        base_url=policy.base_url,
+        max_size=policy.max_size,
+        auto_rename=policy.auto_rename,
+        dir_name_rule=policy.dir_name_rule,
+        file_name_rule=policy.file_name_rule,
+        is_origin_link_enable=policy.is_origin_link_enable,
+        options=policy.options.model_dump() if policy.options else None,
+        groups=[PolicyGroupInfo(id=str(g.id), name=g.name) for g in groups],
+        object_count=object_count,
+    )
 
 
 @admin_policy_router.delete(
     path='/{policy_id}',
     summary='删除存储策略',
     description='Delete storage policy by ID',
-    dependencies=[Depends(admin_required)]
+    dependencies=[Depends(admin_required)],
+    status_code=204,
 )
 async def router_policy_delete_policy(
     session: SessionDep,
     policy_id: UUID,
-) -> ResponseBase:
+) -> None:
     """
     删除存储策略。
 
@@ -346,4 +418,3 @@ async def router_policy_delete_policy(
     await Policy.delete(session, policy)
 
     l.info(f"管理员删除了存储策略: {policy_name}")
-    return ResponseBase(data={"deleted": True})

@@ -109,6 +109,8 @@ default_settings: list[Setting] = [
     Setting(name="pwa_display", value="standalone", type=SettingsType.PWA),
     Setting(name="pwa_theme_color", value="#000000", type=SettingsType.PWA),
     Setting(name="pwa_background_color", value="#ffffff", type=SettingsType.PWA),
+    Setting(name="logo_light", value="", type=SettingsType.BASIC),
+    Setting(name="logo_dark", value="", type=SettingsType.BASIC),
     # ==================== 认证方式配置 ====================
     Setting(name="auth_email_password_enabled", value="1", type=SettingsType.AUTH),
     Setting(name="auth_phone_sms_enabled", value="0", type=SettingsType.AUTH),

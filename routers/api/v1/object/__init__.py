@@ -26,7 +26,6 @@ from sqlmodels import (
     PhysicalFile,
     Policy,
     PolicyType,
-    ResponseBase,
     User,
 )
 from service.storage import (
@@ -439,9 +438,9 @@ async def router_object_rename(
     if '/' in new_name or '\\' in new_name:
         raise HTTPException(status_code=400, detail="名称不能包含斜杠")
 
-    # 如果名称没有变化，直接返回成功
+    # 如果名称没有变化，直接返回
     if obj.name == new_name:
-        return ResponseBase(data={"success": True})
+        return  # noqa: already 204
 
     # 检查同目录下是否存在同名对象（仅检查未删除的）
     existing = await Object.get(

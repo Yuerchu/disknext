@@ -55,7 +55,7 @@ async def router_admin_get_groups(
 async def router_admin_get_group(
     session: SessionDep,
     group_id: UUID,
-) -> ResponseBase:
+) -> GroupDetailResponse:
     """
     根据用户组ID获取用户组详细信息。
 
@@ -71,9 +71,7 @@ async def router_admin_get_group(
     # 直接访问已加载的关系，无需额外查询
     policies = group.policies
     user_count = await User.count(session, User.group_id == group_id)
-    response = GroupDetailResponse.from_group(group, user_count, policies)
-
-    return ResponseBase(data=response.model_dump())
+    return GroupDetailResponse.from_group(group, user_count, policies)
 
 
 @admin_group_router.get(

@@ -20,15 +20,15 @@ slave_aria2_router = APIRouter(
     summary='测试用路由',
     description='Test route for checking connectivity.',
 )
-def router_slave_ping() -> ResponseBase:
+def router_slave_ping() -> str:
     """
     Test route for checking connectivity.
-    
+
     Returns:
-        ResponseBase: A response model indicating success.
+        str: 后端版本号
     """
     from utils.conf.appmeta import BackendVersion
-    return ResponseBase(data=BackendVersion)
+    return BackendVersion
 
 @slave_router.post(
     path='/post',

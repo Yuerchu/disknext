@@ -1,3 +1,4 @@
+from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -6,8 +7,53 @@ from loguru import logger as l
 from middleware.auth import admin_required
 from middleware.dependencies import SessionDep, TableViewRequestDep
 from sqlmodels import (
-    ResponseBase, ListResponse,
-    Share, AdminShareListItem, )
+    ListResponse,
+    Share, AdminShareListItem,
+)
+from sqlmodel_ext import SQLModelBase
+
+
+class ShareDetailResponse(SQLModelBase):
+    """分享详情响应"""
+
+    id: UUID
+    """分享UUID"""
+
+    code: str
+    """分享码"""
+
+    views: int
+    """浏览次数"""
+
+    downloads: int
+    """下载次数"""
+
+    remain_downloads: int | None
+    """剩余下载次数"""
+
+    expires: datetime | None
+    """过期时间"""
+
+    preview_enabled: bool
+    """是否启用预览"""
+
+    score: int
+    """评分"""
+
+    has_password: bool
+    """是否有密码"""
+
+    user_id: str
+    """用户UUID"""
+
+    username: str | None
+    """用户名"""
+
+    object: dict | None
+    """关联对象信息"""
+
+    created_at: str
+    """创建时间"""
 
 admin_share_router = APIRouter(
     prefix='/share',
@@ -54,7 +100,7 @@ async def router_admin_get_share_list(
 async def router_admin_get_share(
     session: SessionDep,
     share_id: UUID,
-) -> ResponseBase:
+) -> ShareDetailResponse:
     """
     获取分享详情。
 
@@ -69,38 +115,39 @@ async def router_admin_get_share(
     obj = await share.awaitable_attrs.object
     user = await share.awaitable_attrs.user
 
-    return ResponseBase(data={
-        "id": share.id,
-        "code": share.code,
-        "views": share.views,
-        "downloads": share.downloads,
-        "remain_downloads": share.remain_downloads,
-        "expires": share.expires.isoformat() if share.expires else None,
-        "preview_enabled": share.preview_enabled,
-        "score": share.score,
-        "has_password": bool(share.password),
-        "user_id": str(share.user_id),
-        "username": user.email if user else None,
-        "object": {
+    return ShareDetailResponse(
+        id=share.id,
+        code=share.code,
+        views=share.views,
+        downloads=share.downloads,
+        remain_downloads=share.remain_downloads,
+        expires=share.expires,
+        preview_enabled=share.preview_enabled,
+        score=share.score,
+        has_password=bool(share.password),
+        user_id=str(share.user_id),
+        username=user.email if user else None,
+        object={
             "id": str(obj.id),
             "name": obj.name,
             "type": obj.type.value,
             "size": obj.size,
         } if obj else None,
-        "created_at": share.created_at.isoformat(),
-    })
+        created_at=share.created_at.isoformat(),
+    )
 
 
 @admin_share_router.delete(
     path='/{share_id}',
     summary='删除分享',
     description='Delete share by ID',
-    dependencies=[Depends(admin_required)]
+    dependencies=[Depends(admin_required)],
+    status_code=204,
 )
 async def router_admin_delete_share(
     session: SessionDep,
     share_id: UUID,
-) -> ResponseBase:
+) -> None:
     """
     删除分享。
 
@@ -115,4 +162,3 @@ async def router_admin_delete_share(
     await Share.delete(session, share)
 
     l.info(f"管理员删除了分享: {share.code}")
-    return ResponseBase(data={"deleted": True})
