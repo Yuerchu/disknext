@@ -318,7 +318,7 @@ async def router_user_magic_link(
     site_url = site_url_setting.value if site_url_setting else "http://localhost"
 
     # TODO: 发送邮件（包含 {site_url}/auth/magic-link?token={token}）
-    logger.info(f"Magic Link token 已生成: {token} (邮件发送待实现)")
+    logger.info(f"Magic Link token 已为 {request.email} 生成 (邮件发送待实现)")
 
 
 @user_router.post(

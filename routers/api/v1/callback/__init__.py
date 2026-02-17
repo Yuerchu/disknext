@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Query
 from fastapi.responses import PlainTextResponse
+from loguru import logger as l
 
 from sqlmodels import ResponseBase
 import service.oauth
@@ -64,16 +65,17 @@ async def router_callback_github(
     """
     try:
         access_token = await service.oauth.github.get_access_token(code)
-        # [TODO] 把access_token写数据库里
         if not access_token:
-            return PlainTextResponse("Failed to retrieve access token from GitHub.", status_code=400)
-        
+            return PlainTextResponse("GitHub 认证失败", status_code=400)
+
         user_data = await service.oauth.github.get_user_info(access_token.access_token)
-        # [TODO] 把user_data写数据库里
-        
-        return PlainTextResponse(f"User information processed successfully, code: {code}, user_data: {user_data.json_dump()}", status_code=200)
+        # [TODO] 把 access_token 和 user_data 写数据库，生成 JWT，重定向到前端
+        l.info(f"GitHub OAuth 回调成功: user={user_data.user_data.login}")
+
+        return PlainTextResponse("认证成功，功能开发中", status_code=200)
     except Exception as e:
-        return PlainTextResponse(f"An error occurred: {str(e)}", status_code=500)
+        l.error(f"GitHub OAuth 回调异常: {e}")
+        return PlainTextResponse("认证过程中发生错误，请重试", status_code=500)
 
 @pay_router.post(
     path='/alipay',

@@ -260,6 +260,33 @@ def _check_storage_quota(user: User, additional_bytes: int) -> None:
         raise DAVError(HTTP_INSUFFICIENT_STORAGE, "存储空间不足")
 
 
+class QuotaLimitedWriter(io.RawIOBase):
+    """带配额限制的写入流包装器"""
+
+    def __init__(self, stream: io.BufferedWriter, max_bytes: int) -> None:
+        self._stream = stream
+        self._max_bytes = max_bytes
+        self._bytes_written = 0
+
+    def writable(self) -> bool:
+        return True
+
+    def write(self, b: bytes | bytearray) -> int:
+        if self._bytes_written + len(b) > self._max_bytes:
+            raise DAVError(HTTP_INSUFFICIENT_STORAGE, "存储空间不足")
+        written = self._stream.write(b)
+        self._bytes_written += written
+        return written
+
+    def close(self) -> None:
+        self._stream.close()
+        super().close()
+
+    @property
+    def bytes_written(self) -> int:
+        return self._bytes_written
+
+
 # ==================== Provider ====================
 
 class DiskNextDAVProvider(DAVProvider):
@@ -441,7 +468,7 @@ class DiskNextFile(DAVNonCollection):
         self._user_id = user_id
         self._account = account
         self._write_path: str | None = None
-        self._write_stream: io.BufferedWriter | None = None
+        self._write_stream: io.BufferedWriter | QuotaLimitedWriter | None = None
 
     def get_content_length(self) -> int | None:
         return self._obj.size if self._obj.size else 0
@@ -486,20 +513,32 @@ class DiskNextFile(DAVNonCollection):
 
         return open(full_path, "rb")  # noqa: SIM115
 
-    def begin_write(self, *, content_type: str | None = None) -> io.BufferedWriter:
+    def begin_write(
+        self,
+        *,
+        content_type: str | None = None,
+    ) -> io.BufferedWriter | QuotaLimitedWriter:
         """
         开始写入文件（PUT 操作）。
 
         返回一个可写的文件流，WsgiDAV 将向其中写入请求体数据。
+        当用户有配额限制时，返回 QuotaLimitedWriter 在写入过程中实时检查配额。
         """
         _check_readonly(self.environ)
 
         # 检查配额
+        remaining_quota: int = 0
         user = _run_async(_get_user(self._user_id))
         if user:
-            content_length = self.environ.get("CONTENT_LENGTH")
-            if content_length:
-                _check_storage_quota(user, int(content_length))
+            max_storage = user.group.max_storage
+            if max_storage > 0:
+                remaining_quota = max_storage - user.storage
+                if remaining_quota <= 0:
+                    raise DAVError(HTTP_INSUFFICIENT_STORAGE, "存储空间不足")
+                # Content-Length 预检（如果有的话）
+                content_length = self.environ.get("CONTENT_LENGTH")
+                if content_length and int(content_length) > remaining_quota:
+                    raise DAVError(HTTP_INSUFFICIENT_STORAGE, "存储空间不足")
 
         # 获取策略以确定存储路径
         policy = _run_async(_get_policy(self._obj.policy_id))
@@ -515,7 +554,14 @@ class DiskNextFile(DAVNonCollection):
         )
 
         self._write_path = full_path
-        self._write_stream = open(full_path, "wb")  # noqa: SIM115
+        raw_stream = open(full_path, "wb")  # noqa: SIM115
+
+        # 有配额限制时使用包装流，实时检查写入量
+        if remaining_quota > 0:
+            self._write_stream = QuotaLimitedWriter(raw_stream, remaining_quota)
+        else:
+            self._write_stream = raw_stream
+
         return self._write_stream
 
     def end_write(self, *, with_errors: bool) -> None:
@@ -524,7 +570,14 @@ class DiskNextFile(DAVNonCollection):
             self._write_stream.close()
             self._write_stream = None
 
-        if with_errors or not self._write_path:
+        if with_errors:
+            if self._write_path:
+                file_path = Path(self._write_path)
+                if file_path.exists():
+                    file_path.unlink()
+            return
+
+        if not self._write_path:
             return
 
         # 获取文件大小

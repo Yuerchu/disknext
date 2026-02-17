@@ -3,12 +3,14 @@
 
 支持多种认证方式：邮箱密码、GitHub OAuth、QQ OAuth、Passkey、Magic Link、手机短信（预留）。
 """
+import hashlib
 from uuid import UUID, uuid4
 
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from loguru import logger as l
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from service.redis.token_store import TokenStore
 from sqlmodels.auth_identity import AuthIdentity, AuthProviderType
 from sqlmodels.group import GroupClaims, GroupOptions
 from sqlmodels.object import Object, ObjectType
@@ -362,6 +364,12 @@ async def _login_magic_link(
         http_exceptions.raise_unauthorized("Magic Link 已过期")
     except BadSignature:
         http_exceptions.raise_unauthorized("Magic Link 无效")
+
+    # 防重放：使用 token 哈希作为标识符
+    token_hash = hashlib.sha256(request.identifier.encode()).hexdigest()
+    is_first_use = await TokenStore.mark_used(f"magic_link:{token_hash}", ttl=600)
+    if not is_first_use:
+        http_exceptions.raise_unauthorized("Magic Link 已被使用")
 
     # 查找绑定了该邮箱的 AuthIdentity（email_password 或 magic_link）
     identity: AuthIdentity | None = await AuthIdentity.get(

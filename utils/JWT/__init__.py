@@ -37,6 +37,12 @@ async def load_secret_key() -> None:
         if setting:
             SECRET_KEY = setting.value
 
+    if not SECRET_KEY:
+        raise RuntimeError(
+            "JWT SECRET_KEY 未配置，拒绝启动。"
+            "请在 Setting 表中添加 type='auth', name='secret_key' 的记录。"
+        )
+
 
 def build_token_payload(
     data: dict,
