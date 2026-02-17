@@ -78,6 +78,26 @@ class ObjectBase(SQLModelBase):
 
 # ==================== DTO 模型 ====================
 
+class ObjectFileFinalize(SQLModelBase):
+    """文件上传完成后更新 Object 的 DTO"""
+
+    size: int
+    """文件大小（字节）"""
+
+    physical_file_id: UUID
+    """关联的物理文件UUID"""
+
+
+class ObjectMoveUpdate(SQLModelBase):
+    """移动/重命名 Object 的 DTO"""
+
+    parent_id: UUID
+    """新的父目录UUID"""
+
+    name: str
+    """新名称"""
+
+
 class DirectoryCreateRequest(SQLModelBase):
     """创建目录请求 DTO"""
 

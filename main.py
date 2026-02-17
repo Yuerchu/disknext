@@ -5,6 +5,8 @@ from fastapi import FastAPI, Request
 from loguru import logger as l
 
 from routers import router
+from routers.dav import dav_app
+from routers.dav.provider import EventLoopRef
 from service.redis import RedisManager
 from sqlmodels.database_connection import DatabaseManager
 from sqlmodels.migration import migration
@@ -39,6 +41,9 @@ STATICS_DIR: Path = (Path(__file__).parent / "statics").resolve()
 async def _init_db() -> None:
     """初始化数据库连接引擎"""
     await DatabaseManager.init(appmeta.database_url, debug=appmeta.debug)
+
+# 捕获事件循环引用（供 WSGI 线程桥接使用）
+lifespan.add_startup(EventLoopRef.capture)
 
 # 添加初始化数据库启动项
 lifespan.add_startup(_init_db)
@@ -87,6 +92,9 @@ async def handle_unexpected_exceptions(
 
 # 挂载路由
 app.include_router(router)
+
+# 挂载 WebDAV 协议端点（优先于 SPA catch-all）
+app.mount("/dav", dav_app)
 
 # 挂载前端静态文件（仅当 statics/ 目录存在时，即 Docker 部署环境）
 if STATICS_DIR.is_dir():

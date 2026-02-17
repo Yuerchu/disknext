@@ -75,7 +75,9 @@ from .object import (
     ObjectBase,
     ObjectCopyRequest,
     ObjectDeleteRequest,
+    ObjectFileFinalize,
     ObjectMoveRequest,
+    ObjectMoveUpdate,
     ObjectPropertyDetailResponse,
     ObjectPropertyResponse,
     ObjectRenameRequest,
@@ -115,7 +117,10 @@ from .source_link import SourceLink
 from .storage_pack import StoragePack
 from .tag import Tag, TagType
 from .task import Task, TaskProps, TaskPropsBase, TaskStatus, TaskType, TaskSummary
-from .webdav import WebDAV
+from .webdav import (
+    WebDAV, WebDAVBase,
+    WebDAVCreateRequest, WebDAVUpdateRequest, WebDAVAccountResponse,
+)
 from .file_app import (
     FileApp, FileAppType, FileAppExtension, FileAppGroupLink, UserFileAppDefault,
     # DTO
