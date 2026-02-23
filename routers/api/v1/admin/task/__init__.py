@@ -8,7 +8,7 @@ from middleware.auth import admin_required
 from middleware.dependencies import SessionDep, TableViewRequestDep
 from sqlmodels import (
     ListResponse,
-    Task, TaskSummary,
+    Task, TaskSummary, TaskStatus, TaskType,
 )
 from sqlmodel_ext import SQLModelBase
 
@@ -19,10 +19,10 @@ class TaskDetailResponse(SQLModelBase):
     id: int
     """任务ID"""
 
-    status: int
+    status: TaskStatus
     """任务状态"""
 
-    type: int
+    type: TaskType
     """任务类型"""
 
     progress: int
