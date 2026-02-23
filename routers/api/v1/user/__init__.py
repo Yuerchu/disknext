@@ -247,11 +247,12 @@ async def router_user_register(
     )
     await identity.save(session)
 
-    # 8. 创建用户根目录
-    default_policy = await sqlmodels.Policy.get(session, sqlmodels.Policy.name == "本地存储")
-    if not default_policy:
-        logger.error("默认存储策略不存在")
+    # 8. 创建用户根目录（使用用户组关联的第一个存储策略）
+    await session.refresh(default_group, ['policies'])
+    if not default_group.policies:
+        logger.error("默认用户组未关联任何存储策略")
         http_exceptions.raise_internal_error()
+    default_policy = default_group.policies[0]
 
     await sqlmodels.Object(
         name="/",

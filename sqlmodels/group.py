@@ -2,6 +2,7 @@
 from typing import TYPE_CHECKING
 from uuid import UUID
 
+from sqlalchemy import BigInteger
 from sqlmodel import Field, Relationship, text
 
 from sqlmodel_ext import SQLModelBase, TableBaseMixin, UUIDTableBaseMixin
@@ -260,7 +261,7 @@ class Group(GroupBase, UUIDTableBaseMixin):
     name: str = Field(max_length=255, unique=True)
     """用户组名"""
 
-    max_storage: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
+    max_storage: int = Field(default=0, sa_type=BigInteger, sa_column_kwargs={"server_default": "0"})
     """最大存储空间（字节）"""
 
     share_enabled: bool = Field(default=False, sa_column_kwargs={"server_default": text("false")})

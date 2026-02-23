@@ -8,13 +8,14 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from loguru import logger as l
 
 from middleware.auth import auth_required
 from middleware.dependencies import SessionDep
 from sqlmodels import (
     CreateFileRequest,
+    Group,
     Object,
     ObjectCopyRequest,
     ObjectDeleteRequest,
@@ -22,18 +23,27 @@ from sqlmodels import (
     ObjectPropertyDetailResponse,
     ObjectPropertyResponse,
     ObjectRenameRequest,
+    ObjectSwitchPolicyRequest,
     ObjectType,
     PhysicalFile,
     Policy,
     PolicyType,
+    Task,
+    TaskProps,
+    TaskStatus,
+    TaskSummaryBase,
+    TaskType,
     User,
 )
 from service.storage import (
     LocalStorageService,
     adjust_user_storage,
     copy_object_recursive,
+    migrate_file_with_task,
+    migrate_directory_files,
 )
 from service.storage.object import soft_delete_objects
+from sqlmodels.database_connection import DatabaseManager
 from utils import http_exceptions
 
 object_router = APIRouter(
@@ -575,3 +585,136 @@ async def router_object_property_detail(
         response.checksum_md5 = obj.file_metadata.checksum_md5
 
     return response
+
+
+@object_router.patch(
+    path='/{object_id}/policy',
+    summary='切换对象存储策略',
+)
+async def router_object_switch_policy(
+    session: SessionDep,
+    background_tasks: BackgroundTasks,
+    user: Annotated[User, Depends(auth_required)],
+    object_id: UUID,
+    request: ObjectSwitchPolicyRequest,
+) -> TaskSummaryBase:
+    """
+    切换对象的存储策略
+
+    文件：立即创建后台迁移任务，将文件从源策略搬到目标策略。
+    目录：更新目录 policy_id（新文件使用新策略）；
+          若 is_migrate_existing=True，额外创建后台任务迁移所有已有文件。
+
+    认证：JWT Bearer Token
+
+    错误处理：
+    - 404: 对象不存在
+    - 403: 无权操作此对象 / 用户组无权使用目标策略
+    - 400: 目标策略与当前相同 / 不能对根目录操作
+    """
+    user_id = user.id
+
+    # 查找对象
+    obj = await Object.get(
+        session,
+        (Object.id == object_id) & (Object.deleted_at == None)
+    )
+    if not obj:
+        http_exceptions.raise_not_found("对象不存在")
+    if obj.owner_id != user_id:
+        http_exceptions.raise_forbidden("无权操作此对象")
+    if obj.is_banned:
+        http_exceptions.raise_banned()
+
+    # 根目录不能直接切换策略（应通过子对象或子目录操作）
+    if obj.parent_id is None:
+        raise HTTPException(status_code=400, detail="不能对根目录切换存储策略，请对子目录操作")
+
+    # 校验目标策略存在
+    dest_policy = await Policy.get(session, Policy.id == request.policy_id)
+    if not dest_policy:
+        http_exceptions.raise_not_found("目标存储策略不存在")
+
+    # 校验用户组权限
+    group: Group = await user.awaitable_attrs.group
+    await session.refresh(group, ['policies'])
+    allowed_ids = {p.id for p in group.policies}
+    if request.policy_id not in allowed_ids:
+        http_exceptions.raise_forbidden("当前用户组无权使用该存储策略")
+
+    # 不能切换到相同策略
+    if obj.policy_id == request.policy_id:
+        raise HTTPException(status_code=400, detail="目标策略与当前策略相同")
+
+    # 保存必要的属性，避免 save 后对象过期
+    src_policy_id = obj.policy_id
+    obj_id = obj.id
+    obj_is_file = obj.type == ObjectType.FILE
+    dest_policy_id = request.policy_id
+    dest_policy_name = dest_policy.name
+
+    # 创建任务记录
+    task = Task(
+        type=TaskType.POLICY_MIGRATE,
+        status=TaskStatus.QUEUED,
+        user_id=user_id,
+    )
+    task = await task.save(session)
+    task_id = task.id
+
+    task_props = TaskProps(
+        task_id=task_id,
+        source_policy_id=src_policy_id,
+        dest_policy_id=dest_policy_id,
+        object_id=obj_id,
+    )
+    await task_props.save(session)
+
+    if obj_is_file:
+        # 文件：后台迁移
+        async def _run_file_migration() -> None:
+            async with DatabaseManager.session() as bg_session:
+                bg_obj = await Object.get(bg_session, Object.id == obj_id)
+                bg_policy = await Policy.get(bg_session, Policy.id == dest_policy_id)
+                bg_task = await Task.get(bg_session, Task.id == task_id)
+                await migrate_file_with_task(bg_session, bg_obj, bg_policy, bg_task)
+
+        background_tasks.add_task(_run_file_migration)
+    else:
+        # 目录：先更新目录自身的 policy_id
+        obj = await Object.get(session, Object.id == obj_id)
+        obj.policy_id = dest_policy_id
+        await obj.save(session)
+
+        if request.is_migrate_existing:
+            # 后台迁移所有已有文件
+            async def _run_dir_migration() -> None:
+                async with DatabaseManager.session() as bg_session:
+                    bg_folder = await Object.get(bg_session, Object.id == obj_id)
+                    bg_policy = await Policy.get(bg_session, Policy.id == dest_policy_id)
+                    bg_task = await Task.get(bg_session, Task.id == task_id)
+                    await migrate_directory_files(bg_session, bg_folder, bg_policy, bg_task)
+
+            background_tasks.add_task(_run_dir_migration)
+        else:
+            # 不迁移已有文件，直接完成任务
+            task = await Task.get(session, Task.id == task_id)
+            task.status = TaskStatus.COMPLETED
+            task.progress = 100
+            await task.save(session)
+
+    # 重新获取 task 以读取最新状态
+    task = await Task.get(session, Task.id == task_id)
+
+    l.info(f"用户 {user_id} 请求切换对象 {obj_id} 存储策略 → {dest_policy_name}")
+
+    return TaskSummaryBase(
+        id=task.id,
+        type=task.type,
+        status=task.status,
+        progress=task.progress,
+        error=task.error,
+        user_id=task.user_id,
+        created_at=task.created_at,
+        updated_at=task.updated_at,
+    )

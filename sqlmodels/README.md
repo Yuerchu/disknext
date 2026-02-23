@@ -954,18 +954,11 @@ class PolicyType(StrEnum):
     S3 = "s3"        # S3 兼容存储
 ```
 
-### StorageType
+### PolicyType
 ```python
-class StorageType(StrEnum):
+class PolicyType(StrEnum):
     LOCAL = "local"              # 本地存储
-    QINIU = "qiniu"              # 七牛云
-    TENCENT = "tencent"          # 腾讯云
-    ALIYUN = "aliyun"            # 阿里云
-    ONEDRIVE = "onedrive"        # OneDrive
-    GOOGLE_DRIVE = "google_drive"  # Google Drive
-    DROPBOX = "dropbox"          # Dropbox
-    WEBDAV = "webdav"            # WebDAV
-    REMOTE = "remote"            # 远程存储
+    S3 = "s3"                    # S3 兼容存储
 ```
 
 ### UserStatus

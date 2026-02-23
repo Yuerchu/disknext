@@ -102,6 +102,94 @@ class PolicySummary(SQLModelBase):
     """是否私有"""
 
 
+class PolicyCreateRequest(PolicyBase):
+    """创建存储策略请求 DTO，包含 PolicyOptions 扁平字段"""
+
+    # PolicyOptions 字段（平铺到请求体中，与 GroupCreateRequest 模式一致）
+    token: str | None = None
+    """访问令牌"""
+
+    file_type: str | None = None
+    """允许的文件类型"""
+
+    mimetype: str | None = Field(default=None, max_length=127)
+    """MIME类型"""
+
+    od_redirect: str | None = Field(default=None, max_length=255)
+    """OneDrive重定向地址"""
+
+    chunk_size: int = Field(default=52428800, ge=1)
+    """分片上传大小（字节），默认50MB"""
+
+    s3_path_style: bool = False
+    """是否使用S3路径风格"""
+
+    s3_region: str = Field(default='us-east-1', max_length=64)
+    """S3 区域（如 us-east-1、ap-southeast-1），仅 S3 策略使用"""
+
+
+class PolicyUpdateRequest(SQLModelBase):
+    """更新存储策略请求 DTO（所有字段可选）"""
+
+    name: str | None = Field(default=None, max_length=255)
+    """策略名称"""
+
+    server: str | None = Field(default=None, max_length=255)
+    """服务器地址"""
+
+    bucket_name: str | None = Field(default=None, max_length=255)
+    """存储桶名称"""
+
+    is_private: bool | None = None
+    """是否为私有空间"""
+
+    base_url: str | None = Field(default=None, max_length=255)
+    """访问文件的基础URL"""
+
+    access_key: str | None = None
+    """Access Key"""
+
+    secret_key: str | None = None
+    """Secret Key"""
+
+    max_size: int | None = Field(default=None, ge=0)
+    """允许上传的最大文件尺寸（字节）"""
+
+    auto_rename: bool | None = None
+    """是否自动重命名"""
+
+    dir_name_rule: str | None = Field(default=None, max_length=255)
+    """目录命名规则"""
+
+    file_name_rule: str | None = Field(default=None, max_length=255)
+    """文件命名规则"""
+
+    is_origin_link_enable: bool | None = None
+    """是否开启源链接访问"""
+
+    # PolicyOptions 字段
+    token: str | None = None
+    """访问令牌"""
+
+    file_type: str | None = None
+    """允许的文件类型"""
+
+    mimetype: str | None = Field(default=None, max_length=127)
+    """MIME类型"""
+
+    od_redirect: str | None = Field(default=None, max_length=255)
+    """OneDrive重定向地址"""
+
+    chunk_size: int | None = Field(default=None, ge=1)
+    """分片上传大小（字节）"""
+
+    s3_path_style: bool | None = None
+    """是否使用S3路径风格"""
+
+    s3_region: str | None = Field(default=None, max_length=64)
+    """S3 区域"""
+
+
 # ==================== 数据库模型 ====================
 
 
@@ -125,6 +213,9 @@ class PolicyOptionsBase(SQLModelBase):
 
     s3_path_style: bool = Field(default=False, sa_column_kwargs={"server_default": text("false")})
     """是否使用S3路径风格"""
+
+    s3_region: str = Field(default='us-east-1', max_length=64, sa_column_kwargs={"server_default": "'us-east-1'"})
+    """S3 区域（如 us-east-1、ap-southeast-1），仅 S3 策略使用"""
 
 
 class PolicyOptions(PolicyOptionsBase, UUIDTableBaseMixin):

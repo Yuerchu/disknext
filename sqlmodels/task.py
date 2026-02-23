@@ -26,8 +26,8 @@ class TaskStatus(StrEnum):
 
 class TaskType(StrEnum):
     """任务类型枚举"""
-    # [TODO] 补充具体任务类型
-    pass
+    POLICY_MIGRATE = "policy_migrate"
+    """存储策略迁移"""
 
 
 # ==================== DTO 模型 ====================
@@ -39,7 +39,7 @@ class TaskSummaryBase(SQLModelBase):
     id: int
     """任务ID"""
 
-    type: int
+    type: TaskType
     """任务类型"""
 
     status: TaskStatus
@@ -91,7 +91,14 @@ class TaskPropsBase(SQLModelBase):
     file_ids: str | None = None
     """文件ID列表（逗号分隔）"""
 
-    # [TODO] 根据业务需求补充更多字段
+    source_policy_id: UUID | None = None
+    """源存储策略UUID"""
+
+    dest_policy_id: UUID | None = None
+    """目标存储策略UUID"""
+
+    object_id: UUID | None = None
+    """关联的对象UUID"""
 
 
 class TaskProps(TaskPropsBase, TableBaseMixin):
@@ -99,7 +106,7 @@ class TaskProps(TaskPropsBase, TableBaseMixin):
 
     task_id: int = Field(
         foreign_key="task.id",
-        primary_key=True,
+        unique=True,
         ondelete="CASCADE"
     )
     """关联的任务ID"""
@@ -121,8 +128,8 @@ class Task(SQLModelBase, TableBaseMixin):
     status: TaskStatus = Field(default=TaskStatus.QUEUED)
     """任务状态"""
 
-    type: int = Field(default=0)
-    """任务类型 [TODO] 待定义枚举"""
+    type: TaskType
+    """任务类型"""
 
     progress: int = Field(default=0, ge=0, le=100)
     """任务进度（0-100）"""

@@ -8,11 +8,11 @@ from sqlmodel import Field
 from middleware.auth import admin_required
 from middleware.dependencies import SessionDep, TableViewRequestDep
 from sqlmodels import (
-    Policy, PolicyBase, PolicyType, PolicySummary, ResponseBase,
-    ListResponse, Object,
+    Policy, PolicyCreateRequest, PolicyOptions, PolicyType, PolicySummary,
+    PolicyUpdateRequest, ResponseBase, ListResponse, Object,
 )
 from sqlmodel_ext import SQLModelBase
-from service.storage import DirectoryCreationError, LocalStorageService
+from service.storage import DirectoryCreationError, LocalStorageService, S3StorageService
 
 admin_policy_router = APIRouter(
     prefix='/policy',
@@ -67,6 +67,12 @@ class PolicyDetailResponse(SQLModelBase):
     base_url: str | None
     """基础URL"""
 
+    access_key: str | None
+    """Access Key"""
+
+    secret_key: str | None
+    """Secret Key"""
+
     max_size: int
     """最大文件尺寸"""
 
@@ -107,9 +113,45 @@ class PolicyTestSlaveRequest(SQLModelBase):
     secret: str
     """从机通信密钥"""
 
-class PolicyCreateRequest(PolicyBase):
-    """创建存储策略请求 DTO，继承 PolicyBase 中的所有字段"""
-    pass
+class PolicyTestS3Request(SQLModelBase):
+    """测试 S3 连接请求 DTO"""
+
+    server: str = Field(max_length=255)
+    """S3 端点地址"""
+
+    bucket_name: str = Field(max_length=255)
+    """存储桶名称"""
+
+    access_key: str
+    """Access Key"""
+
+    secret_key: str
+    """Secret Key"""
+
+    s3_region: str = Field(default='us-east-1', max_length=64)
+    """S3 区域"""
+
+    s3_path_style: bool = False
+    """是否使用路径风格"""
+
+
+class PolicyTestS3Response(SQLModelBase):
+    """S3 连接测试响应"""
+
+    is_connected: bool
+    """连接是否成功"""
+
+    message: str
+    """测试结果消息"""
+
+
+# ==================== Options 字段集合（用于分离 Policy 与 Options 字段） ====================
+
+_OPTIONS_FIELDS: set[str] = {
+    'token', 'file_type', 'mimetype', 'od_redirect',
+    'chunk_size', 's3_path_style', 's3_region',
+}
+
 
 @admin_policy_router.get(
     path='/list',
@@ -277,7 +319,20 @@ async def router_policy_add_policy(
             raise HTTPException(status_code=500, detail=f"创建存储目录失败: {e}")
 
     # 保存到数据库
-    await policy.save(session)
+    policy = await policy.save(session)
+
+    # 创建策略选项
+    options = PolicyOptions(
+        policy_id=policy.id,
+        token=request.token,
+        file_type=request.file_type,
+        mimetype=request.mimetype,
+        od_redirect=request.od_redirect,
+        chunk_size=request.chunk_size,
+        s3_path_style=request.s3_path_style,
+        s3_region=request.s3_region,
+    )
+    await options.save(session)
 
 @admin_policy_router.post(
     path='/cors',
@@ -371,6 +426,8 @@ async def router_policy_get_policy(
         bucket_name=policy.bucket_name,
         is_private=policy.is_private,
         base_url=policy.base_url,
+        access_key=policy.access_key,
+        secret_key=policy.secret_key,
         max_size=policy.max_size,
         auto_rename=policy.auto_rename,
         dir_name_rule=policy.dir_name_rule,
@@ -418,3 +475,107 @@ async def router_policy_delete_policy(
     await Policy.delete(session, policy)
 
     l.info(f"管理员删除了存储策略: {policy_name}")
+
+
+@admin_policy_router.patch(
+    path='/{policy_id}',
+    summary='更新存储策略',
+    description='更新存储策略配置。策略类型创建后不可更改。',
+    dependencies=[Depends(admin_required)],
+    status_code=204,
+)
+async def router_policy_update_policy(
+    session: SessionDep,
+    policy_id: UUID,
+    request: PolicyUpdateRequest,
+) -> None:
+    """
+    更新存储策略端点
+
+    功能：
+    - 更新策略基础字段和扩展选项
+    - 策略类型（type）不可更改
+
+    认证：
+    - 需要管理员权限
+
+    :param session: 数据库会话
+    :param policy_id: 存储策略UUID
+    :param request: 更新请求
+    """
+    policy = await Policy.get(session, Policy.id == policy_id, load=Policy.options)
+    if not policy:
+        raise HTTPException(status_code=404, detail="存储策略不存在")
+
+    # 检查名称唯一性（如果要更新名称）
+    if request.name and request.name != policy.name:
+        existing = await Policy.get(session, Policy.name == request.name)
+        if existing:
+            raise HTTPException(status_code=409, detail="策略名称已存在")
+
+    # 分离 Policy 字段和 Options 字段
+    all_data = request.model_dump(exclude_unset=True)
+    policy_data = {k: v for k, v in all_data.items() if k not in _OPTIONS_FIELDS}
+    options_data = {k: v for k, v in all_data.items() if k in _OPTIONS_FIELDS}
+
+    # 更新 Policy 基础字段
+    if policy_data:
+        for key, value in policy_data.items():
+            setattr(policy, key, value)
+        policy = await policy.save(session)
+
+    # 更新或创建 PolicyOptions
+    if options_data:
+        if policy.options:
+            for key, value in options_data.items():
+                setattr(policy.options, key, value)
+            await policy.options.save(session)
+        else:
+            options = PolicyOptions(policy_id=policy.id, **options_data)
+            await options.save(session)
+
+    l.info(f"管理员更新了存储策略: {policy_id}")
+
+
+@admin_policy_router.post(
+    path='/test/s3',
+    summary='测试 S3 连接',
+    description='测试 S3 存储端点的连通性和凭据有效性。',
+    dependencies=[Depends(admin_required)],
+)
+async def router_policy_test_s3(
+    request: PolicyTestS3Request,
+) -> PolicyTestS3Response:
+    """
+    测试 S3 连接端点
+
+    通过向 S3 端点发送 HEAD Bucket 请求，验证凭据和网络连通性。
+
+    :param request: 测试请求
+    :return: 测试结果
+    """
+    from service.storage import S3APIError
+
+    # 构造临时 Policy 对象用于创建 S3StorageService
+    temp_policy = Policy(
+        name="__test__",
+        type=PolicyType.S3,
+        server=request.server,
+        bucket_name=request.bucket_name,
+        access_key=request.access_key,
+        secret_key=request.secret_key,
+    )
+    s3_service = S3StorageService(
+        temp_policy,
+        region=request.s3_region,
+        is_path_style=request.s3_path_style,
+    )
+
+    try:
+        # 使用 file_exists 发送 HEAD 请求来验证连通性
+        await s3_service.file_exists("__connection_test__")
+        return PolicyTestS3Response(is_connected=True, message="连接成功")
+    except S3APIError as e:
+        return PolicyTestS3Response(is_connected=False, message=f"S3 API 错误: {e}")
+    except Exception as e:
+        return PolicyTestS3Response(is_connected=False, message=f"连接失败: {e}")

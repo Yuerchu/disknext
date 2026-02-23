@@ -43,3 +43,13 @@ class UploadSessionExpiredError(StorageException):
 class InvalidPathError(StorageException):
     """无效的路径"""
     pass
+
+
+class S3APIError(StorageException):
+    """S3 API 请求错误"""
+    pass
+
+
+class S3MultipartUploadError(S3APIError):
+    """S3 分片上传错误"""
+    pass

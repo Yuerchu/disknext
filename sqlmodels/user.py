@@ -4,7 +4,7 @@ from typing import Literal, TYPE_CHECKING, TypeVar
 from uuid import UUID
 
 from pydantic import BaseModel
-from sqlalchemy import BinaryExpression, ClauseElement, and_
+from sqlalchemy import BigInteger, BinaryExpression, ClauseElement, and_
 from sqlmodel import Field, Relationship
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel.main import RelationshipInfo
@@ -473,7 +473,7 @@ class User(UserBase, UUIDTableBaseMixin):
     status: UserStatus = UserStatus.ACTIVE
     """用户状态"""
 
-    storage: int = Field(default=0, sa_column_kwargs={"server_default": "0"}, ge=0)
+    storage: int = Field(default=0, sa_type=BigInteger, sa_column_kwargs={"server_default": "0"}, ge=0)
     """已用存储空间（字节）"""
 
     avatar: str = Field(default="default", max_length=255)

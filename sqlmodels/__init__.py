@@ -82,6 +82,7 @@ from .object import (
     ObjectPropertyResponse,
     ObjectRenameRequest,
     ObjectResponse,
+    ObjectSwitchPolicyRequest,
     ObjectType,
     PolicyResponse,
     UploadChunkResponse,
@@ -100,7 +101,10 @@ from .object import (
 from .physical_file import PhysicalFile, PhysicalFileBase
 from .uri import DiskNextURI, FileSystemNamespace
 from .order import Order, OrderStatus, OrderType
-from .policy import Policy, PolicyBase, PolicyOptions, PolicyOptionsBase, PolicyType, PolicySummary
+from .policy import (
+    Policy, PolicyBase, PolicyCreateRequest, PolicyOptions, PolicyOptionsBase,
+    PolicyType, PolicySummary, PolicyUpdateRequest,
+)
 from .redeem import Redeem, RedeemType
 from .report import Report, ReportReason
 from .setting import (
@@ -116,7 +120,7 @@ from .share import (
 from .source_link import SourceLink
 from .storage_pack import StoragePack
 from .tag import Tag, TagType
-from .task import Task, TaskProps, TaskPropsBase, TaskStatus, TaskType, TaskSummary
+from .task import Task, TaskProps, TaskPropsBase, TaskStatus, TaskType, TaskSummary, TaskSummaryBase
 from .webdav import (
     WebDAV, WebDAVBase,
     WebDAVCreateRequest, WebDAVUpdateRequest, WebDAVAccountResponse,

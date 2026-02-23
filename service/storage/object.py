@@ -6,7 +6,8 @@ from sqlalchemy import update as sql_update
 from sqlalchemy.sql.functions import func
 from middleware.dependencies import SessionDep
 
-from service.storage import LocalStorageService
+from .local_storage import LocalStorageService
+from .s3_storage import S3StorageService
 from sqlmodels import (
     Object,
     PhysicalFile,
@@ -271,10 +272,14 @@ async def permanently_delete_objects(
             if physical_file.can_be_deleted:
                 # 物理删除文件
                 policy = await Policy.get(session, Policy.id == physical_file.policy_id)
-                if policy and policy.type == PolicyType.LOCAL:
+                if policy:
                     try:
-                        storage_service = LocalStorageService(policy)
-                        await storage_service.delete_file(physical_file.storage_path)
+                        if policy.type == PolicyType.LOCAL:
+                            storage_service = LocalStorageService(policy)
+                            await storage_service.delete_file(physical_file.storage_path)
+                        elif policy.type == PolicyType.S3:
+                            s3_service = await S3StorageService.from_policy(policy)
+                            await s3_service.delete_file(physical_file.storage_path)
                         l.debug(f"物理文件已删除: {obj_name}")
                     except Exception as e:
                         l.warning(f"物理删除文件失败: {obj_name}, 错误: {e}")
@@ -374,10 +379,19 @@ async def delete_object_recursive(
         if physical_file.can_be_deleted:
             # 物理删除文件
             policy = await Policy.get(session, Policy.id == physical_file.policy_id)
-            if policy and policy.type == PolicyType.LOCAL:
+            if policy:
                 try:
-                    storage_service = LocalStorageService(policy)
-                    await storage_service.delete_file(physical_file.storage_path)
+                    if policy.type == PolicyType.LOCAL:
+                        storage_service = LocalStorageService(policy)
+                        await storage_service.delete_file(physical_file.storage_path)
+                    elif policy.type == PolicyType.S3:
+                        options = await policy.awaitable_attrs.options
+                        s3_service = S3StorageService(
+                            policy,
+                            region=options.s3_region if options else 'us-east-1',
+                            is_path_style=options.s3_path_style if options else False,
+                        )
+                        await s3_service.delete_file(physical_file.storage_path)
                     l.debug(f"物理文件已删除: {obj_name}")
                 except Exception as e:
                     l.warning(f"物理删除文件失败: {obj_name}, 错误: {e}")

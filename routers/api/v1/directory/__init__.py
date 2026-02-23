@@ -57,7 +57,7 @@ async def _get_directory_response(
     policy_response = PolicyResponse(
         id=policy.id,
         name=policy.name,
-        type=policy.type.value,
+        type=policy.type,
         max_size=policy.max_size,
     )
 
@@ -189,6 +189,14 @@ async def router_directory_create(
         raise HTTPException(status_code=409, detail="同名文件或目录已存在")
 
     policy_id = request.policy_id if request.policy_id else parent.policy_id
+
+    # 校验用户组是否有权使用该策略（仅当用户显式指定 policy_id 时）
+    if request.policy_id:
+        group = await user.awaitable_attrs.group
+        await session.refresh(group, ['policies'])
+        if request.policy_id not in {p.id for p in group.policies}:
+            raise HTTPException(status_code=403, detail="当前用户组无权使用该存储策略")
+
     parent_id = parent.id  # 在 save 前保存
 
     new_folder = Object(

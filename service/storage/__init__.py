@@ -3,6 +3,7 @@
 
 提供文件存储相关的服务，包括：
 - 本地存储服务
+- S3 存储服务
 - 命名规则解析器
 - 存储异常定义
 """
@@ -11,6 +12,8 @@ from .exceptions import (
     FileReadError,
     FileWriteError,
     InvalidPathError,
+    S3APIError,
+    S3MultipartUploadError,
     StorageException,
     StorageFileNotFoundError,
     UploadSessionExpiredError,
@@ -26,3 +29,5 @@ from .object import (
     restore_objects,
     soft_delete_objects,
 )
+from .migrate import migrate_file_with_task, migrate_directory_files
+from .s3_storage import S3StorageService

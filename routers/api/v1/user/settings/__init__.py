@@ -13,6 +13,7 @@ from sqlmodels import (
     AuthIdentity, AuthIdentityResponse, AuthProviderType, BindIdentityRequest,
     ChangePasswordRequest,
     AuthnDetailResponse, AuthnRenameRequest,
+    PolicySummary,
 )
 from sqlmodels.color import ThemeColorsBase
 from sqlmodels.user_authn import UserAuthn
@@ -31,16 +32,25 @@ user_settings_router.include_router(file_viewers_router)
 @user_settings_router.get(
     path='/policies',
     summary='获取用户可选存储策略',
-    description='Get user selectable storage policies.',
 )
-def router_user_settings_policies() -> sqlmodels.ResponseBase:
+async def router_user_settings_policies(
+        session: SessionDep,
+        user: Annotated[sqlmodels.user.User, Depends(auth_required)],
+) -> list[PolicySummary]:
     """
-    Get user selectable storage policies.
+    获取当前用户所在组可选的存储策略列表
 
-    Returns:
-        dict: A dictionary containing available storage policies for the user.
+    返回用户组关联的所有存储策略的摘要信息。
     """
-    http_exceptions.raise_not_implemented()
+    group = await user.awaitable_attrs.group
+    await session.refresh(group, ['policies'])
+    return [
+        PolicySummary(
+            id=p.id, name=p.name, type=p.type,
+            server=p.server, max_size=p.max_size, is_private=p.is_private,
+        )
+        for p in group.policies
+    ]
 
 
 @user_settings_router.get(

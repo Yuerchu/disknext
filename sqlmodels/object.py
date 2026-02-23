@@ -9,6 +9,8 @@ from sqlmodel import Field, Relationship, CheckConstraint, Index, text
 
 from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin
 
+from .policy import PolicyType
+
 if TYPE_CHECKING:
     from .user import User
     from .policy import Policy
@@ -23,18 +25,6 @@ class ObjectType(StrEnum):
     FILE = "file"
     FOLDER = "folder"
     
-class StorageType(StrEnum):
-    """存储类型枚举"""
-    LOCAL = "local"
-    QINIU = "qiniu"
-    TENCENT = "tencent"
-    ALIYUN = "aliyun"
-    ONEDRIVE = "onedrive"
-    GOOGLE_DRIVE = "google_drive"
-    DROPBOX = "dropbox"
-    WEBDAV = "webdav"
-    REMOTE = "remote"
-
 
 class FileMetadataBase(SQLModelBase):
     """文件元数据基础模型"""
@@ -156,7 +146,7 @@ class PolicyResponse(SQLModelBase):
     name: str
     """策略名称"""
 
-    type: StorageType
+    type: PolicyType
     """存储类型"""
 
     max_size: int = Field(ge=0, default=0, sa_type=BigInteger)
@@ -624,6 +614,12 @@ class UploadSession(UploadSessionBase, UUIDTableBaseMixin):
     storage_path: str | None = Field(default=None, max_length=512)
     """文件存储路径"""
 
+    s3_upload_id: str | None = Field(default=None, max_length=256)
+    """S3 Multipart Upload ID（仅 S3 策略使用）"""
+
+    s3_part_etags: str | None = None
+    """S3 已上传分片的 ETag 列表，JSON 格式 [[1,"etag1"],[2,"etag2"]]（仅 S3 策略使用）"""
+
     expires_at: datetime
     """会话过期时间"""
 
@@ -730,6 +726,16 @@ class CreateFileRequest(SQLModelBase):
 
     policy_id: UUID | None = None
     """存储策略UUID，不指定则使用父目录的策略"""
+
+
+class ObjectSwitchPolicyRequest(SQLModelBase):
+    """切换对象存储策略请求"""
+
+    policy_id: UUID
+    """目标存储策略UUID"""
+
+    is_migrate_existing: bool = False
+    """（仅目录）是否迁移已有文件，默认 false 只影响新文件"""
 
 
 # ==================== 对象操作相关 DTO ====================
