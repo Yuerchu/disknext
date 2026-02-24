@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from .share import Share
     from .physical_file import PhysicalFile
     from .uri import DiskNextURI
+    from .object_metadata import ObjectMetadata
 
 
 class ObjectType(StrEnum):
@@ -25,31 +26,6 @@ class ObjectType(StrEnum):
     FILE = "file"
     FOLDER = "folder"
     
-
-class FileMetadataBase(SQLModelBase):
-    """文件元数据基础模型"""
-
-    width: int | None = Field(default=None)
-    """图片宽度（像素）"""
-
-    height: int | None = Field(default=None)
-    """图片高度（像素）"""
-
-    duration: float | None = Field(default=None)
-    """音视频时长（秒）"""
-
-    bitrate: int | None = Field(default=None)
-    """比特率（kbps）"""
-
-    mime_type: str | None = Field(default=None, max_length=127)
-    """MIME类型"""
-
-    checksum_md5: str | None = Field(default=None, max_length=32)
-    """MD5校验和"""
-
-    checksum_sha256: str | None = Field(default=None, max_length=64)
-    """SHA256校验和"""
-
 
 # ==================== Base 模型 ====================
 
@@ -64,6 +40,9 @@ class ObjectBase(SQLModelBase):
 
     size: int | None = None
     """文件大小（字节），目录为 None"""
+
+    mime_type: str | None = Field(default=None, max_length=127)
+    """MIME类型（仅文件有效）"""
 
 
 # ==================== DTO 模型 ====================
@@ -173,22 +152,6 @@ class DirectoryResponse(SQLModelBase):
 
 
 # ==================== 数据库模型 ====================
-
-class FileMetadata(FileMetadataBase, UUIDTableBaseMixin):
-    """文件元数据模型（与Object一对一关联）"""
-
-    object_id: UUID = Field(
-        foreign_key="object.id",
-        unique=True,
-        index=True,
-        ondelete="CASCADE"
-    )
-    """关联的对象UUID"""
-
-    # 反向关系
-    object: "Object" = Relationship(back_populates="file_metadata")
-    """关联的对象"""
-
 
 class Object(ObjectBase, UUIDTableBaseMixin):
     """
@@ -344,11 +307,11 @@ class Object(ObjectBase, UUIDTableBaseMixin):
     """子对象（文件和子目录）"""
 
     # 仅文件有效的关系
-    file_metadata: FileMetadata | None = Relationship(
+    metadata_entries: list["ObjectMetadata"] = Relationship(
         back_populates="object",
-        sa_relationship_kwargs={"uselist": False, "cascade": "all, delete-orphan"},
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
     )
-    """文件元数据（仅文件有效）"""
+    """元数据键值对列表"""
 
     source_links: list["SourceLink"] = Relationship(
         back_populates="object",
@@ -775,6 +738,9 @@ class ObjectPropertyResponse(SQLModelBase):
     size: int
     """文件大小（字节）"""
 
+    mime_type: str | None = None
+    """MIME类型"""
+
     created_at: datetime
     """创建时间"""
 
@@ -788,21 +754,12 @@ class ObjectPropertyResponse(SQLModelBase):
 class ObjectPropertyDetailResponse(ObjectPropertyResponse):
     """对象详细属性响应 DTO（继承基本属性）"""
 
-    # 元数据信息
-    mime_type: str | None = None
-    """MIME类型"""
-
-    width: int | None = None
-    """图片宽度（像素）"""
-
-    height: int | None = None
-    """图片高度（像素）"""
-
-    duration: float | None = None
-    """音视频时长（秒）"""
-
+    # 校验和（从 PhysicalFile 读取）
     checksum_md5: str | None = None
     """MD5校验和"""
+
+    checksum_sha256: str | None = None
+    """SHA256校验和"""
 
     # 分享统计
     share_count: int = 0
@@ -820,6 +777,10 @@ class ObjectPropertyDetailResponse(ObjectPropertyResponse):
 
     reference_count: int = 1
     """物理文件引用计数（仅文件有效）"""
+
+    # 元数据（KV 格式）
+    metadatas: dict[str, str] = {}
+    """所有元数据条目（键名 → 值）"""
 
 
 # ==================== 管理员文件管理 DTO ====================

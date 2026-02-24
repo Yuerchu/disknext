@@ -92,9 +92,9 @@ class ObjectFactory:
             owner_id=owner_id,
             policy_id=policy_id,
             size=size,
+            mime_type=kwargs.get("mime_type"),
             source_name=kwargs.get("source_name", name),
             upload_session_id=kwargs.get("upload_session_id"),
-            file_metadata=kwargs.get("file_metadata"),
             password=kwargs.get("password"),
         )
 

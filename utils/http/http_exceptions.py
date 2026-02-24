@@ -62,6 +62,10 @@ def raise_not_implemented(detail: str = "尚未支持这种方法") -> NoReturn:
     """Raises an HTTP 501 Not Implemented exception."""
     raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=detail)
 
+def raise_bad_gateway(detail: str | None = None) -> NoReturn:
+    """Raises an HTTP 502 Bad Gateway exception."""
+    raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=detail)
+
 def raise_service_unavailable(detail: str | None = None) -> NoReturn:
     """Raises an HTTP 503 Service Unavailable exception."""
     raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=detail)

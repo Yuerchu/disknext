@@ -34,6 +34,12 @@ from sqlmodels import (
     TaskSummaryBase,
     TaskType,
     User,
+    # 元数据相关
+    ObjectMetadata,
+    MetadataResponse,
+    MetadataPatchRequest,
+    INTERNAL_NAMESPACES,
+    USER_WRITABLE_NAMESPACES,
 )
 from service.storage import (
     LocalStorageService,
@@ -46,10 +52,13 @@ from service.storage.object import soft_delete_objects
 from sqlmodels.database_connection import DatabaseManager
 from utils import http_exceptions
 
+from .custom_property import router as custom_property_router
+
 object_router = APIRouter(
     prefix="/object",
     tags=["object"]
 )
+object_router.include_router(custom_property_router)
 
 @object_router.post(
     path='/',
@@ -503,6 +512,7 @@ async def router_object_property(
         name=obj.name,
         type=obj.type,
         size=obj.size,
+        mime_type=obj.mime_type,
         created_at=obj.created_at,
         updated_at=obj.updated_at,
         parent_id=obj.parent_id,
@@ -530,7 +540,7 @@ async def router_object_property_detail(
     obj = await Object.get(
         session,
         (Object.id == id) & (Object.deleted_at == None),
-        load=Object.file_metadata,
+        load=Object.metadata_entries,
     )
     if not obj:
         raise HTTPException(status_code=404, detail="对象不存在")
@@ -553,38 +563,42 @@ async def router_object_property_detail(
     total_views = sum(s.views for s in shares)
     total_downloads = sum(s.downloads for s in shares)
 
-    # 获取物理文件引用计数
+    # 获取物理文件信息（引用计数、校验和）
     reference_count = 1
+    checksum_md5: str | None = None
+    checksum_sha256: str | None = None
     if obj.physical_file_id:
         physical_file = await PhysicalFile.get(session, PhysicalFile.id == obj.physical_file_id)
         if physical_file:
             reference_count = physical_file.reference_count
+            checksum_md5 = physical_file.checksum_md5
+            checksum_sha256 = physical_file.checksum_sha256
 
-    # 构建响应
-    response = ObjectPropertyDetailResponse(
+    # 构建元数据字典（排除内部命名空间）
+    metadata: dict[str, str] = {}
+    for entry in obj.metadata_entries:
+        ns = entry.name.split(":")[0] if ":" in entry.name else ""
+        if ns not in INTERNAL_NAMESPACES:
+            metadata[entry.name] = entry.value
+
+    return ObjectPropertyDetailResponse(
         id=obj.id,
         name=obj.name,
         type=obj.type,
         size=obj.size,
+        mime_type=obj.mime_type,
         created_at=obj.created_at,
         updated_at=obj.updated_at,
         parent_id=obj.parent_id,
+        checksum_md5=checksum_md5,
+        checksum_sha256=checksum_sha256,
         policy_name=policy_name,
         share_count=share_count,
         total_views=total_views,
         total_downloads=total_downloads,
         reference_count=reference_count,
+        metadatas=metadata,
     )
-
-    # 添加文件元数据
-    if obj.file_metadata:
-        response.mime_type = obj.file_metadata.mime_type
-        response.width = obj.file_metadata.width
-        response.height = obj.file_metadata.height
-        response.duration = obj.file_metadata.duration
-        response.checksum_md5 = obj.file_metadata.checksum_md5
-
-    return response
 
 
 @object_router.patch(
@@ -718,3 +732,132 @@ async def router_object_switch_policy(
         created_at=task.created_at,
         updated_at=task.updated_at,
     )
+
+
+# ==================== 元数据端点 ====================
+
+@object_router.get(
+    path='/{object_id}/metadata',
+    summary='获取对象元数据',
+    description='获取对象的元数据键值对，可按命名空间过滤。',
+)
+async def router_get_object_metadata(
+    session: SessionDep,
+    user: Annotated[User, Depends(auth_required)],
+    object_id: UUID,
+    ns: str | None = None,
+) -> MetadataResponse:
+    """
+    获取对象元数据端点
+
+    认证：JWT token 必填
+
+    查询参数：
+    - ns: 逗号分隔的命名空间列表（如 exif,stream），不传返回所有非内部命名空间
+
+    错误处理：
+    - 404: 对象不存在
+    - 403: 无权查看此对象
+    """
+    obj = await Object.get(
+        session,
+        (Object.id == object_id) & (Object.deleted_at == None),
+        load=Object.metadata_entries,
+    )
+    if not obj:
+        raise HTTPException(status_code=404, detail="对象不存在")
+
+    if obj.owner_id != user.id:
+        raise HTTPException(status_code=403, detail="无权查看此对象")
+
+    # 解析命名空间过滤
+    ns_filter: set[str] | None = None
+    if ns:
+        ns_filter = {n.strip() for n in ns.split(",") if n.strip()}
+        # 不允许查看内部命名空间
+        ns_filter -= INTERNAL_NAMESPACES
+
+    # 构建元数据字典
+    metadata: dict[str, str] = {}
+    for entry in obj.metadata_entries:
+        entry_ns = entry.name.split(":")[0] if ":" in entry.name else ""
+        if entry_ns in INTERNAL_NAMESPACES:
+            continue
+        if ns_filter is not None and entry_ns not in ns_filter:
+            continue
+        metadata[entry.name] = entry.value
+
+    return MetadataResponse(metadatas=metadata)
+
+
+@object_router.patch(
+    path='/{object_id}/metadata',
+    summary='批量更新对象元数据',
+    description='批量设置或删除对象的元数据条目。仅允许修改 custom: 命名空间。',
+    status_code=204,
+)
+async def router_patch_object_metadata(
+    session: SessionDep,
+    user: Annotated[User, Depends(auth_required)],
+    object_id: UUID,
+    request: MetadataPatchRequest,
+) -> None:
+    """
+    批量更新对象元数据端点
+
+    请求体中值为 None 的键将被删除，其余键将被设置/更新。
+    用户只能修改 custom: 命名空间的条目。
+
+    认证：JWT token 必填
+
+    错误处理：
+    - 400: 尝试修改非 custom: 命名空间的条目
+    - 404: 对象不存在
+    - 403: 无权操作此对象
+    """
+    obj = await Object.get(
+        session,
+        (Object.id == object_id) & (Object.deleted_at == None),
+    )
+    if not obj:
+        raise HTTPException(status_code=404, detail="对象不存在")
+
+    if obj.owner_id != user.id:
+        raise HTTPException(status_code=403, detail="无权操作此对象")
+
+    for patch in request.patches:
+        # 验证命名空间
+        patch_ns = patch.key.split(":")[0] if ":" in patch.key else ""
+        if patch_ns not in USER_WRITABLE_NAMESPACES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"不允许修改命名空间 '{patch_ns}' 的元数据，仅允许 custom: 命名空间",
+            )
+
+        if patch.value is None:
+            # 删除元数据条目
+            existing = await ObjectMetadata.get(
+                session,
+                (ObjectMetadata.object_id == object_id) & (ObjectMetadata.name == patch.key),
+            )
+            if existing:
+                await ObjectMetadata.delete(session, instances=existing)
+        else:
+            # 设置/更新元数据条目
+            existing = await ObjectMetadata.get(
+                session,
+                (ObjectMetadata.object_id == object_id) & (ObjectMetadata.name == patch.key),
+            )
+            if existing:
+                existing.value = patch.value
+                await existing.save(session)
+            else:
+                entry = ObjectMetadata(
+                    object_id=object_id,
+                    name=patch.key,
+                    value=patch.value,
+                    is_public=True,
+                )
+                await entry.save(session)
+
+    l.info(f"用户 {user.id} 更新了对象 {object_id} 的 {len(request.patches)} 条元数据")

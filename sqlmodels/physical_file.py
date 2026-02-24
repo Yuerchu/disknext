@@ -34,6 +34,9 @@ class PhysicalFileBase(SQLModelBase):
     checksum_md5: str | None = Field(default=None, max_length=32)
     """MD5校验和（用于文件去重和完整性校验）"""
 
+    checksum_sha256: str | None = Field(default=None, max_length=64)
+    """SHA256校验和"""
+
 
 class PhysicalFile(PhysicalFileBase, UUIDTableBaseMixin):
     """

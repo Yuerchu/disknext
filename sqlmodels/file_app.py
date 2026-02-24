@@ -297,6 +297,29 @@ class WopiSessionResponse(SQLModelBase):
     """完整的编辑器 URL"""
 
 
+class WopiDiscoveredExtension(SQLModelBase):
+    """单个 WOPI Discovery 发现的扩展名"""
+
+    extension: str
+    """文件扩展名"""
+
+    action_url: str
+    """处理后的动作 URL 模板"""
+
+
+class WopiDiscoveryResponse(SQLModelBase):
+    """WOPI Discovery 结果响应 DTO"""
+
+    discovered_extensions: list[WopiDiscoveredExtension] = []
+    """发现的扩展名及其 URL 模板"""
+
+    app_names: list[str] = []
+    """WOPI 服务端报告的应用名称（如 Writer、Calc、Impress）"""
+
+    applied_count: int = 0
+    """已应用到 FileAppExtension 的数量"""
+
+
 # ==================== 数据库模型 ====================
 
 class FileApp(SQLModelBase, UUIDTableBaseMixin):
@@ -376,6 +399,9 @@ class FileAppExtension(SQLModelBase, TableBaseMixin):
 
     priority: int = Field(default=0, ge=0)
     """排序优先级（越小越优先）"""
+
+    wopi_action_url: str | None = Field(default=None, max_length=2048)
+    """WOPI 动作 URL 模板（Discovery 自动填充），支持 {wopi_src} {access_token} {access_token_ttl}"""
 
     # 关系
     app: FileApp = Relationship(back_populates="extensions")

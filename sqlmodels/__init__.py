@@ -69,8 +69,6 @@ from .object import (
     CreateUploadSessionRequest,
     DirectoryCreateRequest,
     DirectoryResponse,
-    FileMetadata,
-    FileMetadataBase,
     Object,
     ObjectBase,
     ObjectCopyRequest,
@@ -97,6 +95,24 @@ from .object import (
     TrashItemResponse,
     TrashRestoreRequest,
     TrashDeleteRequest,
+)
+from .object_metadata import (
+    ObjectMetadata,
+    ObjectMetadataBase,
+    MetadataNamespace,
+    MetadataResponse,
+    MetadataPatchItem,
+    MetadataPatchRequest,
+    INTERNAL_NAMESPACES,
+    USER_WRITABLE_NAMESPACES,
+)
+from .custom_property import (
+    CustomPropertyDefinition,
+    CustomPropertyDefinitionBase,
+    CustomPropertyType,
+    CustomPropertyCreateRequest,
+    CustomPropertyUpdateRequest,
+    CustomPropertyResponse,
 )
 from .physical_file import PhysicalFile, PhysicalFileBase
 from .uri import DiskNextURI, FileSystemNamespace
@@ -131,6 +147,7 @@ from .file_app import (
     FileAppSummary, FileViewersResponse, SetDefaultViewerRequest, UserFileAppDefaultResponse,
     FileAppCreateRequest, FileAppUpdateRequest, FileAppResponse, FileAppListResponse,
     ExtensionUpdateRequest, GroupAccessUpdateRequest, WopiSessionResponse,
+    WopiDiscoveredExtension, WopiDiscoveryResponse,
 )
 from .wopi import WopiFileInfo, WopiAccessTokenPayload
 

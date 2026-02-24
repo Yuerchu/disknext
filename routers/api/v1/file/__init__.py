@@ -812,6 +812,7 @@ async def create_wopi_session(
     )
 
     wopi_app: FileApp | None = None
+    matched_ext_record: FileAppExtension | None = None
     for ext_record in ext_records:
         app = ext_record.app
         if app.type == FileAppType.WOPI and app.is_enabled:
@@ -827,13 +828,20 @@ async def create_wopi_session(
                 if not result.first():
                     continue
             wopi_app = app
+            matched_ext_record = ext_record
             break
 
     if not wopi_app:
         http_exceptions.raise_not_found("无可用的 WOPI 查看器")
 
-    if not wopi_app.wopi_editor_url_template:
-        http_exceptions.raise_bad_request("WOPI 应用未配置编辑器 URL 模板")
+    # 优先使用 per-extension URL（Discovery 自动填充），回退到全局模板
+    editor_url_template: str | None = None
+    if matched_ext_record and matched_ext_record.wopi_action_url:
+        editor_url_template = matched_ext_record.wopi_action_url
+    if not editor_url_template:
+        editor_url_template = wopi_app.wopi_editor_url_template
+    if not editor_url_template:
+        http_exceptions.raise_bad_request("WOPI 应用未配置编辑器 URL 模板，请先执行 Discovery 或手动配置")
 
     # 获取站点 URL
     site_url_setting: Setting | None = await Setting.get(
@@ -849,12 +857,8 @@ async def create_wopi_session(
     # 构建 wopi_src
     wopi_src = f"{site_url}/wopi/files/{file_id}"
 
-    # 构建 editor URL
-    editor_url = wopi_app.wopi_editor_url_template.format(
-        wopi_src=wopi_src,
-        access_token=token,
-        access_token_ttl=access_token_ttl,
-    )
+    # 构建 editor URL（只替换 wopi_src，token 通过 POST 表单传递）
+    editor_url = editor_url_template.format(wopi_src=wopi_src)
 
     return WopiSessionResponse(
         wopi_src=wopi_src,
