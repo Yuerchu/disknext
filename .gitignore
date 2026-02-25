@@ -1,8 +1,6 @@
 # Python
 __pycache__/
 *.py[cod]
-*.pyo
-*.pyd
 *.so
 *.egg
 *.egg-info/
@@ -79,3 +77,6 @@ statics/
 # 许可证密钥（保密）
 license_private.pem
 license.key
+
+avatar/
+.dev/
