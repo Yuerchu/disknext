@@ -263,14 +263,48 @@ class LocalStorageService:
         """
         删除文件（物理删除）
 
+        删除文件后会尝试清理因此变空的父目录。
+
         :param path: 完整文件路径
         """
         if await self.file_exists(path):
             try:
                 await aiofiles.os.remove(path)
                 l.debug(f"已删除文件: {path}")
+                await self._cleanup_empty_parents(path)
             except OSError as e:
                 l.warning(f"删除文件失败 {path}: {e}")
+
+    async def _cleanup_empty_parents(self, file_path: str) -> None:
+        """
+        从被删文件的父目录开始，向上逐级删除空目录
+
+        在以下情况停止：
+
+        - 到达存储根目录（_base_path）
+        - 遇到非空目录
+        - 遇到 .trash 目录
+        - 删除失败（权限、并发等）
+
+        :param file_path: 被删文件的完整路径
+        """
+        current = Path(file_path).parent
+
+        while current != self._base_path and str(current).startswith(str(self._base_path)):
+            if current.name == '.trash':
+                break
+
+            try:
+                entries = await aiofiles.os.listdir(str(current))
+                if entries:
+                    break
+
+                await aiofiles.os.rmdir(str(current))
+                l.debug(f"已清理空目录: {current}")
+                current = current.parent
+            except OSError as e:
+                l.debug(f"清理空目录失败（忽略）: {current}: {e}")
+                break
 
     async def move_to_trash(
         self,
@@ -304,6 +338,7 @@ class LocalStorageService:
         try:
             await aiofiles.os.rename(source_path, str(trash_path))
             l.info(f"文件已移动到回收站: {source_path} -> {trash_path}")
+            await self._cleanup_empty_parents(source_path)
             return str(trash_path)
         except OSError as e:
             raise StorageException(f"移动文件到回收站失败: {e}")
