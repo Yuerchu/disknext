@@ -82,7 +82,8 @@ async def router_site_config(session: SessionDep) -> SiteConfigResponse:
         (Setting.type == SettingsType.REGISTER) |
         (Setting.type == SettingsType.CAPTCHA) |
         (Setting.type == SettingsType.AUTH) |
-        (Setting.type == SettingsType.OAUTH),
+        (Setting.type == SettingsType.OAUTH) |
+        (Setting.type == SettingsType.AVATAR),
         fetch_mode="all",
     )
 
@@ -122,6 +123,7 @@ async def router_site_config(session: SessionDep) -> SiteConfigResponse:
         password_required=s.get("auth_password_required") == "1",
         phone_binding_required=s.get("auth_phone_binding_required") == "1",
         email_binding_required=s.get("auth_email_binding_required") == "1",
+        avatar_max_size=int(s["avatar_size"]),
         footer_code=s.get("footer_code"),
         tos_url=s.get("tos_url"),
         privacy_url=s.get("privacy_url"),

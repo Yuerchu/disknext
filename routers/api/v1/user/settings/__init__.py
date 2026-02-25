@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 import sqlmodels
@@ -165,34 +165,121 @@ async def router_user_settings(
 @user_settings_router.post(
     path='/avatar',
     summary='从文件上传头像',
-    description='Upload user avatar from file.',
-    dependencies=[Depends(auth_required)],
+    status_code=204,
 )
-def router_user_settings_avatar() -> sqlmodels.ResponseBase:
+async def router_user_settings_avatar(
+        session: SessionDep,
+        user: Annotated[sqlmodels.user.User, Depends(auth_required)],
+        file: UploadFile = File(...),
+) -> None:
     """
-    Upload user avatar from file.
+    上传头像文件
 
-    Returns:
-        dict: A dictionary containing the result of the avatar upload.
+    认证：JWT token
+    请求体：multipart/form-data，file 字段
+
+    流程：
+    1. 验证文件 MIME 类型（JPEG/PNG/GIF/WebP）
+    2. 验证文件大小 <= avatar_size 设置（默认 2MB）
+    3. 调用 Pillow 验证图片有效性并处理（居中裁剪、缩放 L/M/S）
+    4. 保存三种尺寸的 WebP 文件
+    5. 更新 User.avatar = "file"
+
+    错误处理：
+    - 400: 文件类型不支持 / 图片无法解析
+    - 413: 文件过大
     """
-    http_exceptions.raise_not_implemented()
+    from service.avatar import (
+        ALLOWED_CONTENT_TYPES,
+        get_avatar_settings,
+        process_and_save_avatar,
+    )
+
+    # 验证 MIME 类型
+    if file.content_type not in ALLOWED_CONTENT_TYPES:
+        http_exceptions.raise_bad_request(
+            f"不支持的图片格式，允许: {', '.join(ALLOWED_CONTENT_TYPES)}"
+        )
+
+    # 读取并验证大小
+    _, max_upload_size, _, _, _ = await get_avatar_settings(session)
+    raw_bytes = await file.read()
+    if len(raw_bytes) > max_upload_size:
+        raise HTTPException(
+            status_code=413,
+            detail=f"文件过大，最大允许 {max_upload_size} 字节",
+        )
+
+    # 处理并保存（内部会验证图片有效性，无效抛出 ValueError）
+    try:
+        await process_and_save_avatar(session, user.id, raw_bytes)
+    except ValueError as e:
+        http_exceptions.raise_bad_request(str(e))
+
+    # 更新用户头像字段
+    user.avatar = "file"
+    await user.save(session)
 
 
 @user_settings_router.put(
     path='/avatar',
-    summary='设定为Gravatar头像',
-    description='Set user avatar to Gravatar.',
-    dependencies=[Depends(auth_required)],
+    summary='设定为 Gravatar 头像',
     status_code=204,
 )
-def router_user_settings_avatar_gravatar() -> None:
+async def router_user_settings_avatar_gravatar(
+        session: SessionDep,
+        user: Annotated[sqlmodels.user.User, Depends(auth_required)],
+) -> None:
     """
-    Set user avatar to Gravatar.
+    将头像切换为 Gravatar
 
-    Returns:
-        dict: A dictionary containing the result of setting the Gravatar avatar.
+    认证：JWT token
+
+    流程：
+    1. 验证用户有邮箱（Gravatar 基于邮箱 MD5）
+    2. 如果当前是 FILE 头像，删除本地文件
+    3. 更新 User.avatar = "gravatar"
+
+    错误处理：
+    - 400: 用户没有邮箱
     """
-    http_exceptions.raise_not_implemented()
+    from service.avatar import delete_avatar_files
+
+    if not user.email:
+        http_exceptions.raise_bad_request("Gravatar 需要邮箱，请先绑定邮箱")
+
+    if user.avatar == "file":
+        await delete_avatar_files(session, user.id)
+
+    user.avatar = "gravatar"
+    await user.save(session)
+
+
+@user_settings_router.delete(
+    path='/avatar',
+    summary='重置头像为默认',
+    status_code=204,
+)
+async def router_user_settings_avatar_delete(
+        session: SessionDep,
+        user: Annotated[sqlmodels.user.User, Depends(auth_required)],
+) -> None:
+    """
+    重置头像为默认
+
+    认证：JWT token
+
+    流程：
+    1. 如果当前是 FILE 头像，删除本地文件
+    2. 更新 User.avatar = "default"
+    """
+    from service.avatar import delete_avatar_files
+
+    if user.avatar == "file":
+        await delete_avatar_files(session, user.id)
+
+    user.avatar = "default"
+    await user.save(session)
 
 
 @user_settings_router.patch(

@@ -76,6 +76,9 @@ class SiteConfigResponse(SQLModelBase):
     email_binding_required: bool = True
     """是否强制绑定邮箱"""
 
+    avatar_max_size: int = 2097152
+    """头像文件最大字节数（默认 2MB）"""
+
     footer_code: str | None = None
     """自定义页脚代码"""
 

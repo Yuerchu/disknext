@@ -23,6 +23,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 from main import app
 from sqlmodels import Group, GroupClaims, GroupOptions, Object, ObjectType, Policy, PolicyType, Setting, SettingsType, User
+from sqlmodels.policy import GroupPolicyLink
 from sqlmodels.auth_identity import AuthIdentity, AuthProviderType
 from sqlmodels.user import UserStatus
 from utils import Password
@@ -108,6 +109,12 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
         Setting(type=SettingsType.AUTH, name="auth_email_binding_required", value="1"),
         Setting(type=SettingsType.OAUTH, name="github_enabled", value="0"),
         Setting(type=SettingsType.OAUTH, name="qq_enabled", value="0"),
+        Setting(type=SettingsType.AVATAR, name="gravatar_server", value="https://www.gravatar.com/"),
+        Setting(type=SettingsType.AVATAR, name="avatar_size", value="2097152"),
+        Setting(type=SettingsType.AVATAR, name="avatar_size_l", value="200"),
+        Setting(type=SettingsType.AVATAR, name="avatar_size_m", value="130"),
+        Setting(type=SettingsType.AVATAR, name="avatar_size_s", value="50"),
+        Setting(type=SettingsType.PATH, name="avatar_path", value="avatar"),
     ]
     for setting in settings:
         test_session.add(setting)
@@ -156,7 +163,11 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
     await test_session.refresh(admin_group)
     await test_session.refresh(default_policy)
 
-    # 4. 创建用户组选项
+    # 4. 关联用户组与存储策略
+    test_session.add(GroupPolicyLink(group_id=default_group.id, policy_id=default_policy.id))
+    test_session.add(GroupPolicyLink(group_id=admin_group.id, policy_id=default_policy.id))
+
+    # 5. 创建用户组选项
     default_group_options = GroupOptions(
         group_id=default_group.id,
         share_download=True,

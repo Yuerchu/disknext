@@ -5,6 +5,7 @@ import json
 
 import jwt
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import FileResponse, RedirectResponse
 from itsdangerous import URLSafeTimedSerializer
 from loguru import logger
 from webauthn import (
@@ -358,20 +359,78 @@ def router_user_profile(id: str) -> sqlmodels.ResponseBase:
 @user_router.get(
     path='/avatar/{id}/{size}',
     summary='获取用户头像',
-    description='Get user avatar by ID and size.',
+    response_model=None,
 )
-def router_user_avatar(id: str, size: int = 128) -> sqlmodels.ResponseBase:
+async def router_user_avatar(
+        session: SessionDep,
+        id: UUID,
+        size: int = 128,
+) -> FileResponse | RedirectResponse:
     """
-    Get user avatar by ID and size.
+    获取指定用户指定尺寸的头像（公开端点，无需认证）
 
-    Args:
-        id (str): The user ID.
-        size (int): The size of the avatar image.
+    路径参数：
+    - id: 用户 UUID
+    - size: 请求的头像尺寸（px），默认 128
 
-    Returns:
-        str: A Base64 encoded string of the user avatar image.
+    行为：
+    - default: 302 重定向到 Gravatar identicon
+    - gravatar: 302 重定向到 Gravatar（使用用户邮箱 MD5）
+    - file: 返回本地 WebP 文件
+
+    响应：
+    - 200: image/webp（file 模式）
+    - 302: 重定向到外部 URL（default/gravatar 模式）
+    - 404: 用户不存在
+
+    缓存：Cache-Control: public, max-age=3600
     """
-    http_exceptions.raise_not_implemented()
+    import aiofiles.os
+
+    from service.avatar import (
+        get_avatar_file_path,
+        get_avatar_settings,
+        gravatar_url,
+        resolve_avatar_size,
+    )
+
+    user = await sqlmodels.User.get(session, sqlmodels.User.id == id)
+    if not user:
+        http_exceptions.raise_not_found("用户不存在")
+
+    avatar_path, _, size_l, size_m, size_s = await get_avatar_settings(session)
+
+    if user.avatar == "file":
+        size_label = resolve_avatar_size(size, size_l, size_m, size_s)
+        file_path = get_avatar_file_path(avatar_path, user.id, size_label)
+
+        if not await aiofiles.os.path.exists(file_path):
+            # 文件丢失，降级为 identicon
+            fallback_url = gravatar_url(str(user.id), size, "https://www.gravatar.com/")
+            return RedirectResponse(url=fallback_url, status_code=302)
+
+        return FileResponse(
+            path=file_path,
+            media_type="image/webp",
+            headers={"Cache-Control": "public, max-age=3600"},
+        )
+
+    elif user.avatar == "gravatar":
+        gravatar_setting = await sqlmodels.Setting.get(
+            session,
+            (sqlmodels.Setting.type == sqlmodels.SettingsType.AVATAR)
+            & (sqlmodels.Setting.name == "gravatar_server"),
+        )
+        server = gravatar_setting.value if gravatar_setting else "https://www.gravatar.com/"
+        email = user.email or str(user.id)
+        url = gravatar_url(email, size, server)
+        return RedirectResponse(url=url, status_code=302)
+
+    else:
+        # default: identicon
+        email_or_id = user.email or str(user.id)
+        url = gravatar_url(email_or_id, size, "https://www.gravatar.com/")
+        return RedirectResponse(url=url, status_code=302)
 
 #####################
 # 需要登录的接口
