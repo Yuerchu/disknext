@@ -446,34 +446,41 @@ _DEFAULT_FILE_APPS: list[dict] = [
         "is_enabled": True,
         "extensions": ["mp3", "wav", "ogg", "flac", "aac", "m4a", "opus"],
     },
-    # iframe 应用（默认禁用）
+    {
+        "name": "EPUB 阅读器",
+        "app_key": "epub_reader",
+        "type": "builtin",
+        "icon": "book-open",
+        "description": "阅读 EPUB 电子书",
+        "is_enabled": True,
+        "extensions": ["epub"],
+    },
+    {
+        "name": "3D 模型预览",
+        "app_key": "model_viewer",
+        "type": "builtin",
+        "icon": "cube",
+        "description": "预览 3D 模型",
+        "is_enabled": True,
+        "extensions": ["gltf", "glb", "stl", "obj", "fbx", "ply", "3mf"],
+    },
+    {
+        "name": "Font Viewer",
+        "app_key": "font_viewer",
+        "type": "builtin",
+        "icon": "type",
+        "description": "预览字体文件并显示元数据和文本样本",
+        "is_enabled": True,
+        "extensions": ["ttf", "otf", "woff", "woff2"],
+    },
     {
         "name": "Office 在线预览",
         "app_key": "office_viewer",
         "type": "iframe",
         "icon": "file-word",
         "description": "使用 Microsoft Office Online 预览文档",
-        "is_enabled": False,
+        "is_enabled": True,
         "iframe_url_template": "https://view.officeapps.live.com/op/embed.aspx?src={file_url}",
-        "extensions": ["doc", "docx", "xls", "xlsx", "ppt", "pptx"],
-    },
-    # WOPI 应用（默认禁用）
-    {
-        "name": "Collabora Online",
-        "app_key": "collabora",
-        "type": "wopi",
-        "icon": "file-text",
-        "description": "Collabora Online 文档编辑器（需自行部署）",
-        "is_enabled": False,
-        "extensions": ["doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp"],
-    },
-    {
-        "name": "OnlyOffice",
-        "app_key": "onlyoffice",
-        "type": "wopi",
-        "icon": "file-text",
-        "description": "OnlyOffice 文档编辑器（需自行部署）",
-        "is_enabled": False,
         "extensions": ["doc", "docx", "xls", "xlsx", "ppt", "pptx"],
     },
 ]
@@ -493,7 +500,7 @@ async def init_default_file_apps() -> None:
             return
 
         for app_data in _DEFAULT_FILE_APPS:
-            extensions = app_data.pop("extensions")
+            extensions = app_data["extensions"]
 
             app = FileApp(
                 name=app_data["name"],
