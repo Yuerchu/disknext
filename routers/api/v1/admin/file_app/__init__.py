@@ -322,7 +322,7 @@ async def update_group_access(
     错误处理：
     - 404: 应用不存在
     """
-    await FileApp.get_exist_one(session, app_id)
+    app = await FileApp.get_exist_one(session, app_id)
 
     # 删除旧的用户组关联
     old_links_result = await session.exec(
