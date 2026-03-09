@@ -71,7 +71,7 @@ async def router_admin_theme_create(
         name=request.name,
         **request.colors.model_dump(),
     )
-    await preset.save(session)
+    preset = await preset.save(session)
     l.info(f"管理员创建了主题预设: {request.name}")
 
 
@@ -101,11 +101,7 @@ async def router_admin_theme_update(
     - 404: 预设不存在
     - 409: 名称已被其他预设使用
     """
-    preset: ThemePreset | None = await ThemePreset.get(
-        session, ThemePreset.id == preset_id
-    )
-    if not preset:
-        http_exceptions.raise_not_found("主题预设不存在")
+    preset = await ThemePreset.get_exist_one(session, preset_id)
 
     # 检查名称唯一性（排除自身）
     if request.name is not None and request.name != preset.name:
@@ -120,7 +116,7 @@ async def router_admin_theme_update(
         for key, value in color_data.items():
             setattr(preset, key, value)
 
-    await preset.save(session)
+    preset = await preset.save(session)
     l.info(f"管理员更新了主题预设: {preset.name}")
 
 
@@ -147,11 +143,7 @@ async def router_admin_theme_delete(
     副作用：
     - 关联用户的 theme_preset_id 会被数据库 SET NULL
     """
-    preset: ThemePreset | None = await ThemePreset.get(
-        session, ThemePreset.id == preset_id
-    )
-    if not preset:
-        http_exceptions.raise_not_found("主题预设不存在")
+    preset = await ThemePreset.get_exist_one(session, preset_id)
 
     await preset.delete(session)
     l.info(f"管理员删除了主题预设: {preset.name}")
@@ -180,11 +172,7 @@ async def router_admin_theme_set_default(
     逻辑：
     - 事务中先清除所有旧默认，再设新默认
     """
-    preset: ThemePreset | None = await ThemePreset.get(
-        session, ThemePreset.id == preset_id
-    )
-    if not preset:
-        http_exceptions.raise_not_found("主题预设不存在")
+    preset = await ThemePreset.get_exist_one(session, preset_id)
 
     # 清除所有旧默认
     await session.execute(
@@ -195,5 +183,5 @@ async def router_admin_theme_set_default(
 
     # 设新默认
     preset.is_default = True
-    await preset.save(session)
+    preset = await preset.save(session)
     l.info(f"管理员将主题预设 '{preset.name}' 设为默认")

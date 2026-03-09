@@ -45,12 +45,7 @@ async def router_share_get(
     4. 返回分享详情（含文件树和分享者信息）
     """
     # 1. 查询分享（预加载 user 和 object）
-    share = await Share.get(
-        session, Share.id == id,
-        load=[Share.user, Share.object],
-    )
-    if not share:
-        http_exceptions.raise_not_found(detail="分享不存在或已被取消")
+    share = await Share.get_exist_one(session, id, load=[Share.user, Share.object])
 
     # 2. 检查过期
     now = datetime.now()
@@ -474,16 +469,29 @@ def router_share_update(id: str) -> ResponseBase:
     path='/{id}',
     summary='删除分享',
     description='Delete a share by ID.',
-    dependencies=[Depends(auth_required)]
+    status_code=204,
 )
-def router_share_delete(id: str) -> ResponseBase:
+async def router_share_delete(
+    session: SessionDep,
+    user: Annotated[User, Depends(auth_required)],
+    id: UUID,
+) -> None:
     """
-    Delete a share by ID.
-    
-    Args:
-        id (str): The ID of the share to be deleted.
-    
-    Returns:
-        ResponseBase: A model containing the response data for the deleted share.
+    删除分享
+
+    认证：需要 JWT token
+
+    流程：
+    1. 通过分享ID查找分享
+    2. 验证分享属于当前用户
+    3. 删除分享记录
     """
-    http_exceptions.raise_not_implemented()
+    share = await Share.get_exist_one(session, id)
+    if share.user_id != user.id:
+        http_exceptions.raise_forbidden(detail="无权删除此分享")
+
+    user_id = user.id
+    share_code = share.code
+    await Share.delete(session, share)
+
+    l.info(f"用户 {user_id} 删除了分享: {share_code}")

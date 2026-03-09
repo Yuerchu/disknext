@@ -112,9 +112,7 @@ async def router_object_create(
 
     # 确定存储策略
     policy_id = request.policy_id or parent.policy_id
-    policy = await Policy.get(session, Policy.id == policy_id)
-    if not policy:
-        raise HTTPException(status_code=404, detail="存储策略不存在")
+    policy = await Policy.get_exist_one(session, policy_id)
 
     parent_id = parent.id
 
@@ -149,7 +147,7 @@ async def router_object_create(
         owner_id=user_id,
         policy_id=policy_id,
     )
-    await file_object.save(session)
+    file_object = await file_object.save(session)
 
     l.info(f"创建空白文件: {request.name}")
 
@@ -474,7 +472,7 @@ async def router_object_rename(
 
     # 更新名称
     obj.name = new_name
-    await obj.save(session)
+    obj = await obj.save(session)
 
     l.info(f"用户 {user_id} 将对象 {obj.id} 重命名为 {new_name}")
 
@@ -682,7 +680,7 @@ async def router_object_switch_policy(
         dest_policy_id=dest_policy_id,
         object_id=obj_id,
     )
-    await task_props.save(session)
+    task_props = await task_props.save(session)
 
     if obj_is_file:
         # 文件：后台迁移
@@ -698,7 +696,7 @@ async def router_object_switch_policy(
         # 目录：先更新目录自身的 policy_id
         obj = await Object.get(session, Object.id == obj_id)
         obj.policy_id = dest_policy_id
-        await obj.save(session)
+        obj = await obj.save(session)
 
         if request.is_migrate_existing:
             # 后台迁移所有已有文件
@@ -715,7 +713,7 @@ async def router_object_switch_policy(
             task = await Task.get(session, Task.id == task_id)
             task.status = TaskStatus.COMPLETED
             task.progress = 100
-            await task.save(session)
+            task = await task.save(session)
 
     # 重新获取 task 以读取最新状态
     task = await Task.get(session, Task.id == task_id)
@@ -850,7 +848,7 @@ async def router_patch_object_metadata(
             )
             if existing:
                 existing.value = patch.value
-                await existing.save(session)
+                existing = await existing.save(session)
             else:
                 entry = ObjectMetadata(
                     object_id=object_id,
@@ -858,6 +856,6 @@ async def router_patch_object_metadata(
                     value=patch.value,
                     is_public=True,
                 )
-                await entry.save(session)
+                entry = await entry.save(session)
 
     l.info(f"用户 {user.id} 更新了对象 {object_id} 的 {len(request.patches)} 条元数据")

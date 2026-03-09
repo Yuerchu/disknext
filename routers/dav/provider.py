@@ -175,8 +175,7 @@ async def _finalize_upload(
         obj = await Object.get(session, Object.id == object_id)
         if obj:
             obj.sqlmodel_update({'size': size, 'physical_file_id': pf.id})
-            session.add(obj)
-            await session.commit()
+            obj = await obj.save(session)
 
         # 更新用户存储用量
         if size > 0:
@@ -193,8 +192,7 @@ async def _move_object(
         obj = await Object.get(session, Object.id == object_id)
         if obj:
             obj.sqlmodel_update({'parent_id': new_parent_id, 'name': new_name})
-            session.add(obj)
-            await session.commit()
+            obj = await obj.save(session)
 
 
 async def _copy_object_recursive(

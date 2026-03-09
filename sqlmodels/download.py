@@ -4,7 +4,7 @@ from uuid import UUID
 
 from sqlmodel import Field, Relationship, UniqueConstraint, Index
 
-from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, TableBaseMixin
+from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, TableBaseMixin, Str255
 
 if TYPE_CHECKING:
     from .user import User
@@ -141,7 +141,7 @@ class Download(DownloadBase, UUIDTableBaseMixin):
     speed: int = Field(default=0)
     """下载速度（bytes/s）"""
 
-    parent: str | None = Field(default=None, max_length=255)
+    parent: Str255 | None = None
     """父任务标识"""
 
     error: str | None = Field(default=None)

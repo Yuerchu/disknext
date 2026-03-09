@@ -163,6 +163,7 @@ class SettingsType(StrEnum):
     VERSION = "version"
     VIEW = "view"
     WOPI = "wopi"
+    FILE_CATEGORY = "file_category"
 
 # 数据库模型
 class Setting(SettingItem, TableBaseMixin):

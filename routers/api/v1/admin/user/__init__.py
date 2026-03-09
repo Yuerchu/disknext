@@ -128,8 +128,9 @@ async def router_admin_create_user(
             is_verified=True,
             user_id=user.id,
         )
-        await identity.save(session)
+        identity = await identity.save(session)
 
+    user = await User.get(session, User.id == user.id, load=User.group)
     return user.to_public()
 
 
@@ -153,9 +154,7 @@ async def router_admin_update_user(
     :param request: 更新请求
     :return: 更新结果
     """
-    user = await User.get(session, User.id == user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="用户不存在")
+    user = await User.get_exist_one(session, user_id)
 
     # 默认管理员不允许更改用户组（通过 Setting 中的 default_admin_id 识别）
     default_admin_setting = await Setting.get(
@@ -252,9 +251,7 @@ async def router_admin_calibrate_storage(
     :param user_id: 用户UUID
     :return: 校准结果
     """
-    user = await User.get(session, User.id == user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="用户不存在")
+    user = await User.get_exist_one(session, user_id)
 
     previous_storage = user.storage
 

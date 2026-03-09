@@ -13,7 +13,7 @@ from uuid import UUID
 from sqlalchemy import JSON
 from sqlmodel import Field, Relationship
 
-from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin
+from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str100
 
 if TYPE_CHECKING:
     from .user import User
@@ -44,13 +44,13 @@ class CustomPropertyType(StrEnum):
 class CustomPropertyDefinitionBase(SQLModelBase):
     """自定义属性定义基础模型"""
 
-    name: str = Field(max_length=100)
+    name: Str100
     """属性显示名称"""
 
     type: CustomPropertyType
     """属性值类型"""
 
-    icon: str | None = Field(default=None, max_length=100)
+    icon: Str100 | None = None
     """图标标识（iconify 名称）"""
 
     options: list[str] | None = Field(default=None, sa_type=JSON)
@@ -90,7 +90,7 @@ class CustomPropertyDefinition(CustomPropertyDefinitionBase, UUIDTableBaseMixin)
 class CustomPropertyCreateRequest(SQLModelBase):
     """创建自定义属性请求 DTO"""
 
-    name: str = Field(max_length=100)
+    name: Str100
     """属性显示名称"""
 
     type: CustomPropertyType

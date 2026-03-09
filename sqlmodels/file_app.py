@@ -20,7 +20,7 @@ from uuid import UUID
 
 from sqlmodel import Field, Relationship, UniqueConstraint
 
-from sqlmodel_ext import SQLModelBase, TableBaseMixin, UUIDTableBaseMixin
+from sqlmodel_ext import SQLModelBase, TableBaseMixin, UUIDTableBaseMixin, Str100, Str255, Text1024
 
 if TYPE_CHECKING:
     from .group import Group
@@ -119,7 +119,7 @@ class UserFileAppDefaultResponse(SQLModelBase):
 class FileAppCreateRequest(SQLModelBase):
     """管理员创建应用请求 DTO"""
 
-    name: str = Field(max_length=100)
+    name: Str100
     """应用名称"""
 
     app_key: str = Field(max_length=50)
@@ -128,7 +128,7 @@ class FileAppCreateRequest(SQLModelBase):
     type: FileAppType
     """应用类型"""
 
-    icon: str | None = Field(default=None, max_length=255)
+    icon: Str255 | None = None
     """图标名称/URL"""
 
     description: str | None = Field(default=None, max_length=500)
@@ -140,13 +140,13 @@ class FileAppCreateRequest(SQLModelBase):
     is_restricted: bool = False
     """是否限制用户组访问"""
 
-    iframe_url_template: str | None = Field(default=None, max_length=1024)
+    iframe_url_template: Text1024 | None = None
     """iframe URL 模板"""
 
     wopi_discovery_url: str | None = Field(default=None, max_length=512)
     """WOPI 发现端点 URL"""
 
-    wopi_editor_url_template: str | None = Field(default=None, max_length=1024)
+    wopi_editor_url_template: Text1024 | None = None
     """WOPI 编辑器 URL 模板"""
 
     extensions: list[str] = []
@@ -159,7 +159,7 @@ class FileAppCreateRequest(SQLModelBase):
 class FileAppUpdateRequest(SQLModelBase):
     """管理员更新应用请求 DTO（所有字段可选）"""
 
-    name: str | None = Field(default=None, max_length=100)
+    name: Str100 | None = None
     """应用名称"""
 
     app_key: str | None = Field(default=None, max_length=50)
@@ -168,7 +168,7 @@ class FileAppUpdateRequest(SQLModelBase):
     type: FileAppType | None = None
     """应用类型"""
 
-    icon: str | None = Field(default=None, max_length=255)
+    icon: Str255 | None = None
     """图标名称/URL"""
 
     description: str | None = Field(default=None, max_length=500)
@@ -180,13 +180,13 @@ class FileAppUpdateRequest(SQLModelBase):
     is_restricted: bool | None = None
     """是否限制用户组访问"""
 
-    iframe_url_template: str | None = Field(default=None, max_length=1024)
+    iframe_url_template: Text1024 | None = None
     """iframe URL 模板"""
 
     wopi_discovery_url: str | None = Field(default=None, max_length=512)
     """WOPI 发现端点 URL"""
 
-    wopi_editor_url_template: str | None = Field(default=None, max_length=1024)
+    wopi_editor_url_template: Text1024 | None = None
     """WOPI 编辑器 URL 模板"""
 
 
@@ -325,7 +325,7 @@ class WopiDiscoveryResponse(SQLModelBase):
 class FileApp(SQLModelBase, UUIDTableBaseMixin):
     """文件查看器应用注册表"""
 
-    name: str = Field(max_length=100)
+    name: Str100
     """应用名称"""
 
     app_key: str = Field(max_length=50, unique=True, index=True)
@@ -334,7 +334,7 @@ class FileApp(SQLModelBase, UUIDTableBaseMixin):
     type: FileAppType
     """应用类型"""
 
-    icon: str | None = Field(default=None, max_length=255)
+    icon: Str255 | None = None
     """图标名称/URL"""
 
     description: str | None = Field(default=None, max_length=500)
@@ -346,13 +346,13 @@ class FileApp(SQLModelBase, UUIDTableBaseMixin):
     is_restricted: bool = False
     """是否限制用户组访问"""
 
-    iframe_url_template: str | None = Field(default=None, max_length=1024)
+    iframe_url_template: Text1024 | None = None
     """iframe URL 模板，支持 {file_url} 占位符"""
 
     wopi_discovery_url: str | None = Field(default=None, max_length=512)
     """WOPI 客户端发现端点 URL"""
 
-    wopi_editor_url_template: str | None = Field(default=None, max_length=1024)
+    wopi_editor_url_template: Text1024 | None = None
     """WOPI 编辑器 URL 模板，支持 {wopi_src} {access_token} {access_token_ttl}"""
 
     # 关系

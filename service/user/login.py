@@ -192,7 +192,7 @@ async def _login_oauth(
         # 已绑定 → 更新 OAuth 信息并返回关联用户
         identity.display_name = nickname
         identity.avatar_url = avatar_url
-        await identity.save(session)
+        identity = await identity.save(session)
 
         user: User = await User.get(session, User.id == identity.user_id, load=User.group)
         if not user:
@@ -254,7 +254,7 @@ async def _auto_register_oauth_user(
         is_verified=True,
         user_id=new_user_id,
     )
-    await identity.save(session)
+    identity = await identity.save(session)
 
     # 创建用户根目录
     default_policy = await Policy.get(session, Policy.name == "本地存储")
@@ -335,7 +335,7 @@ async def _login_passkey(
 
     # 更新签名计数
     authn.sign_count = verification.new_sign_count
-    await authn.save(session)
+    authn = await authn.save(session)
 
     # 加载用户
     user: User = await User.get(session, User.id == authn.user_id, load=User.group)
@@ -392,7 +392,7 @@ async def _login_magic_link(
     # 标记邮箱已验证
     if not identity.is_verified:
         identity.is_verified = True
-        await identity.save(session)
+        identity = await identity.save(session)
 
     return user
 

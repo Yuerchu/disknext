@@ -234,7 +234,7 @@ async def router_user_register(
         group_id=default_group.id,
     )
     new_user_id = new_user.id
-    await new_user.save(session)
+    new_user = await new_user.save(session)
 
     # 7. 创建 AuthIdentity
     hashed_password = Password.hash(request.credential) if request.credential else None
@@ -246,7 +246,7 @@ async def router_user_register(
         is_verified=False,
         user_id=new_user_id,
     )
-    await identity.save(session)
+    identity = await identity.save(session)
 
     # 8. 创建用户根目录（使用用户组关联的第一个存储策略）
     await session.refresh(default_group, ['policies'])
@@ -494,9 +494,24 @@ async def router_user_storage(
     if not group:
         raise HTTPException(status_code=404, detail="用户组不存在")
 
-    # [TODO] 总空间加上用户购买的额外空间
+    # 查询用户所有未过期容量包的 size 总和
+    from datetime import datetime
+    from sqlalchemy import func, select, and_, or_
 
-    total: int = group.max_storage
+    now = datetime.now()
+    stmt = select(func.coalesce(func.sum(sqlmodels.StoragePack.size), 0)).where(
+        and_(
+            sqlmodels.StoragePack.user_id == user.id,
+            or_(
+                sqlmodels.StoragePack.expired_time.is_(None),
+                sqlmodels.StoragePack.expired_time > now,
+            ),
+        )
+    )
+    result = await session.exec(stmt)
+    active_packs_total: int = result.scalar_one()
+
+    total: int = group.max_storage + active_packs_total
     used: int = user.storage
     free: int = max(0, total - used)
 
@@ -638,7 +653,7 @@ async def router_user_authn_finish(
         is_verified=True,
         user_id=user.id,
     )
-    await identity.save(session)
+    identity = await identity.save(session)
 
     return authn.to_detail_response()
 

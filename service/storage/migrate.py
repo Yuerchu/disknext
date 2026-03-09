@@ -147,7 +147,7 @@ async def migrate_single_file(
     # 4. 更新 Object
     obj.policy_id = dest_policy.id
     obj.physical_file_id = new_physical.id
-    await obj.save(session)
+    obj = await obj.save(session)
 
     # 5. 旧 PhysicalFile 引用计数 -1
     old_physical.decrement_reference()
@@ -159,7 +159,7 @@ async def migrate_single_file(
             l.warning(f"删除源文件失败（不影响迁移结果）: {old_physical.storage_path}: {e}")
         await PhysicalFile.delete(session, old_physical)
     else:
-        await old_physical.save(session)
+        old_physical = await old_physical.save(session)
 
     l.info(f"文件迁移完成: {obj.name} ({obj.id}), {src_policy.name} → {dest_policy.name}")
 
@@ -187,12 +187,12 @@ async def migrate_file_with_task(
 
         task.status = TaskStatus.COMPLETED
         task.progress = 100
-        await task.save(session)
+        task = await task.save(session)
     except Exception as e:
         l.error(f"文件迁移任务失败: {obj.id}: {e}")
         task.status = TaskStatus.ERROR
         task.error = str(e)[:500]
-        await task.save(session)
+        task = await task.save(session)
 
 
 async def migrate_directory_files(
@@ -244,7 +244,7 @@ async def migrate_directory_files(
         # 更新所有子目录的 policy_id
         for sub_folder in folders_to_update:
             sub_folder.policy_id = dest_policy.id
-            await sub_folder.save(session)
+            sub_folder = await sub_folder.save(session)
 
         # 完成任务
         if errors:
@@ -254,7 +254,7 @@ async def migrate_directory_files(
             task.status = TaskStatus.COMPLETED
 
         task.progress = 100
-        await task.save(session)
+        task = await task.save(session)
 
         l.info(
             f"目录迁移完成: {folder.name} ({folder.id}), "
@@ -264,7 +264,7 @@ async def migrate_directory_files(
         l.error(f"目录迁移任务失败: {folder.id}: {e}")
         task.status = TaskStatus.ERROR
         task.error = str(e)[:500]
-        await task.save(session)
+        task = await task.save(session)
 
 
 async def _collect_objects_recursive(

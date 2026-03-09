@@ -4,7 +4,7 @@ from uuid import UUID
 from enum import StrEnum
 from sqlmodel import Field, Relationship, text
 
-from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin
+from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str64, Str255
 
 if TYPE_CHECKING:
     from .object import Object
@@ -37,22 +37,22 @@ class PolicyType(StrEnum):
 class PolicyBase(SQLModelBase):
     """存储策略基础字段，供 DTO 和数据库模型共享"""
 
-    name: str = Field(max_length=255)
+    name: Str255
     """策略名称"""
 
     type: PolicyType
     """存储策略类型"""
 
-    server: str | None = Field(default=None, max_length=255)
+    server: Str255 | None = None
     """服务器地址（本地策略为绝对路径）"""
 
-    bucket_name: str | None = Field(default=None, max_length=255)
+    bucket_name: Str255 | None = None
     """存储桶名称"""
 
     is_private: bool = True
     """是否为私有空间"""
 
-    base_url: str | None = Field(default=None, max_length=255)
+    base_url: Str255 | None = None
     """访问文件的基础URL"""
 
     access_key: str | None = None
@@ -67,10 +67,10 @@ class PolicyBase(SQLModelBase):
     auto_rename: bool = False
     """是否自动重命名"""
 
-    dir_name_rule: str | None = Field(default=None, max_length=255)
+    dir_name_rule: Str255 | None = None
     """目录命名规则"""
 
-    file_name_rule: str | None = Field(default=None, max_length=255)
+    file_name_rule: Str255 | None = None
     """文件命名规则"""
 
     is_origin_link_enable: bool = False
@@ -115,7 +115,7 @@ class PolicyCreateRequest(PolicyBase):
     mimetype: str | None = Field(default=None, max_length=127)
     """MIME类型"""
 
-    od_redirect: str | None = Field(default=None, max_length=255)
+    od_redirect: Str255 | None = None
     """OneDrive重定向地址"""
 
     chunk_size: int = Field(default=52428800, ge=1)
@@ -124,26 +124,26 @@ class PolicyCreateRequest(PolicyBase):
     s3_path_style: bool = False
     """是否使用S3路径风格"""
 
-    s3_region: str = Field(default='us-east-1', max_length=64)
+    s3_region: Str64 = 'us-east-1'
     """S3 区域（如 us-east-1、ap-southeast-1），仅 S3 策略使用"""
 
 
 class PolicyUpdateRequest(SQLModelBase):
     """更新存储策略请求 DTO（所有字段可选）"""
 
-    name: str | None = Field(default=None, max_length=255)
+    name: Str255 | None = None
     """策略名称"""
 
-    server: str | None = Field(default=None, max_length=255)
+    server: Str255 | None = None
     """服务器地址"""
 
-    bucket_name: str | None = Field(default=None, max_length=255)
+    bucket_name: Str255 | None = None
     """存储桶名称"""
 
     is_private: bool | None = None
     """是否为私有空间"""
 
-    base_url: str | None = Field(default=None, max_length=255)
+    base_url: Str255 | None = None
     """访问文件的基础URL"""
 
     access_key: str | None = None
@@ -158,10 +158,10 @@ class PolicyUpdateRequest(SQLModelBase):
     auto_rename: bool | None = None
     """是否自动重命名"""
 
-    dir_name_rule: str | None = Field(default=None, max_length=255)
+    dir_name_rule: Str255 | None = None
     """目录命名规则"""
 
-    file_name_rule: str | None = Field(default=None, max_length=255)
+    file_name_rule: Str255 | None = None
     """文件命名规则"""
 
     is_origin_link_enable: bool | None = None
@@ -177,7 +177,7 @@ class PolicyUpdateRequest(SQLModelBase):
     mimetype: str | None = Field(default=None, max_length=127)
     """MIME类型"""
 
-    od_redirect: str | None = Field(default=None, max_length=255)
+    od_redirect: Str255 | None = None
     """OneDrive重定向地址"""
 
     chunk_size: int | None = Field(default=None, ge=1)
@@ -186,7 +186,7 @@ class PolicyUpdateRequest(SQLModelBase):
     s3_path_style: bool | None = None
     """是否使用S3路径风格"""
 
-    s3_region: str | None = Field(default=None, max_length=64)
+    s3_region: Str64 | None = None
     """S3 区域"""
 
 
@@ -205,7 +205,7 @@ class PolicyOptionsBase(SQLModelBase):
     mimetype: str | None = Field(default=None, max_length=127)
     """MIME类型"""
 
-    od_redirect: str | None = Field(default=None, max_length=255)
+    od_redirect: Str255 | None = None
     """OneDrive重定向地址"""
 
     chunk_size: int = Field(default=52428800, sa_column_kwargs={"server_default": "52428800"})
@@ -214,7 +214,7 @@ class PolicyOptionsBase(SQLModelBase):
     s3_path_style: bool = Field(default=False, sa_column_kwargs={"server_default": text("false")})
     """是否使用S3路径风格"""
 
-    s3_region: str = Field(default='us-east-1', max_length=64, sa_column_kwargs={"server_default": "'us-east-1'"})
+    s3_region: Str64 = Field(default='us-east-1', sa_column_kwargs={"server_default": "'us-east-1'"})
     """S3 区域（如 us-east-1、ap-southeast-1），仅 S3 策略使用"""
 
 
@@ -237,7 +237,7 @@ class Policy(PolicyBase, UUIDTableBaseMixin):
     """存储策略模型"""
 
     # 覆盖基类字段以添加数据库专有配置
-    name: str = Field(max_length=255, unique=True)
+    name: Str255 = Field(unique=True)
     """策略名称"""
 
     is_private: bool = Field(default=True, sa_column_kwargs={"server_default": text("true")})

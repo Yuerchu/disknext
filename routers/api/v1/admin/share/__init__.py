@@ -155,9 +155,7 @@ async def router_admin_delete_share(
     :param share_id: 分享ID
     :return: 删除结果
     """
-    share = await Share.get(session, Share.id == share_id)
-    if not share:
-        raise HTTPException(status_code=404, detail="分享不存在")
+    share = await Share.get_exist_one(session, share_id)
 
     await Share.delete(session, share)
 

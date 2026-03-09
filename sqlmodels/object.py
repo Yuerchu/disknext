@@ -7,7 +7,7 @@ from enum import StrEnum
 from sqlalchemy import BigInteger
 from sqlmodel import Field, Relationship, CheckConstraint, Index, text
 
-from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin
+from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str255, Str256
 
 from .policy import PolicyType
 
@@ -25,7 +25,15 @@ class ObjectType(StrEnum):
     """对象类型枚举"""
     FILE = "file"
     FOLDER = "folder"
-    
+
+
+class FileCategory(StrEnum):
+    """文件类型分类枚举，用于按类别筛选文件"""
+    IMAGE = "image"
+    VIDEO = "video"
+    AUDIO = "audio"
+    DOCUMENT = "document"
+
 
 # ==================== Base 模型 ====================
 
@@ -190,13 +198,13 @@ class Object(ObjectBase, UUIDTableBaseMixin):
 
     # ==================== 基础字段 ====================
 
-    name: str = Field(max_length=255)
+    name: Str255
     """对象名称（文件名或目录名）"""
 
     type: ObjectType
     """对象类型：file 或 folder"""
 
-    password: str | None = Field(default=None, max_length=255)
+    password: Str255 | None = None
     """对象独立密码（仅当用户为对象单独设置密码时有效）"""
 
     # ==================== 文件专属字段 ====================
@@ -204,7 +212,7 @@ class Object(ObjectBase, UUIDTableBaseMixin):
     size: int = Field(default=0, sa_type=BigInteger, sa_column_kwargs={"server_default": "0"})
     """文件大小（字节），目录为 0"""
 
-    upload_session_id: str | None = Field(default=None, max_length=255, unique=True, index=True)
+    upload_session_id: Str255 | None = Field(default=None, unique=True, index=True)
     """分块上传会话ID（仅文件有效）"""
 
     physical_file_id: UUID | None = Field(
@@ -470,6 +478,37 @@ class Object(ObjectBase, UUIDTableBaseMixin):
         )
 
     @classmethod
+    async def get_by_category(
+        cls,
+        session: 'AsyncSession',
+        user_id: UUID,
+        extensions: list[str],
+        table_view: 'TableViewRequest | None' = None,
+    ) -> 'ListResponse[Object]':
+        """
+        按扩展名列表查询用户的所有文件（跨目录）
+
+        只查询未删除、未封禁的文件对象，使用 ILIKE 匹配文件名后缀。
+
+        :param session: 数据库会话
+        :param user_id: 用户UUID
+        :param extensions: 扩展名列表（不含点号）
+        :param table_view: 分页排序参数
+        :return: 分页文件列表
+        """
+        from sqlalchemy import or_
+
+        ext_conditions = [cls.name.ilike(f"%.{ext}") for ext in extensions]
+        condition = (
+            (cls.owner_id == user_id) &
+            (cls.type == ObjectType.FILE) &
+            (cls.deleted_at == None) &
+            (cls.is_banned == False) &
+            or_(*ext_conditions)
+        )
+        return await cls.get_with_count(session, condition, table_view=table_view)
+
+    @classmethod
     async def resolve_uri(
         cls,
         session,
@@ -546,7 +585,7 @@ class Object(ObjectBase, UUIDTableBaseMixin):
 class UploadSessionBase(SQLModelBase):
     """上传会话基础字段"""
 
-    file_name: str = Field(max_length=255)
+    file_name: Str255
     """原始文件名"""
 
     file_size: int = Field(ge=0, sa_type=BigInteger)
@@ -577,7 +616,7 @@ class UploadSession(UploadSessionBase, UUIDTableBaseMixin):
     storage_path: str | None = Field(default=None, max_length=512)
     """文件存储路径"""
 
-    s3_upload_id: str | None = Field(default=None, max_length=256)
+    s3_upload_id: Str256 | None = None
     """S3 Multipart Upload ID（仅 S3 策略使用）"""
 
     s3_part_etags: str | None = None
@@ -624,7 +663,7 @@ class UploadSession(UploadSessionBase, UUIDTableBaseMixin):
 class CreateUploadSessionRequest(SQLModelBase):
     """创建上传会话请求 DTO"""
 
-    file_name: str = Field(max_length=255)
+    file_name: Str255
     """文件名"""
 
     file_size: int = Field(ge=0)
@@ -681,7 +720,7 @@ class UploadChunkResponse(SQLModelBase):
 class CreateFileRequest(SQLModelBase):
     """创建空白文件请求 DTO"""
 
-    name: str = Field(max_length=255)
+    name: Str255
     """文件名"""
 
     parent_id: UUID
@@ -719,7 +758,7 @@ class ObjectRenameRequest(SQLModelBase):
     id: UUID
     """对象UUID"""
 
-    new_name: str = Field(max_length=255)
+    new_name: Str255
     """新名称"""
 
 

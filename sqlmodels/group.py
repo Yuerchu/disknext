@@ -5,7 +5,7 @@ from uuid import UUID
 from sqlalchemy import BigInteger
 from sqlmodel import Field, Relationship, text
 
-from sqlmodel_ext import SQLModelBase, TableBaseMixin, UUIDTableBaseMixin
+from sqlmodel_ext import SQLModelBase, TableBaseMixin, UUIDTableBaseMixin, Str255
 
 if TYPE_CHECKING:
     from .user import User
@@ -67,7 +67,7 @@ class GroupAllOptionsBase(GroupOptionsBase):
 class GroupCreateRequest(GroupAllOptionsBase):
     """创建用户组请求 DTO"""
 
-    name: str = Field(max_length=255)
+    name: Str255
     """用户组名称"""
 
     max_storage: int = Field(default=0, ge=0)
@@ -92,7 +92,7 @@ class GroupCreateRequest(GroupAllOptionsBase):
 class GroupUpdateRequest(SQLModelBase):
     """更新用户组请求 DTO（所有字段可选）"""
 
-    name: str | None = Field(default=None, max_length=255)
+    name: Str255 | None = None
     """用户组名称"""
 
     max_storage: int | None = Field(default=None, ge=0)
@@ -258,7 +258,7 @@ class GroupOptions(GroupAllOptionsBase, TableBaseMixin):
 class Group(GroupBase, UUIDTableBaseMixin):
     """用户组模型"""
 
-    name: str = Field(max_length=255, unique=True)
+    name: Str255 = Field(unique=True)
     """用户组名"""
 
     max_storage: int = Field(default=0, sa_type=BigInteger, sa_column_kwargs={"server_default": "0"})

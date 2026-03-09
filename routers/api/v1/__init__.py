@@ -5,6 +5,7 @@ from utils.conf import appmeta
 from .admin import admin_router
 
 from .callback import callback_router
+from .category import category_router
 from .directory import directory_router
 from .download import download_router
 from .file import router as file_router
@@ -14,7 +15,6 @@ from .trash import trash_router
 from .site import site_router
 from .slave import slave_router
 from .user import user_router
-from .vas import vas_router
 from .webdav import webdav_router
 
 router = APIRouter(prefix="/v1")
@@ -24,6 +24,7 @@ router = APIRouter(prefix="/v1")
 if appmeta.mode == "master":
     router.include_router(admin_router)
     router.include_router(callback_router)
+    router.include_router(category_router)
     router.include_router(directory_router)
     router.include_router(download_router)
     router.include_router(file_router)
@@ -32,7 +33,6 @@ if appmeta.mode == "master":
     router.include_router(site_router)
     router.include_router(trash_router)
     router.include_router(user_router)
-    router.include_router(vas_router)
     router.include_router(webdav_router)
 elif appmeta.mode == "slave":
     router.include_router(slave_router)

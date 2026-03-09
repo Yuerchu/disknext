@@ -15,7 +15,7 @@ from uuid import UUID
 from sqlalchemy import BigInteger
 from sqlmodel import Field, Relationship, Index
 
-from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin
+from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str32, Str64
 
 if TYPE_CHECKING:
     from .object import Object
@@ -31,10 +31,10 @@ class PhysicalFileBase(SQLModelBase):
     size: int = Field(default=0, sa_type=BigInteger)
     """文件大小（字节）"""
 
-    checksum_md5: str | None = Field(default=None, max_length=32)
+    checksum_md5: Str32 | None = None
     """MD5校验和（用于文件去重和完整性校验）"""
 
-    checksum_sha256: str | None = Field(default=None, max_length=64)
+    checksum_sha256: Str64 | None = None
     """SHA256校验和"""
 
 

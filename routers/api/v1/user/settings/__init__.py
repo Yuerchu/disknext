@@ -218,7 +218,7 @@ async def router_user_settings_avatar(
 
     # 更新用户头像字段
     user.avatar = "file"
-    await user.save(session)
+    user = await user.save(session)
 
 
 @user_settings_router.put(
@@ -252,7 +252,7 @@ async def router_user_settings_avatar_gravatar(
         await delete_avatar_files(session, user.id)
 
     user.avatar = "gravatar"
-    await user.save(session)
+    user = await user.save(session)
 
 
 @user_settings_router.delete(
@@ -279,7 +279,7 @@ async def router_user_settings_avatar_delete(
         await delete_avatar_files(session, user.id)
 
     user.avatar = "default"
-    await user.save(session)
+    user = await user.save(session)
 
 
 @user_settings_router.patch(
@@ -321,7 +321,7 @@ async def router_user_settings_theme(
         user.color_error = request.theme_colors.error
         user.color_neutral = request.theme_colors.neutral
 
-    await user.save(session)
+    user = await user.save(session)
 
 
 @user_settings_router.patch(
@@ -358,7 +358,7 @@ async def router_user_settings_change_password(
         http_exceptions.raise_forbidden("当前密码错误")
 
     email_identity.credential = Password.hash(request.new_password)
-    await email_identity.save(session)
+    email_identity = await email_identity.save(session)
 
 
 @user_settings_router.patch(
@@ -392,7 +392,7 @@ async def router_user_settings_patch(
         http_exceptions.raise_bad_request(f"设置项 {option.value} 不允许为空")
 
     setattr(user, option.value, value)
-    await user.save(session)
+    user = await user.save(session)
 
 
 @user_settings_router.get(
@@ -454,7 +454,7 @@ async def router_user_settings_2fa_enable(
     extra: dict = orjson.loads(email_identity.extra_data) if email_identity.extra_data else {}
     extra["two_factor"] = secret
     email_identity.extra_data = orjson.dumps(extra).decode('utf-8')
-    await email_identity.save(session)
+    email_identity = await email_identity.save(session)
 
 
 # ==================== 认证身份管理 ====================

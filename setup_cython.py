@@ -84,6 +84,7 @@ if __name__ == "__main__":
 
     setup(
         name="disknext-ee",
+        packages=[],
         ext_modules=cythonize(
             extensions,
             compiler_directives={'language_level': "3"},

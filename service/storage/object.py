@@ -287,7 +287,7 @@ async def permanently_delete_objects(
                 await PhysicalFile.delete(session, physical_file, commit=False)
                 l.debug(f"物理文件记录已删除: {physical_file.storage_path}")
             else:
-                await physical_file.save(session, commit=False)
+                physical_file = await physical_file.save(session, commit=False)
                 l.debug(f"物理文件仍有 {physical_file.reference_count} 个引用: {physical_file.storage_path}")
 
         # 更新用户存储配额
@@ -399,7 +399,7 @@ async def delete_object_recursive(
             await PhysicalFile.delete(session, physical_file, commit=False)
             l.debug(f"物理文件记录已删除: {physical_file.storage_path}")
         else:
-            await physical_file.save(session, commit=False)
+            physical_file = await physical_file.save(session, commit=False)
             l.debug(f"物理文件仍有 {physical_file.reference_count} 个引用: {physical_file.storage_path}")
 
     # 阶段三：更新用户存储配额（与删除在同一事务中）
@@ -458,7 +458,7 @@ async def _copy_object_recursive(
         physical_file = await PhysicalFile.get(session, PhysicalFile.id == src_physical_file_id)
         if physical_file:
             physical_file.increment_reference()
-            await physical_file.save(session)
+            physical_file = await physical_file.save(session)
         total_copied_size += src_size
 
     new_obj = await new_obj.save(session)

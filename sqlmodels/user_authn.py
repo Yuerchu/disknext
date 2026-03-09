@@ -5,7 +5,7 @@ from uuid import UUID
 from sqlalchemy import Column, Text
 from sqlmodel import Field, Relationship
 
-from sqlmodel_ext import SQLModelBase, TableBaseMixin
+from sqlmodel_ext import SQLModelBase, TableBaseMixin, Str32, Str100, Str255
 
 if TYPE_CHECKING:
     from .user import User
@@ -51,7 +51,7 @@ class AuthnDetailResponse(SQLModelBase):
 class AuthnRenameRequest(SQLModelBase):
     """WebAuthn 凭证重命名请求 DTO"""
 
-    name: str = Field(max_length=100)
+    name: Str100
     """新的凭证名称"""
 
 
@@ -60,7 +60,7 @@ class AuthnRenameRequest(SQLModelBase):
 class UserAuthn(SQLModelBase, TableBaseMixin):
     """用户 WebAuthn 凭证模型，与 User 为多对一关系"""
 
-    credential_id: str = Field(max_length=255, unique=True, index=True)
+    credential_id: Str255 = Field(unique=True, index=True)
     """凭证 ID，Base64URL 编码"""
 
     credential_public_key: str = Field(sa_column=Column(Text))
@@ -69,16 +69,16 @@ class UserAuthn(SQLModelBase, TableBaseMixin):
     sign_count: int = Field(default=0, ge=0)
     """签名计数器，用于防重放攻击"""
 
-    credential_device_type: str = Field(max_length=32)
+    credential_device_type: Str32
     """凭证设备类型：'single_device' 或 'multi_device'"""
 
     credential_backed_up: bool = Field(default=False)
     """凭证是否已备份"""
 
-    transports: str | None = Field(default=None, max_length=255)
+    transports: Str255 | None = None
     """支持的传输方式，逗号分隔，如 'usb,nfc,ble,internal'"""
 
-    name: str | None = Field(default=None, max_length=100)
+    name: Str100 | None = None
     """用户自定义的凭证名称，便于识别"""
 
     # 外键

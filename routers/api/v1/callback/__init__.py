@@ -16,18 +16,12 @@ oauth_router = APIRouter(
     tags=["callback", "oauth"],
 )
 
-pay_router = APIRouter(
-    prefix='/callback/pay',
-    tags=["callback", "pay"],
-)
-
 upload_router = APIRouter(
     prefix='/callback/upload',
     tags=["callback", "upload"],
 )
 
 callback_router.include_router(oauth_router)
-callback_router.include_router(pay_router)
 callback_router.include_router(upload_router)
 
 @oauth_router.post(
@@ -38,7 +32,7 @@ callback_router.include_router(upload_router)
 def router_callback_qq() -> ResponseBase:
     """
     Handle QQ OAuth callback and return user information.
-    
+
     Returns:
         ResponseBase: A model containing the response data for the QQ OAuth callback.
     """
@@ -55,11 +49,11 @@ async def router_callback_github(
     GitHub OAuth 回调处理
     - 错误响应示例：
         - {
-            'error': 'bad_verification_code', 
-            'error_description': 'The code passed is incorrect or expired.', 
+            'error': 'bad_verification_code',
+            'error_description': 'The code passed is incorrect or expired.',
             'error_uri': 'https://docs.github.com/apps/managing-oauth-apps/troubleshooting-oauth-app-access-token-request-errors/#bad-verification-code'
             }
-    
+
     Returns:
         PlainTextResponse: A response containing the user information from GitHub.
     """
@@ -77,81 +71,6 @@ async def router_callback_github(
         l.error(f"GitHub OAuth 回调异常: {e}")
         return PlainTextResponse("认证过程中发生错误，请重试", status_code=500)
 
-@pay_router.post(
-    path='/alipay',
-    summary='支付宝支付回调',
-    description='Handle Alipay payment callback and return payment status.',
-)
-def router_callback_alipay() -> ResponseBase:
-    """
-    Handle Alipay payment callback and return payment status.
-    
-    Returns:
-        ResponseBase: A model containing the response data for the Alipay payment callback.
-    """
-    http_exceptions.raise_not_implemented()
-
-@pay_router.post(    
-    path='/wechat',
-    summary='微信支付回调',
-    description='Handle WeChat Pay payment callback and return payment status.',
-)
-def router_callback_wechat() -> ResponseBase:
-    """
-    Handle WeChat Pay payment callback and return payment status.
-    
-    Returns:
-        ResponseBase: A model containing the response data for the WeChat Pay payment callback.
-    """
-    http_exceptions.raise_not_implemented()
-
-@pay_router.post(
-    path='/stripe',
-    summary='Stripe支付回调',
-    description='Handle Stripe payment callback and return payment status.',
-)
-def router_callback_stripe() -> ResponseBase:
-    """
-    Handle Stripe payment callback and return payment status.
-    
-    Returns:
-        ResponseBase: A model containing the response data for the Stripe payment callback.
-    """
-    http_exceptions.raise_not_implemented()
-
-@pay_router.get(
-    path='/easypay',
-    summary='易支付回调',
-    description='Handle EasyPay payment callback and return payment status.',
-)
-def router_callback_easypay() -> PlainTextResponse:
-    """
-    Handle EasyPay payment callback and return payment status.
-    
-    Returns:
-        PlainTextResponse: A response containing the payment status for the EasyPay payment callback.
-    """
-    http_exceptions.raise_not_implemented()
-    # return PlainTextResponse("success", status_code=200)
-
-@pay_router.get(
-    path='/custom/{order_no}/{id}',
-    summary='自定义支付回调',
-    description='Handle custom payment callback and return payment status.',
-)
-def router_callback_custom(order_no: str, id: str) -> ResponseBase:
-    """
-    Handle custom payment callback and return payment status.
-    
-    Args:
-        order_no (str): The order number for the payment.
-        id (str): The ID associated with the payment.
-    
-    Returns:
-        ResponseBase: A model containing the response data for the custom payment callback.
-    """
-    http_exceptions.raise_not_implemented()
-
 @upload_router.post(
     path='/remote/{session_id}/{key}',
     summary='远程上传回调',
@@ -160,11 +79,11 @@ def router_callback_custom(order_no: str, id: str) -> ResponseBase:
 def router_callback_remote(session_id: str, key: str) -> ResponseBase:
     """
     Handle remote upload callback and return upload status.
-    
+
     Args:
         session_id (str): The session ID for the upload.
         key (str): The key for the uploaded file.
-    
+
     Returns:
         ResponseBase: A model containing the response data for the remote upload callback.
     """
@@ -178,15 +97,15 @@ def router_callback_remote(session_id: str, key: str) -> ResponseBase:
 def router_callback_qiniu(session_id: str) -> ResponseBase:
     """
     Handle Qiniu Cloud upload callback and return upload status.
-    
+
     Args:
         session_id (str): The session ID for the upload.
-    
+
     Returns:
         ResponseBase: A model containing the response data for the Qiniu Cloud upload callback.
     """
     http_exceptions.raise_not_implemented()
-    
+
 @upload_router.post(
     path='/tencent/{session_id}',
     summary='腾讯云上传回调',
@@ -195,16 +114,16 @@ def router_callback_qiniu(session_id: str) -> ResponseBase:
 def router_callback_tencent(session_id: str) -> ResponseBase:
     """
     Handle Tencent Cloud upload callback and return upload status.
-    
+
     Args:
         session_id (str): The session ID for the upload.
-    
+
     Returns:
         ResponseBase: A model containing the response data for the Tencent Cloud upload callback.
     """
     http_exceptions.raise_not_implemented()
 
-@upload_router.post(    
+@upload_router.post(
     path='/aliyun/{session_id}',
     summary='阿里云上传回调',
     description='Handle Aliyun upload callback and return upload status.',
@@ -212,16 +131,16 @@ def router_callback_tencent(session_id: str) -> ResponseBase:
 def router_callback_aliyun(session_id: str) -> ResponseBase:
     """
     Handle Aliyun upload callback and return upload status.
-    
+
     Args:
         session_id (str): The session ID for the upload.
-    
+
     Returns:
         ResponseBase: A model containing the response data for the Aliyun upload callback.
     """
     http_exceptions.raise_not_implemented()
 
-@upload_router.post(   
+@upload_router.post(
     path='/upyun/{session_id}',
     summary='又拍云上传回调',
     description='Handle Upyun upload callback and return upload status.',
@@ -229,10 +148,10 @@ def router_callback_aliyun(session_id: str) -> ResponseBase:
 def router_callback_upyun(session_id: str) -> ResponseBase:
     """
     Handle Upyun upload callback and return upload status.
-    
+
     Args:
         session_id (str): The session ID for the upload.
-    
+
     Returns:
         ResponseBase: A model containing the response data for the Upyun upload callback.
     """
@@ -246,10 +165,10 @@ def router_callback_upyun(session_id: str) -> ResponseBase:
 def router_callback_aws(session_id: str) -> ResponseBase:
     """
     Handle AWS S3 upload callback and return upload status.
-    
+
     Args:
         session_id (str): The session ID for the upload.
-    
+
     Returns:
         ResponseBase: A model containing the response data for the AWS S3 upload callback.
     """
@@ -263,10 +182,10 @@ def router_callback_aws(session_id: str) -> ResponseBase:
 def router_callback_onedrive_finish(session_id: str) -> ResponseBase:
     """
     Handle OneDrive upload completion callback and return upload status.
-    
+
     Args:
         session_id (str): The session ID for the upload.
-    
+
     Returns:
         ResponseBase: A model containing the response data for the OneDrive upload completion callback.
     """
@@ -280,7 +199,7 @@ def router_callback_onedrive_finish(session_id: str) -> ResponseBase:
 def router_callback_onedrive_auth() -> ResponseBase:
     """
     Handle OneDrive authorization callback and return authorization status.
-    
+
     Returns:
         ResponseBase: A model containing the response data for the OneDrive authorization callback.
     """
@@ -294,7 +213,7 @@ def router_callback_onedrive_auth() -> ResponseBase:
 def router_callback_google_auth() -> ResponseBase:
     """
     Handle Google OAuth completion callback and return authorization status.
-    
+
     Returns:
         ResponseBase: A model containing the response data for the Google OAuth completion callback.
     """

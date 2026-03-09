@@ -130,6 +130,11 @@ default_settings: list[Setting] = [
     Setting(name="sms_provider", value="", type=SettingsType.MOBILE),
     Setting(name="sms_access_key", value="", type=SettingsType.MOBILE),
     Setting(name="sms_secret_key", value="", type=SettingsType.MOBILE),
+    # ==================== 文件分类扩展名配置 ====================
+    Setting(name="image", value="jpg,jpeg,png,gif,bmp,webp,svg,ico,tiff,tif,avif,heic,heif,psd,raw", type=SettingsType.FILE_CATEGORY),
+    Setting(name="video", value="mp4,mkv,avi,mov,wmv,flv,webm,m4v,ts,3gp,mpg,mpeg", type=SettingsType.FILE_CATEGORY),
+    Setting(name="audio", value="mp3,wav,flac,aac,ogg,wma,m4a,opus,ape,aiff,mid,midi", type=SettingsType.FILE_CATEGORY),
+    Setting(name="document", value="pdf,doc,docx,odt,rtf,txt,tex,epub,pages,ppt,pptx,odp,key,xls,xlsx,csv,ods,numbers,tsv,md,markdown,mdx", type=SettingsType.FILE_CATEGORY),
 ]
 
 async def init_default_settings() -> None:
@@ -173,7 +178,7 @@ async def init_default_group() -> None:
                 admin=True,
             )
             admin_group_id = admin_group.id  # 在 save 前保存 UUID
-            await admin_group.save(session)
+            admin_group = await admin_group.save(session)
 
             await GroupOptions(
                 group_id=admin_group_id,
@@ -203,7 +208,7 @@ async def init_default_group() -> None:
                 web_dav_enabled=True,
             )
             member_group_id = member_group.id  # 在 save 前保存 UUID
-            await member_group.save(session)
+            member_group = await member_group.save(session)
 
             await GroupOptions(
                 group_id=member_group_id,
@@ -222,7 +227,7 @@ async def init_default_group() -> None:
             default_group_setting = await Setting.get(session, Setting.name == "default_group")
             if default_group_setting:
                 default_group_setting.value = str(member_group_id)
-                await default_group_setting.save(session)
+                default_group_setting = await default_group_setting.save(session)
 
         # 未找到初始游客组时，则创建
         if not await Group.get(session, Group.name == "游客"):
@@ -232,7 +237,7 @@ async def init_default_group() -> None:
                 web_dav_enabled=False,
             )
             guest_group_id = guest_group.id  # 在 save 前保存 UUID
-            await guest_group.save(session)
+            guest_group = await guest_group.save(session)
 
             await GroupOptions(
                 group_id=guest_group_id,
@@ -284,7 +289,7 @@ async def init_default_user() -> None:
                 group_id=admin_group.id,
             )
             admin_user_id = admin_user.id  # 在 save 前保存 UUID
-            await admin_user.save(session)
+            admin_user = await admin_user.save(session)
 
             # 创建 AuthIdentity（邮箱密码身份）
             await AuthIdentity(
@@ -373,7 +378,7 @@ async def init_default_theme_presets() -> None:
             error=ChromaticColor.RED,
             neutral=NeutralColor.ZINC,
         )
-        await default_preset.save(session)
+        default_preset = await default_preset.save(session)
         log.info('已创建默认主题预设')
 
 
@@ -522,6 +527,6 @@ async def init_default_file_apps() -> None:
                     extension=ext.lower(),
                     priority=i,
                 )
-                await ext_record.save(session)
+                ext_record = await ext_record.save(session)
 
         log.info(f'已创建 {len(_DEFAULT_FILE_APPS)} 个默认文件查看器应用')

@@ -63,10 +63,7 @@ async def router_admin_get_group(
     :param group_id: 用户组UUID
     :return: 用户组详情
     """
-    group = await Group.get(session, Group.id == group_id, load=[Group.options, Group.policies])
-
-    if not group:
-        raise HTTPException(status_code=404, detail="用户组不存在")
+    group = await Group.get_exist_one(session, group_id, load=[Group.options, Group.policies])
 
     # 直接访问已加载的关系，无需额外查询
     policies = group.policies
@@ -94,9 +91,7 @@ async def router_admin_get_group_members(
     :return: 分页成员列表
     """
     # 验证组存在
-    group = await Group.get(session, Group.id == group_id)
-    if not group:
-        raise HTTPException(status_code=404, detail="用户组不存在")
+    await Group.get_exist_one(session, group_id)
 
     result = await User.get_with_count(session, User.group_id == group_id, table_view=table_view)
 
@@ -138,10 +133,11 @@ async def router_admin_create_group(
         speed_limit=request.speed_limit,
     )
     group = await group.save(session)
+    group_id_val: UUID = group.id
 
     # 创建选项
     options = GroupOptions(
-        group_id=group.id,
+        group_id=group_id_val,
         share_download=request.share_download,
         share_free=request.share_free,
         relocate=request.relocate,
@@ -154,11 +150,11 @@ async def router_admin_create_group(
         aria2=request.aria2,
         redirected_source=request.redirected_source,
     )
-    await options.save(session)
+    options = await options.save(session)
 
     # 关联存储策略
     for policy_id in request.policy_ids:
-        link = GroupPolicyLink(group_id=group.id, policy_id=policy_id)
+        link = GroupPolicyLink(group_id=group_id_val, policy_id=policy_id)
         session.add(link)
     await session.commit()
 
@@ -185,9 +181,7 @@ async def router_admin_update_group(
     :param request: 更新请求
     :return: 更新结果
     """
-    group = await Group.get(session, Group.id == group_id, load=Group.options)
-    if not group:
-        raise HTTPException(status_code=404, detail="用户组不存在")
+    group = await Group.get_exist_one(session, group_id, load=Group.options)
 
     # 检查名称唯一性（如果要更新名称）
     if request.name and request.name != group.name:
@@ -217,7 +211,7 @@ async def router_admin_update_group(
         if options_data:
             for key, value in options_data.items():
                 setattr(group.options, key, value)
-            await group.options.save(session)
+            group.options = await group.options.save(session)
 
     # 更新策略关联
     if request.policy_ids is not None:
@@ -255,9 +249,7 @@ async def router_admin_delete_group(
     :param group_id: 用户组UUID
     :return: 删除结果
     """
-    group = await Group.get(session, Group.id == group_id)
-    if not group:
-        raise HTTPException(status_code=404, detail="用户组不存在")
+    group = await Group.get_exist_one(session, group_id)
 
     # 检查是否有用户属于该组
     user_count = await User.count(session, User.group_id == group_id)

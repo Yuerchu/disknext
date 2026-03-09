@@ -10,7 +10,7 @@ from uuid import UUID
 
 from sqlmodel import Field, Relationship, UniqueConstraint
 
-from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin
+from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str100, Str128, Str255, Text1024
 
 if TYPE_CHECKING:
     from .user import User
@@ -87,7 +87,7 @@ class ChangePasswordRequest(SQLModelBase):
     old_password: str = Field(min_length=1)
     """当前密码"""
 
-    new_password: str = Field(min_length=8, max_length=128)
+    new_password: Str128 = Field(min_length=8)
     """新密码（至少 8 位）"""
 
 
@@ -103,13 +103,13 @@ class AuthIdentity(SQLModelBase, UUIDTableBaseMixin):
     provider: AuthProviderType = Field(index=True)
     """提供者类型"""
 
-    identifier: str = Field(max_length=255, index=True)
+    identifier: Str255 = Field(index=True)
     """标识符（邮箱/手机号/OAuth openid）"""
 
-    credential: str | None = Field(default=None, max_length=1024)
+    credential: Text1024 | None = None
     """凭证（Argon2 哈希密码 / null）"""
 
-    display_name: str | None = Field(default=None, max_length=100)
+    display_name: Str100 | None = None
     """OAuth 昵称"""
 
     avatar_url: str | None = Field(default=None, max_length=512)

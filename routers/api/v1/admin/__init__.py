@@ -16,6 +16,12 @@ from sqlmodels.setting import (
 from sqlmodels.setting import SettingsType
 from utils import http_exceptions
 from utils.conf import appmeta
+
+try:
+    from ee.service import get_cached_license
+except ImportError:
+    get_cached_license = None
+
 from .file import admin_file_router
 from .file_app import admin_file_app_router
 from .group import admin_group_router
@@ -24,7 +30,6 @@ from .share import admin_share_router
 from .task import admin_task_router
 from .user import admin_user_router
 from .theme import admin_theme_router
-from .vas import admin_vas_router
 
 
 class Aria2TestRequest(SQLModelBase):
@@ -50,7 +55,6 @@ admin_router.include_router(admin_policy_router)
 admin_router.include_router(admin_share_router)
 admin_router.include_router(admin_task_router)
 admin_router.include_router(admin_theme_router)
-admin_router.include_router(admin_vas_router)
 
 # 离线下载 /api/admin/aria2
 admin_aria2_router = APIRouter(
@@ -159,14 +163,24 @@ async def router_admin_get_summary(session: SessionDep) -> AdminSummaryResponse:
     if site_url_setting and site_url_setting.value:
         site_urls.append(site_url_setting.value)
 
-    # 许可证信息（从设置读取或使用默认值）
-    license_info = LicenseInfo(
-        expired_at=now + timedelta(days=365),
-        signed_at=now,
-        root_domains=[],
-        domains=[],
-        vol_domains=[],
-    )
+    # 许可证信息（Pro 版本从缓存读取，CE 版本永不过期）
+    if appmeta.IsPro and get_cached_license:
+        payload = get_cached_license()
+        license_info = LicenseInfo(
+            expired_at=payload.expires_at,
+            signed_at=payload.issued_at,
+            root_domains=[],
+            domains=[payload.domain],
+            vol_domains=[],
+        )
+    else:
+        license_info = LicenseInfo(
+            expired_at=datetime.max,
+            signed_at=now,
+            root_domains=[],
+            domains=[],
+            vol_domains=[],
+        )
 
     # 版本信息
     version_info = VersionInfo(
@@ -225,11 +239,11 @@ async def router_admin_update_settings(
 
         if existing:
             existing.value = item.value
-            await existing.save(session)
+            existing = await existing.save(session)
             updated_count += 1
         else:
             new_setting = Setting(type=item.type, name=item.name, value=item.value)
-            await new_setting.save(session)
+            new_setting = await new_setting.save(session)
             created_count += 1
 
     l.info(f"管理员更新了 {updated_count} 个设置项，新建了 {created_count} 个设置项")

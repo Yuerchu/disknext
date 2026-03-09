@@ -102,7 +102,7 @@ async def router_create_custom_property(
         options=request.options,
         default_value=request.default_value,
     )
-    await definition.save(session)
+    definition = await definition.save(session)
 
     l.info(f"用户 {user.id} 创建了自定义属性: {request.name}")
 
@@ -128,12 +128,7 @@ async def router_update_custom_property(
     - 404: 属性定义不存在
     - 403: 无权操作此属性
     """
-    definition = await CustomPropertyDefinition.get(
-        session,
-        CustomPropertyDefinition.id == id,
-    )
-    if not definition:
-        raise HTTPException(status_code=404, detail="自定义属性不存在")
+    definition = await CustomPropertyDefinition.get_exist_one(session, id)
 
     if definition.owner_id != user.id:
         raise HTTPException(status_code=403, detail="无权操作此属性")
@@ -163,12 +158,7 @@ async def router_delete_custom_property(
     - 404: 属性定义不存在
     - 403: 无权操作此属性
     """
-    definition = await CustomPropertyDefinition.get(
-        session,
-        CustomPropertyDefinition.id == id,
-    )
-    if not definition:
-        raise HTTPException(status_code=404, detail="自定义属性不存在")
+    definition = await CustomPropertyDefinition.get_exist_one(session, id)
 
     if definition.owner_id != user.id:
         raise HTTPException(status_code=403, detail="无权操作此属性")

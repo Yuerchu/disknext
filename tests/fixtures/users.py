@@ -71,7 +71,7 @@ class UserFactory:
             is_verified=True,
             user_id=user.id,
         )
-        await identity.save(session)
+        identity = await identity.save(session)
 
         return user
 
@@ -123,7 +123,7 @@ class UserFactory:
             is_verified=True,
             user_id=admin.id,
         )
-        await identity.save(session)
+        identity = await identity.save(session)
 
         return admin
 
@@ -170,7 +170,7 @@ class UserFactory:
             is_verified=True,
             user_id=banned_user.id,
         )
-        await identity.save(session)
+        identity = await identity.save(session)
 
         return banned_user
 
@@ -219,6 +219,6 @@ class UserFactory:
             is_verified=True,
             user_id=user.id,
         )
-        await identity.save(session)
+        identity = await identity.save(session)
 
         return user

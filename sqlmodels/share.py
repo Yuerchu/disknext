@@ -5,7 +5,7 @@ from uuid import UUID
 
 from sqlmodel import Field, Relationship, text, UniqueConstraint, Index
 
-from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin
+from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str64, Str255
 
 from .model_base import ResponseBase
 from .object import ObjectType
@@ -52,10 +52,10 @@ class Share(SQLModelBase, UUIDTableBaseMixin):
         Index("ix_share_object", "object_id"),
     )
 
-    code: str = Field(max_length=64, nullable=False, index=True)
+    code: Str64 = Field(nullable=False, index=True)
     """分享码"""
 
-    password: str | None = Field(default=None, max_length=255)
+    password: Str255 | None = None
     """分享密码（加密后）"""
 
     object_id: UUID = Field(
@@ -80,7 +80,7 @@ class Share(SQLModelBase, UUIDTableBaseMixin):
     preview_enabled: bool = Field(default=True, sa_column_kwargs={"server_default": text("true")})
     """是否允许预览"""
 
-    source_name: str | None = Field(default=None, max_length=255)
+    source_name: Str255 | None = None
     """源名称（冗余字段，便于展示）"""
 
     score: int = Field(default=0, ge=0)

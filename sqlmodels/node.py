@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 
 from sqlmodel import Field, Relationship, text, Index
 
-from sqlmodel_ext import SQLModelBase, TableBaseMixin
+from sqlmodel_ext import SQLModelBase, TableBaseMixin, Str255
 
 if TYPE_CHECKING:
     from .download import Download
@@ -28,13 +28,13 @@ class NodeType(StrEnum):
 class Aria2ConfigurationBase(SQLModelBase):
     """Aria2配置基础模型"""
 
-    rpc_url: str | None = Field(default=None, max_length=255)
+    rpc_url: Str255 | None = None
     """RPC地址"""
 
     rpc_secret: str | None = None
     """RPC密钥"""
 
-    temp_path: str | None = Field(default=None, max_length=255)
+    temp_path: Str255 | None = None
     """临时下载路径"""
 
     max_concurrent: int = Field(default=5, ge=1, le=50)
@@ -70,19 +70,19 @@ class Node(SQLModelBase, TableBaseMixin):
     status: NodeStatus = Field(default=NodeStatus.ONLINE)
     """节点状态"""
 
-    name: str = Field(max_length=255, unique=True)
+    name: Str255 = Field(unique=True)
     """节点名称"""
 
     type: NodeType
     """节点类型"""
 
-    server: str = Field(max_length=255)
+    server: Str255
     """节点地址（IP或域名）"""
 
-    slave_key: str | None = Field(default=None, max_length=255)
+    slave_key: Str255 | None = None
     """从机通讯密钥"""
 
-    master_key: str | None = Field(default=None, max_length=255)
+    master_key: Str255 | None = None
     """主机通讯密钥"""
 
     aria2_enabled: bool = False

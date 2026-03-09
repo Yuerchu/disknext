@@ -79,9 +79,7 @@ async def set_default_viewer(
 
     if existing:
         existing.app_id = request.app_id
-        existing = await existing.save(session)
-        # 重新加载 app 关系
-        await session.refresh(existing, attribute_names=["app"])
+        existing = await existing.save(session, load=UserFileAppDefault.app)
         return existing.to_response()
     else:
         new_default = UserFileAppDefault(
@@ -89,9 +87,7 @@ async def set_default_viewer(
             extension=normalized_ext,
             app_id=request.app_id,
         )
-        new_default = await new_default.save(session)
-        # 重新加载 app 关系
-        await session.refresh(new_default, attribute_names=["app"])
+        new_default = await new_default.save(session, load=UserFileAppDefault.app)
         return new_default.to_response()
 
 

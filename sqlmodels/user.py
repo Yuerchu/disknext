@@ -9,7 +9,7 @@ from sqlmodel import Field, Relationship
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel.main import RelationshipInfo
 
-from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, TableViewRequest, ListResponse
+from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, TableViewRequest, ListResponse, Str255
 
 from .auth_identity import AuthProviderType
 from .color import ChromaticColor, NeutralColor, ThemeColorsBase
@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from .download import Download
     from .object import Object
     from .order import Order
+    from .redeem import Redeem
     from .share import Share
     from .storage_pack import StoragePack
     from .tag import Tag
@@ -476,7 +477,7 @@ class User(UserBase, UUIDTableBaseMixin):
     storage: int = Field(default=0, sa_type=BigInteger, sa_column_kwargs={"server_default": "0"}, ge=0)
     """已用存储空间（字节）"""
 
-    avatar: str = Field(default="default", max_length=255)
+    avatar: Str255 = Field(default="default")
     """头像地址"""
 
     score: int = Field(default=0, sa_column_kwargs={"server_default": "0"}, ge=0)
@@ -570,6 +571,14 @@ class User(UserBase, UUIDTableBaseMixin):
         back_populates="user",
         sa_relationship_kwargs={"cascade": "all, delete-orphan"}
     )
+    redeems: list["Redeem"] = Relationship(
+        back_populates="user",
+        sa_relationship_kwargs={
+            "cascade": "all, delete-orphan",
+            "foreign_keys": "[Redeem.used_by]"
+        }
+    )
+    """用户使用过的兑换码列表"""
     shares: list["Share"] = Relationship(
         back_populates="user",
         sa_relationship_kwargs={"cascade": "all, delete-orphan"}

@@ -206,4 +206,4 @@ async def router_directory_create(
         parent_id=parent_id,
         policy_id=policy_id,
     )
-    await new_folder.save(session)
+    new_folder = await new_folder.save(session)

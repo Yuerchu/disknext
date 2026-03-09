@@ -25,7 +25,7 @@ from uuid import UUID
 
 from sqlmodel import Field, UniqueConstraint, Index, Relationship
 
-from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin
+from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str255
 
 if TYPE_CHECKING:
     from .object import Object
@@ -65,7 +65,7 @@ USER_WRITABLE_NAMESPACES: set[str] = {MetadataNamespace.CUSTOM}
 class ObjectMetadataBase(SQLModelBase):
     """对象元数据 KV 基础模型"""
 
-    name: str = Field(max_length=255)
+    name: Str255
     """元数据键名，格式：namespace:key（如 exif:width, stream:duration）"""
 
     value: str
@@ -113,7 +113,7 @@ class MetadataResponse(SQLModelBase):
 class MetadataPatchItem(SQLModelBase):
     """单条元数据补丁 DTO"""
 
-    key: str = Field(max_length=255)
+    key: Str255
     """元数据键名"""
 
     value: str | None = None

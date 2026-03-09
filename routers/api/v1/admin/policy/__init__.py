@@ -332,7 +332,7 @@ async def router_policy_add_policy(
         s3_path_style=request.s3_path_style,
         s3_region=request.s3_region,
     )
-    await options.save(session)
+    options = await options.save(session)
 
 @admin_policy_router.post(
     path='/cors',
@@ -383,9 +383,7 @@ async def router_policy_onddrive_oauth(
     :param policy_id: 存储策略UUID
     :return: OAuth URL
     """
-    policy = await Policy.get(session, Policy.id == policy_id)
-    if not policy:
-        raise HTTPException(status_code=404, detail="存储策略不存在")
+    policy = await Policy.get_exist_one(session, policy_id)
 
     # TODO: 实现OneDrive OAuth
     raise HTTPException(status_code=501, detail="OneDrive OAuth暂未实现")
@@ -408,9 +406,7 @@ async def router_policy_get_policy(
     :param policy_id: 存储策略UUID
     :return: 策略详情
     """
-    policy = await Policy.get(session, Policy.id == policy_id, load=Policy.options)
-    if not policy:
-        raise HTTPException(status_code=404, detail="存储策略不存在")
+    policy = await Policy.get_exist_one(session, policy_id, load=Policy.options)
 
     # 获取使用此策略的用户组
     groups = await policy.awaitable_attrs.groups
@@ -459,9 +455,7 @@ async def router_policy_delete_policy(
     :param policy_id: 存储策略UUID
     :return: 删除结果
     """
-    policy = await Policy.get(session, Policy.id == policy_id)
-    if not policy:
-        raise HTTPException(status_code=404, detail="存储策略不存在")
+    policy = await Policy.get_exist_one(session, policy_id)
 
     # 检查是否有文件使用此策略
     file_count = await Object.count(session, Object.policy_id == policy_id)
@@ -503,9 +497,7 @@ async def router_policy_update_policy(
     :param policy_id: 存储策略UUID
     :param request: 更新请求
     """
-    policy = await Policy.get(session, Policy.id == policy_id, load=Policy.options)
-    if not policy:
-        raise HTTPException(status_code=404, detail="存储策略不存在")
+    policy = await Policy.get_exist_one(session, policy_id, load=Policy.options)
 
     # 检查名称唯一性（如果要更新名称）
     if request.name and request.name != policy.name:
@@ -529,10 +521,10 @@ async def router_policy_update_policy(
         if policy.options:
             for key, value in options_data.items():
                 setattr(policy.options, key, value)
-            await policy.options.save(session)
+            policy.options = await policy.options.save(session)
         else:
             options = PolicyOptions(policy_id=policy.id, **options_data)
-            await options.save(session)
+            options = await options.save(session)
 
     l.info(f"管理员更新了存储策略: {policy_id}")
 

@@ -9,7 +9,7 @@ from uuid import UUID
 
 from sqlmodel import Field, Relationship, UniqueConstraint
 
-from sqlmodel_ext import SQLModelBase, TableBaseMixin
+from sqlmodel_ext import SQLModelBase, TableBaseMixin, Str255
 
 if TYPE_CHECKING:
     from .user import User
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 class WebDAVBase(SQLModelBase):
     """WebDAV 账户基础字段"""
 
-    name: str = Field(max_length=255)
+    name: Str255
     """账户名称（同一用户下唯一）"""
 
     root: str = Field(default="/", sa_column_kwargs={"server_default": "'/'"})
@@ -40,7 +40,7 @@ class WebDAV(WebDAVBase, TableBaseMixin):
 
     __table_args__ = (UniqueConstraint("name", "user_id", name="uq_webdav_name_user"),)
 
-    password: str = Field(max_length=255)
+    password: Str255
     """密码（Argon2 哈希）"""
 
     # 外键
@@ -60,10 +60,10 @@ class WebDAV(WebDAVBase, TableBaseMixin):
 class WebDAVCreateRequest(SQLModelBase):
     """创建 WebDAV 账户请求"""
 
-    name: str = Field(max_length=255)
+    name: Str255
     """账户名称"""
 
-    password: str = Field(min_length=1, max_length=255)
+    password: Str255 = Field(min_length=1)
     """账户密码（明文，服务端哈希后存储）"""
 
     root: str = "/"
@@ -79,7 +79,7 @@ class WebDAVCreateRequest(SQLModelBase):
 class WebDAVUpdateRequest(SQLModelBase):
     """更新 WebDAV 账户请求"""
 
-    password: str | None = Field(default=None, min_length=1, max_length=255)
+    password: Str255 | None = Field(default=None, min_length=1)
     """新密码（为 None 时不修改）"""
 
     root: str | None = None

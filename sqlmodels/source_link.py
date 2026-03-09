@@ -4,7 +4,7 @@ from uuid import UUID
 
 from sqlmodel import Field, Relationship, Index
 
-from sqlmodel_ext import SQLModelBase, TableBaseMixin
+from sqlmodel_ext import SQLModelBase, TableBaseMixin, Str255
 
 if TYPE_CHECKING:
     from .object import Object
@@ -17,7 +17,7 @@ class SourceLink(SQLModelBase, TableBaseMixin):
         Index("ix_sourcelink_object_name", "object_id", "name"),
     )
 
-    name: str = Field(max_length=255)
+    name: Str255
     """链接名称"""
 
     downloads: int = Field(default=0, sa_column_kwargs={"server_default": "0"})

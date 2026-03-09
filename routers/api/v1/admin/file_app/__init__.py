@@ -151,9 +151,7 @@ async def get_file_app(
     错误处理：
     - 404: 应用不存在
     """
-    app: FileApp | None = await FileApp.get(session, FileApp.id == app_id)
-    if not app:
-        http_exceptions.raise_not_found("应用不存在")
+    app = await FileApp.get_exist_one(session, app_id)
 
     extensions = await FileAppExtension.get(
         session,
@@ -186,9 +184,7 @@ async def update_file_app(
     - 404: 应用不存在
     - 409: 新 app_key 已被其他应用使用
     """
-    app: FileApp | None = await FileApp.get(session, FileApp.id == app_id)
-    if not app:
-        http_exceptions.raise_not_found("应用不存在")
+    app = await FileApp.get_exist_one(session, app_id)
 
     # 检查 app_key 唯一性
     if request.app_key is not None and request.app_key != app.app_key:
@@ -235,9 +231,7 @@ async def delete_file_app(
     错误处理：
     - 404: 应用不存在
     """
-    app: FileApp | None = await FileApp.get(session, FileApp.id == app_id)
-    if not app:
-        http_exceptions.raise_not_found("应用不存在")
+    app = await FileApp.get_exist_one(session, app_id)
 
     app_name = app.app_key
     await FileApp.delete(session, app)
@@ -263,9 +257,7 @@ async def update_extensions(
     错误处理：
     - 404: 应用不存在
     """
-    app: FileApp | None = await FileApp.get(session, FileApp.id == app_id)
-    if not app:
-        http_exceptions.raise_not_found("应用不存在")
+    app = await FileApp.get_exist_one(session, app_id)
 
     # 保留旧扩展名的 wopi_action_url（Discovery 填充的值）
     old_extensions: list[FileAppExtension] = await FileAppExtension.get(
@@ -330,9 +322,7 @@ async def update_group_access(
     错误处理：
     - 404: 应用不存在
     """
-    app: FileApp | None = await FileApp.get(session, FileApp.id == app_id)
-    if not app:
-        http_exceptions.raise_not_found("应用不存在")
+    await FileApp.get_exist_one(session, app_id)
 
     # 删除旧的用户组关联
     old_links_result = await session.exec(
@@ -387,9 +377,7 @@ async def discover_wopi(
     - 400: 非 WOPI 类型 / discovery URL 未配置 / XML 解析失败
     - 502: WOPI 服务端不可达或返回无效响应
     """
-    app: FileApp | None = await FileApp.get(session, FileApp.id == app_id)
-    if not app:
-        http_exceptions.raise_not_found("应用不存在")
+    app = await FileApp.get_exist_one(session, app_id)
 
     if app.type != FileAppType.WOPI:
         http_exceptions.raise_bad_request("仅 WOPI 类型应用支持自动发现")

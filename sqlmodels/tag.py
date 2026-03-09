@@ -5,7 +5,7 @@ from datetime import datetime
 
 from sqlmodel import Field, Relationship, UniqueConstraint, Column, func, DateTime
 
-from sqlmodel_ext import SQLModelBase, TableBaseMixin
+from sqlmodel_ext import SQLModelBase, TableBaseMixin, Str255
 
 if TYPE_CHECKING:
     from .user import User
@@ -24,13 +24,13 @@ class Tag(SQLModelBase, TableBaseMixin):
 
     __table_args__ = (UniqueConstraint("name", "user_id", name="uq_tag_name_user"),)
 
-    name: str = Field(max_length=255)
+    name: Str255
     """标签名称"""
 
-    icon: str | None = Field(default=None, max_length=255)
+    icon: Str255 | None = None
     """标签图标"""
 
-    color: str | None = Field(default=None, max_length=255)
+    color: Str255 | None = None
     """标签颜色"""
 
     type: TagType = Field(default=TagType.MANUAL)

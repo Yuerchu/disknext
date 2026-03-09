@@ -54,7 +54,7 @@ async def _set_ban_recursive(
         obj.banned_by = None
         obj.ban_reason = None
 
-    await obj.save(session)
+    obj = await obj.save(session)
     count += 1
     return count
 
@@ -131,9 +131,7 @@ async def router_admin_preview_file(
     :param file_id: 文件UUID
     :return: 文件内容
     """
-    file_obj = await Object.get(session, Object.id == file_id)
-    if not file_obj:
-        raise HTTPException(status_code=404, detail="文件不存在")
+    file_obj = await Object.get_exist_one(session, file_id)
 
     if not file_obj.is_file:
         raise HTTPException(status_code=400, detail="对象不是文件")
@@ -182,9 +180,7 @@ async def router_admin_ban_file(
     :param claims: 当前管理员 JWT claims
     :return: 封禁结果
     """
-    file_obj = await Object.get(session, Object.id == file_id)
-    if not file_obj:
-        raise HTTPException(status_code=404, detail="文件不存在")
+    file_obj = await Object.get_exist_one(session, file_id)
 
     count = await _set_ban_recursive(session, file_obj, request.ban, claims.sub, request.reason)
 
@@ -212,9 +208,7 @@ async def router_admin_delete_file(
     :param delete_physical: 是否同时删除物理文件
     :return: 删除结果
     """
-    file_obj = await Object.get(session, Object.id == file_id)
-    if not file_obj:
-        raise HTTPException(status_code=404, detail="文件不存在")
+    file_obj = await Object.get_exist_one(session, file_id)
 
     if not file_obj.is_file:
         raise HTTPException(status_code=400, detail="对象不是文件")

@@ -17,24 +17,26 @@ from utils.http.http_exceptions import raise_internal_error
 from utils.lifespan import lifespan
 
 # 尝试加载企业版功能
+_has_ee: bool = False
 try:
     from ee import init_ee
     from ee.license import LicenseError
+    from ee.routers import ee_router
 
-    async def _init_ee_and_routes() -> None:
+    _has_ee = True
+
+    async def _init_ee() -> None:
+        """启动时验证许可证，路由由 license_valid_required 依赖保护"""
         try:
             await init_ee()
         except LicenseError as exc:
             l.critical(f"许可证验证失败: {exc}")
             raise SystemExit(1) from exc
 
-        from ee.routers import ee_router
-        from routers.api.v1 import router as v1_router
-        v1_router.include_router(ee_router)
-
-    lifespan.add_startup(_init_ee_and_routes)
-except ImportError:
-    l.info("以 Community 版本运行")
+    lifespan.add_startup(_init_ee)
+except ImportError as exc:
+    ee_router = None
+    l.info(f"以 Community 版本运行 (原因: {exc})")
 
 STATICS_DIR: Path = (Path(__file__).parent / "statics").resolve()
 """前端静态文件目录（由 Docker 构建时复制）"""
@@ -95,6 +97,8 @@ async def handle_unexpected_exceptions(
 
 # 挂载路由
 app.include_router(router)
+if _has_ee:
+    app.include_router(ee_router, prefix="/api/v1")
 
 # 挂载 WebDAV 协议端点（优先于 SPA catch-all）
 app.mount("/dav", dav_app)

@@ -3,7 +3,7 @@ from uuid import UUID
 
 from sqlmodel import Field
 
-from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin
+from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str100
 
 from .color import ChromaticColor, NeutralColor, ThemeColorsBase
 
@@ -11,7 +11,7 @@ from .color import ChromaticColor, NeutralColor, ThemeColorsBase
 class ThemePresetBase(SQLModelBase):
     """主题预设基础字段"""
 
-    name: str = Field(max_length=100)
+    name: Str100
     """预设名称"""
 
     is_default: bool = False
@@ -42,7 +42,7 @@ class ThemePresetBase(SQLModelBase):
 class ThemePreset(ThemePresetBase, UUIDTableBaseMixin):
     """主题预设表"""
 
-    name: str = Field(max_length=100, unique=True)
+    name: Str100 = Field(unique=True)
     """预设名称（唯一约束）"""
 
 
@@ -51,7 +51,7 @@ class ThemePreset(ThemePresetBase, UUIDTableBaseMixin):
 class ThemePresetCreateRequest(SQLModelBase):
     """创建主题预设请求 DTO"""
 
-    name: str = Field(max_length=100)
+    name: Str100
     """预设名称"""
 
     colors: ThemeColorsBase
@@ -61,7 +61,7 @@ class ThemePresetCreateRequest(SQLModelBase):
 class ThemePresetUpdateRequest(SQLModelBase):
     """更新主题预设请求 DTO"""
 
-    name: str | None = Field(default=None, max_length=100)
+    name: Str100 | None = None
     """预设名称（可选）"""
 
     colors: ThemeColorsBase | None = None

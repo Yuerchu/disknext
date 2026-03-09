@@ -150,9 +150,7 @@ async def router_admin_delete_task(
     :param task_id: 任务ID
     :return: 删除结果
     """
-    task = await Task.get(session, Task.id == task_id)
-    if not task:
-        raise HTTPException(status_code=404, detail="任务不存在")
+    task = await Task.get_exist_one(session, task_id)
 
     await Task.delete(session, task)
 

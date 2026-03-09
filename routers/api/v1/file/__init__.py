@@ -184,9 +184,7 @@ async def create_upload_session(
 
     # 确定存储策略
     policy_id = request.policy_id or parent.policy_id
-    policy = await Policy.get(session, Policy.id == policy_id)
-    if not policy:
-        raise HTTPException(status_code=404, detail="存储策略不存在")
+    policy = await Policy.get_exist_one(session, policy_id)
 
     # 校验用户组是否有权使用该策略（仅当用户显式指定 policy_id 时）
     if request.policy_id:
@@ -711,9 +709,7 @@ async def create_empty_file(
 
     # 确定存储策略
     policy_id = request.policy_id or parent.policy_id
-    policy = await Policy.get(session, Policy.id == policy_id)
-    if not policy:
-        raise HTTPException(status_code=404, detail="存储策略不存在")
+    policy = await Policy.get_exist_one(session, policy_id)
 
     # 生成存储路径并创建空文件
     storage_path: str | None = None
@@ -942,7 +938,7 @@ async def file_get(
 
     # 递增下载次数
     link.downloads += 1
-    await link.save(session)
+    link = await link.save(session)
 
     if policy.type == PolicyType.LOCAL:
         storage_service = LocalStorageService(policy)
@@ -996,7 +992,7 @@ async def file_source_redirect(
 
     # 递增下载次数
     link.downloads += 1
-    await link.save(session)
+    link = await link.save(session)
 
     if policy.type == PolicyType.LOCAL:
         storage_service = LocalStorageService(policy)
