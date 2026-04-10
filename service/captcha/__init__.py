@@ -1,9 +1,11 @@
 import abc
 from enum import StrEnum
+from typing import cast
 
 import aiohttp
 from loguru import logger as l
 from pydantic import BaseModel
+from sqlmodel import col
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 
@@ -76,15 +78,15 @@ async def verify_captcha_if_needed(
     # 1. 查询该场景是否需要验证码
     scene_setting = await Setting.get(
         session,
-        (Setting.type == SettingsType.LOGIN) & (Setting.name == scene.value),
+        (col(Setting.type) == SettingsType.LOGIN) & (col(Setting.name) == scene.value),
     )
     if not scene_setting or scene_setting.value != "1":
         return
 
     # 2. 查询验证码类型和密钥
-    captcha_settings: list[Setting] = await Setting.get(
-        session, Setting.type == SettingsType.CAPTCHA, fetch_mode="all",
-    )
+    captcha_settings = cast(list[Setting], await Setting.get(
+        session, col(Setting.type) == SettingsType.CAPTCHA, fetch_mode="all",
+    ))
     s: dict[str, str | None] = {item.name: item.value for item in captcha_settings}
     captcha_type = CaptchaType(s.get("captcha_type") or "default")
 
