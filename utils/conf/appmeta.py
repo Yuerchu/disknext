@@ -22,23 +22,24 @@ debug: bool = os.getenv("DEBUG", "false").lower() in ("true", "1", "yes") or Fal
 if debug:
     log.warning("Debug mode is enabled. This is not recommended for production use.")
 
-database_url: str = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///disknext.db")
-"""数据库地址"""
+_database_url = os.getenv("DATABASE_URL")
+if not _database_url:
+    raise RuntimeError(
+        "必须设置 DATABASE_URL 环境变量，DiskNext 只支持 PostgreSQL（asyncpg 驱动）。"
+        "示例：postgresql+asyncpg://user:pass@host:5432/dbname"
+    )
+if not _database_url.startswith("postgresql"):
+    raise RuntimeError(
+        f"DiskNext 只支持 PostgreSQL，当前 DATABASE_URL 前缀无效: {_database_url.split('://', 1)[0]}"
+    )
+database_url: str = _database_url
+"""PostgreSQL 数据库连接 URL（必需，格式：postgresql+asyncpg://...）"""
 
-redis_url: str | None = os.getenv("REDIS_URL")
-"""Redis 主机地址"""
-
-_redis_port = os.getenv("REDIS_PORT")
-redis_port: int = int(_redis_port) if _redis_port else 6379
-"""Redis 端口，默认 6379"""
-
-redis_password: str | None = os.getenv("REDIS_PASSWORD")
-"""Redis 密码"""
-
-_redis_db = os.getenv("REDIS_DB")
-redis_db: int = int(_redis_db) if _redis_db else 0
-"""Redis 数据库索引，默认 0"""
-
-_redis_protocol = os.getenv("REDIS_PROTOCOL")
-redis_protocol: int = int(_redis_protocol) if _redis_protocol else 3
-"""Redis 协议版本，默认 3"""
+_redis_url = os.getenv("REDIS_URL")
+if not _redis_url:
+    raise RuntimeError(
+        "必须设置 REDIS_URL 环境变量，DiskNext 强制要求 Redis。"
+        "示例：redis://:password@host:6379/0"
+    )
+redis_url: str = _redis_url
+"""Redis 连接 URL（必需，完整格式：redis://[:password@]host:port/db）"""

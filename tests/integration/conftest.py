@@ -5,8 +5,7 @@
 """
 import asyncio
 import os
-import sys
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from typing import AsyncGenerator
 from uuid import UUID, uuid4
 
@@ -18,9 +17,6 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
-# 添加项目根目录到Python路径
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-
 from main import app
 from sqlmodels import Group, GroupClaims, GroupOptions, Object, ObjectType, Policy, PolicyType, ServerConfig, User
 from sqlmodels.policy import GroupPolicyLink
@@ -29,6 +25,10 @@ from sqlmodels.user import UserStatus
 from utils import Password
 from utils.JWT import create_access_token
 import utils.JWT as JWT
+
+# tests/conftest.py 在模块加载阶段已校验并设置 DATABASE_URL / REDIS_URL 环境变量，
+# 这里直接读取校验后的 URL 作为测试数据库连接
+_TEST_DATABASE_URL: str = os.environ["DATABASE_URL"]
 
 
 # ==================== 事件循环配置 ====================
@@ -45,20 +45,21 @@ def event_loop():
 
 @pytest_asyncio.fixture(scope="function")
 async def test_db_engine() -> AsyncGenerator[AsyncEngine, None]:
-    """创建测试数据库引擎（内存SQLite）"""
+    """创建 PostgreSQL 测试数据库引擎（function scope，每次重建 schema）"""
     engine = create_async_engine(
-        "sqlite+aiosqlite:///:memory:",
+        _TEST_DATABASE_URL,
         echo=False,
-        connect_args={"check_same_thread": False},
+        future=True,
     )
 
-    # 创建所有表
     async with engine.begin() as conn:
+        await conn.run_sync(SQLModel.metadata.drop_all)
         await conn.run_sync(SQLModel.metadata.create_all)
 
     yield engine
 
-    # 清理
+    async with engine.begin() as conn:
+        await conn.run_sync(SQLModel.metadata.drop_all)
     await engine.dispose()
 
 

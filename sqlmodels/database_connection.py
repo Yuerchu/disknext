@@ -27,9 +27,17 @@ class DatabaseManager:
         """
         初始化数据库连接引擎。
 
-        :param database_url: 数据库连接URL
+        DiskNext 只支持 PostgreSQL（asyncpg 驱动），URL 前缀校验不通过则启动失败。
+
+        :param database_url: PostgreSQL 连接 URL（如 postgresql+asyncpg://...）
         :param debug: 是否开启调试模式
         """
+        if not database_url.startswith("postgresql"):
+            raise RuntimeError(
+                "DiskNext 只支持 PostgreSQL（asyncpg 驱动），"
+                f"无效的 database_url 前缀: {database_url.split('://', 1)[0]}"
+            )
+
         # 构建引擎参数
         engine_kwargs: dict = {
             'echo': debug,
@@ -49,10 +57,6 @@ class DatabaseManager:
                 'pool_recycle': 1800,
                 'pool_pre_ping': True,
             })
-
-        # 只在需要时添加 connect_args
-        if database_url.startswith("sqlite"):
-            engine_kwargs['connect_args'] = {'check_same_thread': False}
 
         cls.engine = create_async_engine(database_url, **engine_kwargs)
 

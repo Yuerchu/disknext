@@ -10,24 +10,9 @@ from uuid import uuid4
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient
-from sqlalchemy import event
-from sqlalchemy.engine import Engine
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from sqlmodels import Object, ObjectType, PhysicalFile, Policy, User
-
-
-@pytest.fixture(autouse=True)
-def _register_sqlite_greatest():
-    """注册 SQLite 的 greatest 函数以兼容 PostgreSQL 语法"""
-
-    def _on_connect(dbapi_connection, connection_record):
-        if hasattr(dbapi_connection, 'create_function'):
-            dbapi_connection.create_function("greatest", 2, max)
-
-    event.listen(Engine, "connect", _on_connect)
-    yield
-    event.remove(Engine, "connect", _on_connect)
 
 
 # ==================== Fixtures ====================

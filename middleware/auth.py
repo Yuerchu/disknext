@@ -8,7 +8,6 @@ from sqlmodels.user import JWTPayload, User, UserStatus
 from utils import JWT
 from .dependencies import SessionDep
 from utils import http_exceptions
-from service.redis import RedisManager
 from service.redis.user_ban_store import UserBanStore
 
 
@@ -19,10 +18,10 @@ async def jwt_required(
     """
     验证 JWT 并返回 claims。
 
-    封禁检查策略：
-    1. JWT 内嵌 status 检查（签发时快照）
-    2. Redis 黑名单检查（即时封禁，如果 Redis 可用）
-    3. Redis 不可用时查库检查 status（降级方案）
+    封禁检查策略（三层）：
+    1. JWT 签名校验 + claims.status 快照检查
+    2. Redis 黑名单检查（即时封禁生效）
+    3. DB 权威源复核（防止 JWT 签发后 DB 状态变更未同步到黑名单的边界情况）
     """
     try:
         payload = jwt.decode(token, JWT.SECRET_KEY, algorithms=["HS256"])
@@ -39,17 +38,14 @@ async def jwt_required(
     if claims.status != UserStatus.ACTIVE:
         http_exceptions.raise_forbidden("账户已被禁用")
 
-    # 2. 即时封禁检查
-    user_id_str = str(claims.sub)
-    if RedisManager.is_available():
-        # Redis 可用：查黑名单
-        if await UserBanStore.is_banned(user_id_str):
-            http_exceptions.raise_forbidden("账户已被禁用")
-    else:
-        # Redis 不可用：查库（仅 status 字段，不加载关系）
-        user = await User.get(session, User.id == claims.sub)
-        if not user or user.status != UserStatus.ACTIVE:
-            http_exceptions.raise_forbidden("账户已被禁用")
+    # 2. Redis 黑名单即时封禁检查
+    if await UserBanStore.is_banned(str(claims.sub)):
+        http_exceptions.raise_forbidden("账户已被禁用")
+
+    # 3. DB 权威源复核
+    user = await User.get(session, User.id == claims.sub)
+    if not user or user.status != UserStatus.ACTIVE:
+        http_exceptions.raise_forbidden("账户已被禁用")
 
     return claims
 

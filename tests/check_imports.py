@@ -35,7 +35,8 @@ def main():
         # 数据库
         ("sqlmodel", "SQLModel ORM"),
         ("sqlalchemy", "SQLAlchemy"),
-        ("aiosqlite", "异步 SQLite 驱动"),
+        ("asyncpg", "异步 PostgreSQL 驱动"),
+        ("redis", "Redis 异步客户端"),
 
         # FastAPI
         ("fastapi", "FastAPI 框架"),

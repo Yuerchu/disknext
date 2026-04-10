@@ -51,8 +51,8 @@ lifespan.add_startup(EventLoopRef.capture)
 # 添加初始化数据库启动项
 lifespan.add_startup(_init_db)
 lifespan.add_startup(migration)
-lifespan.add_startup(JWT.load_secret_key)
 lifespan.add_startup(RedisManager.connect)
+lifespan.add_startup(JWT.load_secret_key)
 lifespan.add_startup(S3StorageService.initialize_session)
 
 # 添加关闭项

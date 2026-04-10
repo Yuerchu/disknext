@@ -69,9 +69,8 @@
 | [Python 3.13+](https://www.python.org/) | 编程语言 |
 | [FastAPI](https://fastapi.tiangolo.com/) | 高性能异步 Web 框架 |
 | [SQLModel](https://sqlmodel.tiangolo.com/) | 类型安全的 ORM（SQLAlchemy + Pydantic） |
-| [Redis](https://redis.io/) | 缓存与令牌存储（可选） |
+| [Redis](https://redis.io/) | 缓存与令牌存储（必需） |
 | [aiohttp](https://docs.aiohttp.org/) | 异步 HTTP 客户端 |
-| [aiosqlite](https://aiosqlite.omnilib.dev/) | 异步 SQLite 驱动 |
 | [asyncpg](https://magicstack.github.io/asyncpg/) | 异步 PostgreSQL 驱动 |
 | [Loguru](https://loguru.readthedocs.io/) | 现代化日志库 |
 | [PyJWT](https://pyjwt.readthedocs.io/) | JWT 令牌处理 |
@@ -165,7 +164,8 @@ Server/
 
 - Python 3.13 或更高版本
 - uv (推荐) 或 pip
-- Redis (可选，用于令牌存储和缓存)
+- PostgreSQL 14+（必需，仅支持 PG）
+- Redis 6+（必需，用于令牌存储、封禁黑名单、WebAuthn Challenge 等）
 
 ### 安装
 
@@ -189,14 +189,11 @@ DEBUG=false
 # 运行模式: master（主节点）或 slave（从节点）
 MODE=master
 
-# 数据库连接（默认使用 SQLite）
-DATABASE_URL=sqlite+aiosqlite:///disknext.db
+# PostgreSQL 连接 URL（必需，仅支持 asyncpg 驱动）
+DATABASE_URL=postgresql+asyncpg://disknext:disknext@localhost:5432/disknext
 
-# Redis 配置（可选，不配置则使用内存缓存）
-REDIS_URL=localhost
-REDIS_PORT=6379
-REDIS_PASSWORD=
-REDIS_DB=0
+# Redis 完整连接 URL（必需）
+REDIS_URL=redis://localhost:6379/0
 ```
 
 ### 启动

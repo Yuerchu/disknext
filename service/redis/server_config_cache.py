@@ -4,6 +4,7 @@ ServerConfig Redis 缓存
 使用 Redis 存储 ServerConfig 序列化数据，减少数据库查询。
 """
 from loguru import logger as l
+from redis.exceptions import RedisError
 
 from . import RedisManager
 
@@ -17,7 +18,8 @@ class ServerConfigCache:
     ServerConfig Redis 缓存管理器
 
     序列化使用 model_dump_json / model_validate_json。
-    Redis 不可用时不缓存，每次请求直接查询数据库。
+    属于非关键缓存：Redis 运行时抖动（读/写异常）时仅记日志降级为直查库，
+    不中断主流程。启动期 Redis 仍然是强制可用的。
     """
 
     @classmethod
@@ -25,15 +27,17 @@ class ServerConfigCache:
         """
         从 Redis 获取 ServerConfig。
 
-        :return: 缓存命中时返回 ServerConfig 实例，否则返回 None
+        :return: 缓存命中时返回 ServerConfig 实例，未命中或 Redis 抖动时返回 None
         """
         from sqlmodels.server_config import ServerConfig
 
-        client = RedisManager.get_client()
-        if client is None:
+        try:
+            client = RedisManager.get_client()
+            raw: bytes | None = await client.get(_CACHE_KEY)
+        except RedisError as e:
+            l.warning(f"[ServerConfigCache] 读取失败，降级为直查库: {e}")
             return None
 
-        raw: bytes | None = await client.get(_CACHE_KEY)
         if raw is None:
             return None
 
@@ -46,12 +50,12 @@ class ServerConfigCache:
 
         :param config: 要缓存的配置实例
         """
-        client = RedisManager.get_client()
-        if client is None:
-            return
-
-        json_str: str = config.model_dump_json()
-        await client.set(_CACHE_KEY, json_str, ex=_TTL)
+        try:
+            client = RedisManager.get_client()
+            json_str: str = config.model_dump_json()
+            await client.set(_CACHE_KEY, json_str, ex=_TTL)
+        except RedisError as e:
+            l.warning(f"[ServerConfigCache] 写入失败: {e}")
 
     @classmethod
     async def invalidate(cls) -> None:
@@ -60,9 +64,9 @@ class ServerConfigCache:
 
         在配置更新后调用，确保下次读取获取最新数据。
         """
-        client = RedisManager.get_client()
-        if client is None:
-            return
-
-        await client.delete(_CACHE_KEY)
-        l.debug("ServerConfig 缓存已清除")
+        try:
+            client = RedisManager.get_client()
+            await client.delete(_CACHE_KEY)
+            l.debug("ServerConfig 缓存已清除")
+        except RedisError as e:
+            l.warning(f"[ServerConfigCache] 失效失败: {e}")

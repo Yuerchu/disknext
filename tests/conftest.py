@@ -2,31 +2,117 @@
 Pytest 配置文件
 
 提供测试所需的 fixtures，包括数据库会话、认证用户、测试客户端等。
+
+**环境要求**：DiskNext 只支持 PostgreSQL + Redis，测试必须连到真实实例。
+通过环境变量 `TEST_DATABASE_URL` 和 `TEST_REDIS_URL` 指定测试后端。
+
+**安全约束**（破坏性操作安全规则）：
+- `TEST_DATABASE_URL` 的数据库名必须包含 ``test`` 或 ``dev``，
+  否则拒绝连接以防误伤生产库
+- URL 前缀必须为 ``postgresql``
+- `TEST_REDIS_URL` 的 db index 必须 >= 1（避免 flushdb 把 db0 的生产数据清掉）
 """
 import asyncio
 import os
 import sys
 from typing import AsyncGenerator
-from uuid import UUID
+from uuid import UUID, uuid4
+
+from dotenv import load_dotenv
+
+# 先把项目根目录加入 sys.path 以便导入 main 等顶层模块
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# 先加载 .env 到环境变量，再做后续校验（main.py/appmeta.py 也依赖这些变量）
+load_dotenv()
+
+
+def _validate_test_database_url() -> str:
+    """
+    校验并返回 TEST_DATABASE_URL，不满足条件则立即 skip 整个测试 session。
+
+    破坏性操作安全规则：
+    - 前缀必须是 postgresql（拒绝 SQLite/MySQL 等）
+    - 数据库名必须包含 'test' 或 'dev'，防止误伤生产库
+    """
+    import pytest
+
+    url = os.getenv("TEST_DATABASE_URL")
+    if not url:
+        pytest.skip(
+            "未设置 TEST_DATABASE_URL，跳过测试。"
+            "示例: postgresql+asyncpg://user:pass@localhost:5432/disknext_test",
+            allow_module_level=True,
+        )
+    if not url.startswith("postgresql"):
+        pytest.skip(
+            f"TEST_DATABASE_URL 必须是 PostgreSQL（asyncpg），当前前缀无效: {url.split('://', 1)[0]}",
+            allow_module_level=True,
+        )
+    db_name = url.rsplit("/", 1)[-1].split("?", 1)[0].lower()
+    if "test" not in db_name and "dev" not in db_name:
+        pytest.skip(
+            f"拒绝连接：TEST_DATABASE_URL 数据库名 '{db_name}' 不包含 test/dev，"
+            "为防止误伤生产库拒绝运行测试",
+            allow_module_level=True,
+        )
+    return url
+
+
+def _validate_test_redis_url() -> str:
+    """
+    校验并返回 TEST_REDIS_URL。
+
+    要求 db index >= 1，防止 flushdb 清掉 db0 的生产数据。
+    """
+    import pytest
+
+    url = os.getenv("TEST_REDIS_URL")
+    if not url:
+        pytest.skip(
+            "未设置 TEST_REDIS_URL，跳过测试。"
+            "示例: redis://localhost:6379/15（db index 必须 >= 1）",
+            allow_module_level=True,
+        )
+    tail = url.rsplit("/", 1)[-1].split("?", 1)[0]
+    try:
+        db_index = int(tail)
+    except ValueError:
+        pytest.skip(
+            f"TEST_REDIS_URL 必须指定 db index（如 /15），当前无法解析: {url}",
+            allow_module_level=True,
+        )
+    if db_index < 1:
+        pytest.skip(
+            f"拒绝连接：TEST_REDIS_URL 的 db index 必须 >= 1（当前 {db_index}），"
+            "为防止 flushdb 清掉生产数据",
+            allow_module_level=True,
+        )
+    return url
+
+
+# 模块加载阶段：先校验测试环境变量，再强制覆盖应用所需的 DATABASE_URL / REDIS_URL，
+# 最后才能导入 main.py（它在导入期会读取这些配置）。
+# 必须用赋值而非 setdefault，否则 .env 里的生产 URL 会被 appmeta 读到，
+# 导致测试连到生产 Redis/DB（严重安全风险）。
+_TEST_DATABASE_URL = _validate_test_database_url()
+_TEST_REDIS_URL = _validate_test_redis_url()
+os.environ["DATABASE_URL"] = _TEST_DATABASE_URL
+os.environ["REDIS_URL"] = _TEST_REDIS_URL
 
 import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient
 from httpx import AsyncClient, ASGITransport
-from loguru import logger as l
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine
 from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.orm import sessionmaker
 
-# 添加项目根目录到Python路径，确保可以导入项目模块
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
 from main import app
+from service.redis import RedisManager
 from sqlmodels.database_connection import DatabaseManager
 from sqlmodels.auth_identity import AuthIdentity, AuthProviderType
 from sqlmodels.group import Group, GroupClaims, GroupOptions
-from sqlmodels.migration import migration
 from sqlmodels.object import Object, ObjectType
 from sqlmodels.policy import Policy, PolicyType
 from sqlmodels.user import User, UserStatus
@@ -42,12 +128,7 @@ JWT.SECRET_KEY = "test_secret_key_for_jwt_token_generation"
 
 @pytest.fixture(scope="session")
 def event_loop():
-    """
-    创建 session 级别的事件循环
-
-    注意：pytest-asyncio 在不同版本中对事件循环的管理有所不同。
-    此 fixture 确保整个测试会话使用同一个事件循环。
-    """
+    """创建 session 级别的事件循环"""
     loop = asyncio.get_event_loop_policy().new_event_loop()
     yield loop
     loop.close()
@@ -58,34 +139,30 @@ def event_loop():
 @pytest_asyncio.fixture(scope="function")
 async def test_engine() -> AsyncGenerator[AsyncEngine, None]:
     """
-    创建 SQLite 内存数据库引擎（function scope）
+    PostgreSQL 测试引擎（function scope）
 
-    每个测试函数都会获得一个全新的数据库，确保测试隔离。
+    每个测试函数都会 drop_all + create_all 重建所有表，保证测试隔离。
     """
     engine = create_async_engine(
-        "sqlite+aiosqlite:///:memory:",
+        _TEST_DATABASE_URL,
         echo=False,
-        connect_args={"check_same_thread": False},
         future=True,
     )
 
-    # 创建所有表
     async with engine.begin() as conn:
+        await conn.run_sync(SQLModel.metadata.drop_all)
         await conn.run_sync(SQLModel.metadata.create_all)
 
     yield engine
 
-    # 清理
+    async with engine.begin() as conn:
+        await conn.run_sync(SQLModel.metadata.drop_all)
     await engine.dispose()
 
 
 @pytest_asyncio.fixture(scope="function")
 async def db_session(test_engine: AsyncEngine) -> AsyncGenerator[AsyncSession, None]:
-    """
-    创建异步数据库会话（function scope）
-
-    使用内存数据库引擎创建会话，每个测试函数独立。
-    """
+    """异步数据库会话（function scope）"""
     async_session_factory = sessionmaker(
         test_engine,
         class_=AsyncSession,
@@ -96,22 +173,35 @@ async def db_session(test_engine: AsyncEngine) -> AsyncGenerator[AsyncSession, N
         yield session
 
 
+# ==================== Redis ====================
+
+@pytest_asyncio.fixture(scope="function", autouse=True)
+async def test_redis() -> AsyncGenerator[None, None]:
+    """
+    测试 Redis（function scope，autouse）
+
+    每个测试函数自动连接 Redis 并在结束时 flushdb + 断开。
+    db index 在模块加载时已校验 >= 1，不会误伤生产数据。
+    """
+    await RedisManager.connect()
+    client = RedisManager.get_client()
+    await client.flushdb()
+
+    yield
+
+    try:
+        await client.flushdb()
+    finally:
+        await RedisManager.disconnect()
+
+
 @pytest_asyncio.fixture(scope="function")
 async def initialized_db(db_session: AsyncSession) -> AsyncSession:
     """
     已初始化的数据库（运行 migration）
 
-    执行数据库迁移逻辑，创建默认数据（如管理员用户组、默认策略等）。
+    TODO: 接入真实 migration 逻辑，当前仅为占位兼容旧测试。
     """
-    # 注意：migration 函数需要适配以支持传入 session
-    # 如果 migration 不支持传入 session，需要修改其实现
-    try:
-        # 这里假设 migration 可以在测试环境中运行
-        # 实际项目中可能需要单独实现测试数据初始化逻辑
-        pass
-    except Exception as e:
-        l.warning(f"Migration 在测试环境中跳过: {e}")
-
     return db_session
 
 
@@ -119,21 +209,13 @@ async def initialized_db(db_session: AsyncSession) -> AsyncSession:
 
 @pytest.fixture(scope="function")
 def client() -> TestClient:
-    """
-    同步 TestClient（function scope）
-
-    用于测试 FastAPI 端点的同步客户端。
-    """
+    """同步 TestClient（function scope）"""
     return TestClient(app)
 
 
 @pytest_asyncio.fixture(scope="function")
 async def async_client() -> AsyncGenerator[AsyncClient, None]:
-    """
-    异步 httpx.AsyncClient（function scope）
-
-    用于测试异步端点，支持 WebSocket 等异步操作。
-    """
+    """异步 httpx.AsyncClient（function scope）"""
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
@@ -142,11 +224,7 @@ async def async_client() -> AsyncGenerator[AsyncClient, None]:
 # ==================== 覆盖依赖 ====================
 
 def override_get_session(db_session: AsyncSession):
-    """
-    覆盖 FastAPI 的数据库会话依赖
-
-    将应用的数据库会话替换为测试会话。
-    """
+    """将应用的数据库会话替换为测试会话"""
     async def _override():
         yield db_session
 
@@ -157,15 +235,10 @@ def override_get_session(db_session: AsyncSession):
 
 @pytest_asyncio.fixture(scope="function")
 async def test_user(db_session: AsyncSession) -> dict[str, str | UUID]:
-    """
-    创建测试用户并返回 {id, email, password, token}
-
-    创建一个普通用户，包含用户组、存储策略和根目录。
-    """
-    # 创建默认用户组
+    """创建测试用户并返回 {id, email, password, token}"""
     group = Group(
         name="测试用户组",
-        max_storage=1024 * 1024 * 1024 * 10,  # 10GB
+        max_storage=1024 * 1024 * 1024 * 10,
         share_enabled=True,
         web_dav_enabled=True,
         admin=False,
@@ -173,7 +246,6 @@ async def test_user(db_session: AsyncSession) -> dict[str, str | UUID]:
     )
     group = await group.save(db_session)
 
-    # 创建用户组选项
     group_options = GroupOptions(
         group_id=group.id,
         share_download=True,
@@ -182,17 +254,15 @@ async def test_user(db_session: AsyncSession) -> dict[str, str | UUID]:
     )
     await group_options.save(db_session)
 
-    # 创建默认存储策略
     policy = Policy(
         name="测试本地策略",
         type=PolicyType.LOCAL,
         server="/tmp/disknext_test",
         is_private=True,
-        max_size=1024 * 1024 * 100,  # 100MB
+        max_size=1024 * 1024 * 100,
     )
     policy = await policy.save(db_session)
 
-    # 创建测试用户
     password = "test_password_123"
     user = User(
         email="testuser@test.local",
@@ -204,7 +274,6 @@ async def test_user(db_session: AsyncSession) -> dict[str, str | UUID]:
     )
     user = await user.save(db_session)
 
-    # 创建邮箱密码认证身份
     identity = AuthIdentity(
         provider=AuthProviderType.EMAIL_PASSWORD,
         identifier="testuser@test.local",
@@ -215,7 +284,6 @@ async def test_user(db_session: AsyncSession) -> dict[str, str | UUID]:
     )
     await identity.save(db_session)
 
-    # 创建用户根目录
     root_folder = Object(
         name="/",
         type=ObjectType.FOLDER,
@@ -226,12 +294,9 @@ async def test_user(db_session: AsyncSession) -> dict[str, str | UUID]:
     )
     await root_folder.save(db_session)
 
-    # 构建权限快照
     group.options = group_options
     group_claims = GroupClaims.from_group(group)
 
-    # 生成访问令牌
-    from uuid import uuid4
     access_token_obj = create_access_token(
         sub=user.id,
         jti=uuid4(),
@@ -251,15 +316,10 @@ async def test_user(db_session: AsyncSession) -> dict[str, str | UUID]:
 
 @pytest_asyncio.fixture(scope="function")
 async def admin_user(db_session: AsyncSession) -> dict[str, str | UUID]:
-    """
-    获取管理员用户 {id, email, token}
-
-    创建具有管理员权限的用户。
-    """
-    # 创建管理员用户组
+    """获取管理员用户 {id, email, token}"""
     admin_group = Group(
         name="管理员组",
-        max_storage=0,  # 无限制
+        max_storage=0,
         share_enabled=True,
         web_dav_enabled=True,
         admin=True,
@@ -267,7 +327,6 @@ async def admin_user(db_session: AsyncSession) -> dict[str, str | UUID]:
     )
     admin_group = await admin_group.save(db_session)
 
-    # 创建管理员组选项
     admin_group_options = GroupOptions(
         group_id=admin_group.id,
         share_download=True,
@@ -279,17 +338,15 @@ async def admin_user(db_session: AsyncSession) -> dict[str, str | UUID]:
     )
     await admin_group_options.save(db_session)
 
-    # 创建默认存储策略
     policy = Policy(
         name="管理员本地策略",
         type=PolicyType.LOCAL,
         server="/tmp/disknext_admin",
         is_private=True,
-        max_size=0,  # 无限制
+        max_size=0,
     )
     policy = await policy.save(db_session)
 
-    # 创建管理员用户
     password = "admin_password_456"
     admin = User(
         email="admin@disknext.local",
@@ -301,7 +358,6 @@ async def admin_user(db_session: AsyncSession) -> dict[str, str | UUID]:
     )
     admin = await admin.save(db_session)
 
-    # 创建管理员邮箱密码认证身份
     admin_identity = AuthIdentity(
         provider=AuthProviderType.EMAIL_PASSWORD,
         identifier="admin@disknext.local",
@@ -312,7 +368,6 @@ async def admin_user(db_session: AsyncSession) -> dict[str, str | UUID]:
     )
     await admin_identity.save(db_session)
 
-    # 创建管理员根目录
     root_folder = Object(
         name="/",
         type=ObjectType.FOLDER,
@@ -323,12 +378,9 @@ async def admin_user(db_session: AsyncSession) -> dict[str, str | UUID]:
     )
     await root_folder.save(db_session)
 
-    # 构建权限快照
     admin_group.options = admin_group_options
     admin_group_claims = GroupClaims.from_group(admin_group)
 
-    # 生成访问令牌
-    from uuid import uuid4
     access_token_obj = create_access_token(
         sub=admin.id,
         jti=uuid4(),
@@ -350,21 +402,13 @@ async def admin_user(db_session: AsyncSession) -> dict[str, str | UUID]:
 
 @pytest.fixture(scope="function")
 def auth_headers(test_user: dict[str, str | UUID]) -> dict[str, str]:
-    """
-    返回认证请求头 {"Authorization": "Bearer ..."}
-
-    使用测试用户的令牌。
-    """
+    """返回认证请求头 {"Authorization": "Bearer ..."}"""
     return {"Authorization": f"Bearer {test_user['token']}"}
 
 
 @pytest.fixture(scope="function")
 def admin_headers(admin_user: dict[str, str | UUID]) -> dict[str, str]:
-    """
-    返回管理员认证请求头
-
-    使用管理员用户的令牌。
-    """
+    """返回管理员认证请求头"""
     return {"Authorization": f"Bearer {admin_user['token']}"}
 
 
@@ -385,18 +429,14 @@ async def test_directory(
     │   └── personal
     ├── images
     └── videos
-
-    返回: {"root": UUID, "documents": UUID, "work": UUID, ...}
     """
     user_id: UUID = test_user["id"]
     policy_id: UUID = test_user["policy_id"]
 
-    # 获取根目录
     root = await Object.get_root(db_session, user_id)
     if not root:
         raise ValueError("测试用户的根目录不存在")
 
-    # 创建顶级目录
     documents = Object(
         name="documents",
         type=ObjectType.FOLDER,
@@ -427,7 +467,6 @@ async def test_directory(
     )
     videos = await videos.save(db_session)
 
-    # 创建子目录
     work = Object(
         name="work",
         type=ObjectType.FOLDER,
