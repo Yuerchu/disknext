@@ -20,8 +20,11 @@ EE_DIR = Path("ee")
 # 跳过 __init__.py —— 包发现需要原始 .py
 SKIP_NAMES = {"__init__.py"}
 
-# 跳过 Rust 原生扩展目录（由 maturin 编译）
-SKIP_DIRS = {"_license_core"}
+# 跳过以下子目录：
+#   - _license_core: Rust 原生扩展（由 maturin 编译）
+#   - tools: 独立签发工具，非运行时代码
+#   - tests: 测试代码，运行时镜像不需要
+SKIP_DIRS = {"_license_core", "tools", "tests"}
 
 
 def _collect_modules() -> list[str]:

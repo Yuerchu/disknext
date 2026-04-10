@@ -23,13 +23,13 @@ class WebDAVBase(SQLModelBase):
     name: Str255
     """账户名称（同一用户下唯一）"""
 
-    root: str = Field(default="/", sa_column_kwargs={"server_default": "'/'"})
+    root: str = "/"
     """挂载根目录路径"""
 
-    readonly: bool = Field(default=False, sa_column_kwargs={"server_default": "false"})
+    readonly: bool = False
     """是否只读"""
 
-    use_proxy: bool = Field(default=False, sa_column_kwargs={"server_default": "false"})
+    use_proxy: bool = False
     """是否使用代理下载"""
 
 

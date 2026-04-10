@@ -477,7 +477,7 @@ class User(UserBase, UUIDTableBaseMixin):
     storage: int = Field(default=0, sa_type=BigInteger, sa_column_kwargs={"server_default": "0"}, ge=0)
     """已用存储空间（字节）"""
 
-    avatar: Str255 = Field(default="default")
+    avatar: str | None = Field(default=None, max_length=255)
     """头像地址"""
 
     score: int = Field(default=0, sa_column_kwargs={"server_default": "0"}, ge=0)
