@@ -18,14 +18,12 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v6
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: "3.14"
 
       - name: Install dependencies
-        run: uv sync
+        # --frozen 跳过锁文件重解析，避免 uv 校验 ee/_license_core 编辑源（EE 私有路径）
+        run: uv sync --frozen
 
       - name: Run tests
         run: uv run pytest tests/ -v --tb=short
