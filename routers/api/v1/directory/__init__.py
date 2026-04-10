@@ -9,9 +9,11 @@ from middleware.dependencies import SessionDep
 from sqlmodels import (
     DirectoryCreateRequest,
     DirectoryResponse,
+    Group,
     Object,
     ObjectResponse,
     ObjectType,
+    Policy,
     PolicyResponse,
     User,
     ResponseBase,
@@ -38,7 +40,10 @@ async def _get_directory_response(
     :return: DirectoryResponse
     """
     children = await Object.get_children(session, user_id, folder.id)
-    policy = await folder.awaitable_attrs.policy
+    # 直接按 policy_id 查 Policy，避免触发 lazy='raise_on_sql'
+    policy = await Policy.get(session, Policy.id == folder.policy_id)
+    if not policy:
+        raise HTTPException(status_code=500, detail="目录对应的存储策略不存在")
 
     objects = [
         ObjectResponse(
@@ -192,9 +197,12 @@ async def router_directory_create(
 
     # 校验用户组是否有权使用该策略（仅当用户显式指定 policy_id 时）
     if request.policy_id:
-        group = await user.awaitable_attrs.group
-        await session.refresh(group, ['policies'])
-        if request.policy_id not in {p.id for p in group.policies}:
+        group = await Group.get(
+            session,
+            Group.id == user.group_id,
+            load=Group.policies,
+        )
+        if not group or request.policy_id not in {p.id for p in group.policies}:
             raise HTTPException(status_code=403, detail="当前用户组无权使用该存储策略")
 
     parent_id = parent.id  # 在 save 前保存

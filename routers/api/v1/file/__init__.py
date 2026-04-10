@@ -596,10 +596,11 @@ async def download_file(
 
     _, file_id, owner_id = result
 
-    # 获取文件对象（排除已删除的）
+    # 获取文件对象（排除已删除的），同时预加载 physical_file 关系
     file_obj = await Object.get(
         session,
-        (Object.id == file_id) & (Object.deleted_at == None)
+        (Object.id == file_id) & (Object.deleted_at == None),
+        load=Object.physical_file,
     )
     if not file_obj or file_obj.owner_id != owner_id:
         raise HTTPException(status_code=404, detail="文件不存在")
@@ -610,8 +611,7 @@ async def download_file(
     if file_obj.is_banned:
         http_exceptions.raise_banned()
 
-    # 预加载 physical_file 关系以获取存储路径
-    physical_file = await file_obj.awaitable_attrs.physical_file
+    physical_file = file_obj.physical_file
     if not physical_file or not physical_file.storage_path:
         raise HTTPException(status_code=500, detail="文件存储路径丢失")
 
@@ -865,6 +865,7 @@ async def _validate_source_link(
     file_obj = await Object.get(
         session,
         (Object.id == file_id) & (Object.deleted_at == None),
+        load=Object.physical_file,
     )
     if not file_obj:
         http_exceptions.raise_not_found("文件不存在")
@@ -890,7 +891,7 @@ async def _validate_source_link(
     if not link:
         http_exceptions.raise_not_found("外链不存在")
 
-    physical_file = await file_obj.awaitable_attrs.physical_file
+    physical_file = file_obj.physical_file
     if not physical_file or not physical_file.storage_path:
         http_exceptions.raise_internal_error("文件存储路径丢失")
 
@@ -1047,7 +1048,8 @@ async def file_content(
     """
     file_obj = await Object.get(
         session,
-        (Object.id == file_id) & (Object.deleted_at == None)
+        (Object.id == file_id) & (Object.deleted_at == None),
+        load=Object.physical_file,
     )
     if not file_obj or file_obj.owner_id != user.id:
         http_exceptions.raise_not_found("文件不存在")
@@ -1055,7 +1057,7 @@ async def file_content(
     if not file_obj.is_file:
         http_exceptions.raise_bad_request("对象不是文件")
 
-    physical_file = await file_obj.awaitable_attrs.physical_file
+    physical_file = file_obj.physical_file
     if not physical_file or not physical_file.storage_path:
         http_exceptions.raise_internal_error("文件存储路径丢失")
 
@@ -1116,7 +1118,8 @@ async def patch_file_content(
     """
     file_obj = await Object.get(
         session,
-        (Object.id == file_id) & (Object.deleted_at == None)
+        (Object.id == file_id) & (Object.deleted_at == None),
+        load=Object.physical_file,
     )
     if not file_obj or file_obj.owner_id != user.id:
         http_exceptions.raise_not_found("文件不存在")
@@ -1127,7 +1130,7 @@ async def patch_file_content(
     if file_obj.is_banned:
         http_exceptions.raise_banned()
 
-    physical_file = await file_obj.awaitable_attrs.physical_file
+    physical_file = file_obj.physical_file
     if not physical_file or not physical_file.storage_path:
         http_exceptions.raise_internal_error("文件存储路径丢失")
 

@@ -426,6 +426,13 @@ async def router_user_me(
     :return: ResponseBase containing user information.
     :rtype: ResponseBase
     """
+    # 重新加载用户并预取 tags 关系（sqlmodel_ext 默认 lazy='raise_on_sql'）
+    user = await sqlmodels.User.get(
+        session,
+        sqlmodels.User.id == user.id,
+        load=sqlmodels.User.tags,
+    )
+
     # 加载 group 及其 options 关系
     group = await sqlmodels.Group.get(
         session,
@@ -436,9 +443,6 @@ async def router_user_me(
     # 构建 GroupResponse
     group_response = group.to_response() if group else None
 
-    # 异步加载 tags 关系
-    user_tags = await user.awaitable_attrs.tags
-
     return sqlmodels.UserResponse(
         id=user.id,
         email=user.email,
@@ -446,7 +450,7 @@ async def router_user_me(
         avatar=user.avatar,
         created_at=user.created_at,
         group=group_response,
-        tags=[tag.name for tag in user_tags] if user_tags else [],
+        tags=[tag.name for tag in user.tags] if user.tags else [],
     )
 
 @user_router.get(
