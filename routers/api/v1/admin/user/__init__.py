@@ -5,11 +5,11 @@ from loguru import logger as l
 from sqlalchemy import func
 
 from middleware.auth import admin_required
-from middleware.dependencies import SessionDep, TableViewRequestDep, UserFilterParamsDep
+from middleware.dependencies import SessionDep, ServerConfigDep, TableViewRequestDep, UserFilterParamsDep
 from service.redis.user_ban_store import UserBanStore
 from sqlmodels import (
     User, ResponseBase, UserPublic, ListResponse,
-    Group, Object, ObjectType, Setting, SettingsType,
+    Group, Object, ObjectType,
     BatchDeleteRequest,
 )
 from sqlmodels.auth_identity import AuthIdentity, AuthProviderType
@@ -143,6 +143,7 @@ async def router_admin_create_user(
 )
 async def router_admin_update_user(
     session: SessionDep,
+    config: ServerConfigDep,
     user_id: UUID,
     request: UserAdminUpdateRequest,
 ) -> None:
@@ -150,20 +151,16 @@ async def router_admin_update_user(
     根据用户ID更新用户信息。
 
     :param session: 数据库会话
+    :param config: 服务器配置
     :param user_id: 用户UUID
     :param request: 更新请求
     :return: 更新结果
     """
     user = await User.get_exist_one(session, user_id)
 
-    # 默认管理员不允许更改用户组（通过 Setting 中的 default_admin_id 识别）
-    default_admin_setting = await Setting.get(
-        session,
-        (Setting.type == SettingsType.AUTH) & (Setting.name == "default_admin_id")
-    )
+    # 默认管理员不允许更改用户组
     if (request.group_id
-            and default_admin_setting
-            and default_admin_setting.value == str(user_id)
+            and config.default_admin_id == user_id
             and request.group_id != user.group_id):
         http_exceptions.raise_forbidden("默认管理员不允许更改用户组")
 
@@ -202,6 +199,7 @@ async def router_admin_update_user(
 )
 async def router_admin_delete_users(
     session: SessionDep,
+    config: ServerConfigDep,
     request: BatchDeleteRequest,
 ) -> None:
     """
@@ -210,18 +208,15 @@ async def router_admin_delete_users(
     注意: 这是一个危险操作，会级联删除用户的所有文件、分享、任务等。
 
     :param session: 数据库会话
+    :param config: 服务器配置
     :param request: 批量删除请求，包含待删除用户的 UUID 列表
     :return: 删除结果（已删除数 / 总请求数）
     """
     for uid in request.ids:
         user = await User.get(session, User.id == uid, load=User.group)
-        
-        # 安全检查：默认管理员不允许被删除（通过 Setting 中的 default_admin_id 识别）
-        default_admin_setting = await Setting.get(
-            session,
-            (Setting.type == SettingsType.AUTH) & (Setting.name == "default_admin_id")
-        )
-        if user and default_admin_setting and default_admin_setting.value == str(uid):
+
+        # 安全检查：默认管理员不允许被删除
+        if user and config.default_admin_id == uid:
             raise HTTPException(status_code=403, detail=f"默认管理员不允许被删除")
         
         if user:

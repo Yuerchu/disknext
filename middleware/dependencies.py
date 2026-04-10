@@ -17,6 +17,7 @@ from fastapi import Depends, Form, Query
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from sqlmodels.database_connection import DatabaseManager
+from sqlmodels.server_config import ServerConfig
 from sqlmodel_ext import TimeFilterRequest, TableViewRequest
 from sqlmodels.user import UserFilterParams, UserStatus
 
@@ -25,6 +26,17 @@ from sqlmodels.user import UserFilterParams, UserStatus
 
 SessionDep: TypeAlias = Annotated[AsyncSession, Depends(DatabaseManager.get_session)]
 """数据库会话依赖，用于路由函数中获取数据库会话"""
+
+
+# --- 服务器配置依赖 ---
+
+async def _get_server_config(session: SessionDep) -> ServerConfig:
+    """获取服务器配置（ID 固定为 1）"""
+    return await ServerConfig.get_instance(session)
+
+
+ServerConfigDep: TypeAlias = Annotated[ServerConfig, Depends(_get_server_config)]
+"""服务器配置依赖，用于路由函数中获取全局配置"""
 
 
 # --- 时间筛选依赖 ---
@@ -117,9 +129,9 @@ def require_captcha(scene: 'CaptchaScene') -> Callable[..., Awaitable[None]]:
     from service.captcha import CaptchaScene, verify_captcha_if_needed
 
     async def _verify_captcha(
-            session: SessionDep,
+            config: ServerConfigDep,
             captcha_code: Annotated[str | None, Form()] = None,
     ) -> None:
-        await verify_captcha_if_needed(session, scene, captcha_code)
+        await verify_captcha_if_needed(config, scene, captcha_code)
 
     return _verify_captcha

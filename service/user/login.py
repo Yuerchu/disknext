@@ -15,7 +15,7 @@ from sqlmodels.auth_identity import AuthIdentity, AuthProviderType
 from sqlmodels.group import GroupClaims, GroupOptions
 from sqlmodels.object import Object, ObjectType
 from sqlmodels.policy import Policy
-from sqlmodels.setting import Setting, SettingsType
+from sqlmodels.server_config import ServerConfig
 from sqlmodels.user import TokenResponse, UnifiedLoginRequest, User, UserStatus
 from utils import JWT, http_exceptions
 from utils.password.pwd import Password, PasswordStatus
@@ -24,25 +24,27 @@ from utils.password.pwd import Password, PasswordStatus
 async def unified_login(
     session: AsyncSession,
     request: UnifiedLoginRequest,
+    config: ServerConfig,
 ) -> TokenResponse:
     """
     统一登录入口，根据 provider 分发到不同的登录逻辑。
 
     :param session: 数据库会话
     :param request: 统一登录请求
+    :param config: 服务器配置
     :return: TokenResponse
     """
-    await _check_provider_enabled(session, request.provider)
+    _check_provider_enabled(config, request.provider)
 
     match request.provider:
         case AuthProviderType.EMAIL_PASSWORD:
             user = await _login_email_password(session, request)
         case AuthProviderType.GITHUB:
-            user = await _login_oauth(session, request, AuthProviderType.GITHUB)
+            user = await _login_oauth(session, request, AuthProviderType.GITHUB, config)
         case AuthProviderType.QQ:
-            user = await _login_oauth(session, request, AuthProviderType.QQ)
+            user = await _login_oauth(session, request, AuthProviderType.QQ, config)
         case AuthProviderType.PASSKEY:
-            user = await _login_passkey(session, request)
+            user = await _login_passkey(session, request, config)
         case AuthProviderType.MAGIC_LINK:
             user = await _login_magic_link(session, request)
         case AuthProviderType.PHONE_SMS:
@@ -53,26 +55,21 @@ async def unified_login(
     return await _issue_tokens(session, user)
 
 
-async def _check_provider_enabled(session: AsyncSession, provider: AuthProviderType) -> None:
+def _check_provider_enabled(
+    config: ServerConfig,
+    provider: AuthProviderType,
+) -> None:
     """检查认证方式是否已被站长启用"""
-    # OAuth 类型从 OAUTH 设置中查询
-    if provider in (AuthProviderType.GITHUB, AuthProviderType.QQ):
-        setting_name = f"{provider.value}_enabled"
-        setting = await Setting.get(
-            session,
-            (Setting.type == SettingsType.OAUTH) & (Setting.name == setting_name),
-        )
-        if not setting or setting.value != "1":
-            http_exceptions.raise_bad_request(f"登录方式 {provider.value} 未启用")
-        return
-
-    # 其他类型从 AUTH 设置中查询
-    setting_name = f"auth_{provider.value}_enabled"
-    setting = await Setting.get(
-        session,
-        (Setting.type == SettingsType.AUTH) & (Setting.name == setting_name),
-    )
-    if not setting or setting.value != "1":
+    provider_map = {
+        AuthProviderType.GITHUB: config.is_github_enabled,
+        AuthProviderType.QQ: config.is_qq_enabled,
+        AuthProviderType.EMAIL_PASSWORD: config.is_auth_email_password_enabled,
+        AuthProviderType.PHONE_SMS: config.is_auth_phone_sms_enabled,
+        AuthProviderType.PASSKEY: config.is_auth_passkey_enabled,
+        AuthProviderType.MAGIC_LINK: config.is_auth_magic_link_enabled,
+    }
+    is_enabled = provider_map.get(provider, False)
+    if not is_enabled:
         http_exceptions.raise_bad_request(f"登录方式 {provider.value} 未启用")
 
 
@@ -131,6 +128,7 @@ async def _login_oauth(
     session: AsyncSession,
     request: UnifiedLoginRequest,
     provider: AuthProviderType,
+    config: ServerConfig,
 ) -> User:
     """
     OAuth 登录（GitHub / QQ）
@@ -138,19 +136,17 @@ async def _login_oauth(
     identifier 为 OAuth authorization code，后端换取 access_token 再获取用户信息。
     """
     # 读取 OAuth 配置
-    client_id_setting = await Setting.get(
-        session,
-        (Setting.type == SettingsType.OAUTH) & (Setting.name == f"{provider.value}_client_id"),
-    )
-    client_secret_setting = await Setting.get(
-        session,
-        (Setting.type == SettingsType.OAUTH) & (Setting.name == f"{provider.value}_client_secret"),
-    )
-    if not client_id_setting or not client_secret_setting:
-        http_exceptions.raise_bad_request(f"{provider.value} OAuth 未配置")
+    if provider == AuthProviderType.GITHUB:
+        client_id = config.github_client_id
+        client_secret = config.github_client_secret
+    elif provider == AuthProviderType.QQ:
+        client_id = config.qq_client_id
+        client_secret = config.qq_client_secret
+    else:
+        http_exceptions.raise_bad_request(f"不支持的 OAuth 提供者: {provider.value}")
 
-    client_id = client_id_setting.value or ""
-    client_secret = client_secret_setting.value or ""
+    if not client_id or not client_secret:
+        http_exceptions.raise_bad_request(f"{provider.value} OAuth 未配置")
 
     # 根据 provider 创建对应的 OAuth 客户端
     if provider == AuthProviderType.GITHUB:
@@ -204,6 +200,7 @@ async def _login_oauth(
     # 未绑定 → 自动注册
     user = await _auto_register_oauth_user(
         session,
+        config,
         provider=provider,
         openid=openid,
         nickname=nickname,
@@ -215,6 +212,7 @@ async def _login_oauth(
 
 async def _auto_register_oauth_user(
     session: AsyncSession,
+    config: ServerConfig,
     *,
     provider: AuthProviderType,
     openid: str,
@@ -224,15 +222,11 @@ async def _auto_register_oauth_user(
 ) -> User:
     """OAuth 自动注册用户"""
     # 获取默认用户组
-    default_group_setting = await Setting.get(
-        session,
-        (Setting.type == SettingsType.REGISTER) & (Setting.name == "default_group"),
-    )
-    if not default_group_setting or not default_group_setting.value:
+    if not config.default_group_id:
         l.error("默认用户组未配置")
         http_exceptions.raise_internal_error()
 
-    default_group_id = UUID(default_group_setting.value)
+    default_group_id = config.default_group_id
 
     # 创建用户
     new_user = User(
@@ -276,6 +270,7 @@ async def _auto_register_oauth_user(
 async def _login_passkey(
     session: AsyncSession,
     request: UnifiedLoginRequest,
+    config: ServerConfig,
 ) -> User:
     """
     Passkey/WebAuthn 登录（Discoverable Credentials 模式）
@@ -317,7 +312,7 @@ async def _login_passkey(
         http_exceptions.raise_unauthorized("Passkey 凭证未注册")
 
     # 获取 RP 配置
-    rp_id, _rp_name, origin = await get_rp_config(session)
+    rp_id, _rp_name, origin = get_rp_config(config)
 
     # 验证 WebAuthn assertion
     try:

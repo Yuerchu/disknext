@@ -23,7 +23,7 @@ from sqlmodel_ext import SQLModelBase
 from whatthepatch.exceptions import HunkApplyException
 
 from middleware.auth import auth_required, verify_download_token
-from middleware.dependencies import SessionDep
+from middleware.dependencies import SessionDep, ServerConfigDep
 from sqlmodels import (
     CreateFileRequest,
     CreateUploadSessionRequest,
@@ -37,8 +37,6 @@ from sqlmodels import (
     Policy,
     PolicyType,
     ResponseBase,
-    Setting,
-    SettingsType,
     SourceLink,
     UploadChunkResponse,
     UploadSession,
@@ -123,15 +121,6 @@ def _check_policy_size_limit(policy: Policy, file_size: int) -> None:
             status_code=413,
             detail=f"文件大小超过限制 ({policy.max_size} bytes)",
         )
-
-
-async def _get_site_url(session: SessionDep) -> str:
-    """获取站点 URL"""
-    site_url_setting = await Setting.get(
-        session,
-        (Setting.type == SettingsType.BASIC) & (Setting.name == "siteURL"),
-    )
-    return site_url_setting.value if site_url_setting else "http://localhost"
 
 
 # ==================== 主路由 ====================
@@ -762,6 +751,7 @@ async def create_empty_file(
 )
 async def create_wopi_session(
     session: SessionDep,
+    config: ServerConfigDep,
     user: Annotated[User, Depends(auth_required)],
     file_id: UUID,
 ) -> WopiSessionResponse:
@@ -840,11 +830,7 @@ async def create_wopi_session(
         http_exceptions.raise_bad_request("WOPI 应用未配置编辑器 URL 模板，请先执行 Discovery 或手动配置")
 
     # 获取站点 URL
-    site_url_setting: Setting | None = await Setting.get(
-        session,
-        (Setting.type == SettingsType.BASIC) & (Setting.name == "siteURL"),
-    )
-    site_url = site_url_setting.value if site_url_setting else "http://localhost"
+    site_url = config.site_url
 
     # 生成 WOPI token
     can_write = file_obj.owner_id == user.id
@@ -1237,6 +1223,7 @@ async def file_thumb(id: str) -> ResponseBase:
 )
 async def file_source(
     session: SessionDep,
+    config: ServerConfigDep,
     user: Annotated[User, Depends(auth_required)],
     file_id: UUID,
 ) -> SourceLinkResponse:
@@ -1286,7 +1273,7 @@ async def file_source(
         )
         link = await link.save(session)
 
-    site_url = await _get_site_url(session)
+    site_url = config.site_url
     url = f"{site_url}/api/v1/file/source/{file_id}/{file_name}"
 
     return SourceLinkResponse(url=url, downloads=link.downloads)

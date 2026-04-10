@@ -19,7 +19,7 @@ from webauthn.helpers.structs import PublicKeyCredentialDescriptor
 import service
 import sqlmodels
 from middleware.auth import auth_required
-from middleware.dependencies import SessionDep, require_captcha
+from middleware.dependencies import SessionDep, ServerConfigDep, require_captcha
 from service.captcha import CaptchaScene
 from service.redis.challenge_store import ChallengeStore
 from service.webauthn import get_rp_config
@@ -44,6 +44,7 @@ user_router.include_router(user_settings_router)
 )
 async def router_user_session(
     session: SessionDep,
+    config: ServerConfigDep,
     request: sqlmodels.UnifiedLoginRequest,
 ) -> sqlmodels.TokenResponse:
     """
@@ -64,7 +65,7 @@ async def router_user_session(
     - 428: 需要两步验证
     - 501: 暂未实现的登录方式
     """
-    return await service.user.unified_login(session, request)
+    return await service.user.unified_login(session, request, config)
 
 
 @user_router.post(
@@ -146,6 +147,7 @@ async def router_user_session_refresh(
 )
 async def router_user_register(
     session: SessionDep,
+    config: ServerConfigDep,
     request: sqlmodels.UnifiedRegisterRequest,
 ) -> None:
     """
@@ -170,12 +172,7 @@ async def router_user_register(
     - 501: 暂未实现的注册方式
     """
     # 1. 检查注册开关
-    register_setting = await sqlmodels.Setting.get(
-        session,
-        (sqlmodels.Setting.type == sqlmodels.SettingsType.REGISTER)
-        & (sqlmodels.Setting.name == "register_enabled"),
-    )
-    if not register_setting or register_setting.value != "1":
+    if not config.is_register_enabled:
         http_exceptions.raise_bad_request("注册功能未开放")
 
     # 2. 目前只支持 email_password 注册
@@ -185,13 +182,7 @@ async def router_user_register(
         http_exceptions.raise_bad_request("不支持的注册方式")
 
     # 3. 检查密码是否必填
-    password_required_setting = await sqlmodels.Setting.get(
-        session,
-        (sqlmodels.Setting.type == sqlmodels.SettingsType.AUTH)
-        & (sqlmodels.Setting.name == "auth_password_required"),
-    )
-    is_password_required = not password_required_setting or password_required_setting.value != "0"
-    if is_password_required and not request.credential:
+    if config.is_auth_password_required and not request.credential:
         http_exceptions.raise_bad_request("密码不能为空")
 
     # 4. 验证 identifier 唯一性（AuthIdentity 表）
@@ -212,16 +203,11 @@ async def router_user_register(
         raise HTTPException(status_code=409, detail="该邮箱已被注册")
 
     # 5. 获取默认用户组
-    default_group_setting = await sqlmodels.Setting.get(
-        session,
-        (sqlmodels.Setting.type == sqlmodels.SettingsType.REGISTER)
-        & (sqlmodels.Setting.name == "default_group"),
-    )
-    if default_group_setting is None or not default_group_setting.value:
-        logger.error("默认用户组不存在")
+    if not config.default_group_id:
+        logger.error("默认用户组未配置")
         http_exceptions.raise_internal_error()
 
-    default_group_id = UUID(default_group_setting.value)
+    default_group_id = config.default_group_id
     default_group = await sqlmodels.Group.get(session, sqlmodels.Group.id == default_group_id)
     if not default_group:
         logger.error("默认用户组不存在")
@@ -272,6 +258,7 @@ async def router_user_register(
 )
 async def router_user_magic_link(
     session: SessionDep,
+    config: ServerConfigDep,
     request: sqlmodels.MagicLinkRequest,
 ) -> None:
     """
@@ -287,12 +274,7 @@ async def router_user_magic_link(
     - 404: 邮箱未注册
     """
     # 检查 magic_link 是否启用
-    magic_link_setting = await sqlmodels.Setting.get(
-        session,
-        (sqlmodels.Setting.type == sqlmodels.SettingsType.AUTH)
-        & (sqlmodels.Setting.name == "auth_magic_link_enabled"),
-    )
-    if not magic_link_setting or magic_link_setting.value != "1":
+    if not config.is_auth_magic_link_enabled:
         http_exceptions.raise_bad_request("Magic Link 登录未启用")
 
     # 验证邮箱存在
@@ -312,12 +294,7 @@ async def router_user_magic_link(
     token = serializer.dumps(request.email, salt="magic-link-salt")
 
     # 获取站点 URL
-    site_url_setting = await sqlmodels.Setting.get(
-        session,
-        (sqlmodels.Setting.type == sqlmodels.SettingsType.BASIC)
-        & (sqlmodels.Setting.name == "siteURL"),
-    )
-    site_url = site_url_setting.value if site_url_setting else "http://localhost"
+    site_url = config.site_url
 
     # TODO: 发送邮件（包含 {site_url}/auth/magic-link?token={token}）
     logger.info(f"Magic Link token 已为 {request.email} 生成 (邮件发送待实现)")
@@ -363,6 +340,7 @@ def router_user_profile(id: str) -> sqlmodels.ResponseBase:
 )
 async def router_user_avatar(
         session: SessionDep,
+        config: ServerConfigDep,
         id: UUID,
         size: int = 128,
 ) -> FileResponse | RedirectResponse:
@@ -416,12 +394,7 @@ async def router_user_avatar(
         )
 
     elif user.avatar == "gravatar":
-        gravatar_setting = await sqlmodels.Setting.get(
-            session,
-            (sqlmodels.Setting.type == sqlmodels.SettingsType.AVATAR)
-            & (sqlmodels.Setting.name == "gravatar_server"),
-        )
-        server = gravatar_setting.value if gravatar_setting else "https://www.gravatar.com/"
+        server = config.gravatar_server
         email = user.email or str(user.id)
         url = gravatar_url(email, size, server)
         return RedirectResponse(url=url, status_code=302)
@@ -529,6 +502,7 @@ async def router_user_storage(
 )
 async def router_user_authn_start(
     session: SessionDep,
+    config: ServerConfigDep,
     user: Annotated[sqlmodels.user.User, Depends(auth_required)],
 ) -> dict:
     """
@@ -539,15 +513,10 @@ async def router_user_authn_start(
     错误处理：
     - 400: Passkey 未启用
     """
-    authn_setting = await sqlmodels.Setting.get(
-        session,
-        (sqlmodels.Setting.type == sqlmodels.SettingsType.AUTHN)
-        & (sqlmodels.Setting.name == "authn_enabled"),
-    )
-    if not authn_setting or authn_setting.value != "1":
+    if not config.is_authn_enabled:
         http_exceptions.raise_bad_request("Passkey 未启用")
 
-    rp_id, rp_name, _origin = await get_rp_config(session)
+    rp_id, rp_name, _origin = get_rp_config(config)
 
     # 查询用户已注册凭证，用于 exclude_credentials
     existing_authns: list[UserAuthn] = await UserAuthn.get(
@@ -587,6 +556,7 @@ async def router_user_authn_start(
 )
 async def router_user_authn_finish(
     session: SessionDep,
+    config: ServerConfigDep,
     user: Annotated[sqlmodels.user.User, Depends(auth_required)],
     request: sqlmodels.AuthnFinishRequest,
 ) -> sqlmodels.AuthnDetailResponse:
@@ -608,7 +578,7 @@ async def router_user_authn_finish(
     if challenge is None:
         http_exceptions.raise_bad_request("注册会话已过期，请重新开始")
 
-    rp_id, _rp_name, origin = await get_rp_config(session)
+    rp_id, _rp_name, origin = get_rp_config(config)
 
     # 验证注册响应
     try:
@@ -664,7 +634,7 @@ async def router_user_authn_finish(
     description='Generate authentication options for Passkey login.',
 )
 async def router_user_authn_options(
-    session: SessionDep,
+    config: ServerConfigDep,
 ) -> dict:
     """
     获取 Passkey 登录的 authentication options（无需登录）
@@ -678,15 +648,10 @@ async def router_user_authn_options(
     错误处理：
     - 400: Passkey 未启用
     """
-    authn_setting = await sqlmodels.Setting.get(
-        session,
-        (sqlmodels.Setting.type == sqlmodels.SettingsType.AUTHN)
-        & (sqlmodels.Setting.name == "authn_enabled"),
-    )
-    if not authn_setting or authn_setting.value != "1":
+    if not config.is_authn_enabled:
         http_exceptions.raise_bad_request("Passkey 未启用")
 
-    rp_id, _rp_name, _origin = await get_rp_config(session)
+    rp_id, _rp_name, _origin = get_rp_config(config)
 
     options = generate_authentication_options(rp_id=rp_id)
 

@@ -6,7 +6,7 @@ from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 import sqlmodels
 from middleware.auth import auth_required
-from middleware.dependencies import SessionDep
+from middleware.dependencies import SessionDep, ServerConfigDep
 from sqlmodels import (
     BUILTIN_DEFAULT_COLORS, ThemePreset, UserThemeUpdateRequest,
     SettingOption, UserSettingUpdateRequest,
@@ -537,6 +537,7 @@ async def router_user_settings_bind_identity(
 )
 async def router_user_settings_unbind_identity(
     session: SessionDep,
+    config: ServerConfigDep,
     user: Annotated[sqlmodels.user.User, Depends(auth_required)],
     identity_id: UUID,
 ) -> None:
@@ -570,21 +571,11 @@ async def router_user_settings_unbind_identity(
 
     # 检查强制绑定约束
     if identity.provider == AuthProviderType.EMAIL_PASSWORD:
-        email_required_setting = await sqlmodels.Setting.get(
-            session,
-            (sqlmodels.Setting.type == sqlmodels.SettingsType.AUTH)
-            & (sqlmodels.Setting.name == "auth_email_binding_required"),
-        )
-        if email_required_setting and email_required_setting.value == "1":
+        if config.is_auth_email_binding_required:
             http_exceptions.raise_bad_request("站长要求必须绑定邮箱，不能解绑")
 
     if identity.provider == AuthProviderType.PHONE_SMS:
-        phone_required_setting = await sqlmodels.Setting.get(
-            session,
-            (sqlmodels.Setting.type == sqlmodels.SettingsType.AUTH)
-            & (sqlmodels.Setting.name == "auth_phone_binding_required"),
-        )
-        if phone_required_setting and phone_required_setting.value == "1":
+        if config.is_auth_phone_binding_required:
             http_exceptions.raise_bad_request("站长要求必须绑定手机号，不能解绑")
 
     await AuthIdentity.delete(session, identity)

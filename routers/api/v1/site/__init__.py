@@ -1,13 +1,13 @@
 from fastapi import APIRouter
 
-from middleware.dependencies import SessionDep
+from middleware.dependencies import SessionDep, ServerConfigDep
 from sqlmodels import (
-    ResponseBase, Setting, SettingsType, SiteConfigResponse,
+    ResponseBase, SiteConfigResponse,
     ThemePreset, ThemePresetResponse, ThemePresetListResponse,
     AuthMethodConfig,
 )
 from sqlmodels.auth_identity import AuthProviderType
-from sqlmodels.setting import CaptchaType
+from sqlmodels.server_config import CaptchaType
 from utils import http_exceptions
 
 site_router = APIRouter(
@@ -67,64 +67,46 @@ async def router_site_themes(session: SessionDep) -> ThemePresetListResponse:
     summary='站点全局配置',
     description='获取站点全局配置，包括验证码设置、注册开关等。',
 )
-async def router_site_config(session: SessionDep) -> SiteConfigResponse:
+async def router_site_config(config: ServerConfigDep) -> SiteConfigResponse:
     """
     获取站点全局配置
 
     无需认证。前端在初始化时调用此端点获取验证码类型、
     登录/注册/找回密码是否需要验证码、可用的认证方式等配置。
     """
-    # 批量查询所需设置
-    settings: list[Setting] = await Setting.get(
-        session,
-        (Setting.type == SettingsType.BASIC) |
-        (Setting.type == SettingsType.LOGIN) |
-        (Setting.type == SettingsType.REGISTER) |
-        (Setting.type == SettingsType.CAPTCHA) |
-        (Setting.type == SettingsType.AUTH) |
-        (Setting.type == SettingsType.OAUTH) |
-        (Setting.type == SettingsType.AVATAR),
-        fetch_mode="all",
-    )
-
-    # 构建 name→value 映射
-    s: dict[str, str | None] = {item.name: item.value for item in settings}
-
     # 根据 captcha_type 选择对应的 public key
-    captcha_type_str = s.get("captcha_type", "default")
-    captcha_type = CaptchaType(captcha_type_str) if captcha_type_str else CaptchaType.DEFAULT
     captcha_key: str | None = None
-    if captcha_type == CaptchaType.GCAPTCHA:
-        captcha_key = s.get("captcha_ReCaptchaKey") or None
-    elif captcha_type == CaptchaType.CLOUD_FLARE_TURNSTILE:
-        captcha_key = s.get("captcha_CloudflareKey") or None
+    if config.captcha_type == CaptchaType.GCAPTCHA:
+        captcha_key = config.captcha_recaptcha_key or None
+    elif config.captcha_type == CaptchaType.CLOUD_FLARE_TURNSTILE:
+        captcha_key = config.captcha_cloudflare_key or None
 
     # 构建认证方式列表
     auth_methods: list[AuthMethodConfig] = [
-        AuthMethodConfig(provider=AuthProviderType.EMAIL_PASSWORD, is_enabled=s.get("auth_email_password_enabled") == "1"),
-        AuthMethodConfig(provider=AuthProviderType.PHONE_SMS, is_enabled=s.get("auth_phone_sms_enabled") == "1"),
-        AuthMethodConfig(provider=AuthProviderType.GITHUB, is_enabled=s.get("github_enabled") == "1"),
-        AuthMethodConfig(provider=AuthProviderType.QQ, is_enabled=s.get("qq_enabled") == "1"),
-        AuthMethodConfig(provider=AuthProviderType.PASSKEY, is_enabled=s.get("auth_passkey_enabled") == "1"),
-        AuthMethodConfig(provider=AuthProviderType.MAGIC_LINK, is_enabled=s.get("auth_magic_link_enabled") == "1"),
+        AuthMethodConfig(provider=AuthProviderType.EMAIL_PASSWORD, is_enabled=config.is_auth_email_password_enabled),
+        AuthMethodConfig(provider=AuthProviderType.PHONE_SMS, is_enabled=config.is_auth_phone_sms_enabled),
+        AuthMethodConfig(provider=AuthProviderType.GITHUB, is_enabled=config.is_github_enabled),
+        AuthMethodConfig(provider=AuthProviderType.QQ, is_enabled=config.is_qq_enabled),
+        AuthMethodConfig(provider=AuthProviderType.PASSKEY, is_enabled=config.is_auth_passkey_enabled),
+        AuthMethodConfig(provider=AuthProviderType.MAGIC_LINK, is_enabled=config.is_auth_magic_link_enabled),
     ]
 
     return SiteConfigResponse(
-        title=s.get("siteName") or "DiskNext",
-        logo_light=s.get("logo_light") or None,
-        logo_dark=s.get("logo_dark") or None,
-        register_enabled=s.get("register_enabled") == "1",
-        login_captcha=s.get("login_captcha") == "1",
-        reg_captcha=s.get("reg_captcha") == "1",
-        forget_captcha=s.get("forget_captcha") == "1",
-        captcha_type=captcha_type,
+        title=config.site_name,
+        logo_light=config.logo_light or None,
+        logo_dark=config.logo_dark or None,
+        register_enabled=config.is_register_enabled,
+        login_captcha=config.is_login_captcha,
+        reg_captcha=config.is_reg_captcha,
+        forget_captcha=config.is_forget_captcha,
+        captcha_type=config.captcha_type,
         captcha_key=captcha_key,
         auth_methods=auth_methods,
-        password_required=s.get("auth_password_required") == "1",
-        phone_binding_required=s.get("auth_phone_binding_required") == "1",
-        email_binding_required=s.get("auth_email_binding_required") == "1",
-        avatar_max_size=int(s["avatar_size"]),
-        footer_code=s.get("footer_code"),
-        tos_url=s.get("tos_url"),
-        privacy_url=s.get("privacy_url"),
+        password_required=config.is_auth_password_required,
+        phone_binding_required=config.is_auth_phone_binding_required,
+        email_binding_required=config.is_auth_email_binding_required,
+        avatar_max_size=config.avatar_size,
+        footer_code=config.footer_code or None,
+        tos_url=config.tos_url or None,
+        privacy_url=config.privacy_url or None,
     )

@@ -1,12 +1,9 @@
 import abc
 from enum import StrEnum
-from typing import cast
 
 import aiohttp
 from loguru import logger as l
 from pydantic import BaseModel
-from sqlmodel import col
-from sqlmodel.ext.asyncio.session import AsyncSession
 
 
 class CaptchaRequestBase(BaseModel):
@@ -49,7 +46,7 @@ from .turnstile import TurnstileCaptcha  # noqa: E402
 
 
 class CaptchaScene(StrEnum):
-    """验证码使用场景，value 对应 Setting 表中的 name"""
+    """验证码使用场景"""
 
     LOGIN = "login_captcha"
     REGISTER = "reg_captcha"
@@ -57,60 +54,54 @@ class CaptchaScene(StrEnum):
 
 
 async def verify_captcha_if_needed(
-        session: AsyncSession,
+        config: 'ServerConfig',
         scene: CaptchaScene,
         captcha_code: str,
 ) -> None:
     """
-    通用验证码校验：查询设置判断是否需要，需要则校验。
+    通用验证码校验：根据 ServerConfig 判断是否需要，需要则校验。
 
-    :param session: 数据库异步会话
+    :param config: 服务器配置
     :param scene: 验证码使用场景
     :param captcha_code: 用户提交的验证码 response token
     :raises HTTPException 400: 需要验证码但未提供
     :raises HTTPException 403: 验证码验证失败
     :raises HTTPException 500: 验证码密钥未配置
     """
-    from sqlmodels import Setting, SettingsType
-    from sqlmodels.setting import CaptchaType
+    from sqlmodels.server_config import CaptchaType, ServerConfig
     from utils import http_exceptions
 
-    # 1. 查询该场景是否需要验证码
-    scene_setting = await Setting.get(
-        session,
-        (col(Setting.type) == SettingsType.LOGIN) & (col(Setting.name) == scene.value),
-    )
-    if not scene_setting or scene_setting.value != "1":
+    # 1. 检查场景是否需要验证码
+    is_scene_enabled: bool = {
+        CaptchaScene.LOGIN: config.is_login_captcha,
+        CaptchaScene.REGISTER: config.is_reg_captcha,
+        CaptchaScene.FORGET: config.is_forget_captcha,
+    }.get(scene, False)
+
+    if not is_scene_enabled:
         return
 
-    # 2. 查询验证码类型和密钥
-    captcha_settings = cast(list[Setting], await Setting.get(
-        session, col(Setting.type) == SettingsType.CAPTCHA, fetch_mode="all",
-    ))
-    s: dict[str, str | None] = {item.name: item.value for item in captcha_settings}
-    captcha_type = CaptchaType(s.get("captcha_type") or "default")
-
-    # 3. DEFAULT 图片验证码尚未实现，跳过
-    if captcha_type == CaptchaType.DEFAULT:
+    # 2. DEFAULT 图片验证码尚未实现，跳过
+    if config.captcha_type == CaptchaType.DEFAULT:
         l.warning("DEFAULT 图片验证码尚未实现，跳过验证")
         return
 
-    # 4. 选择验证器和密钥
-    if captcha_type == CaptchaType.GCAPTCHA:
-        secret = s.get("captcha_ReCaptchaSecret")
+    # 3. 选择验证器和密钥
+    if config.captcha_type == CaptchaType.GCAPTCHA:
+        secret = config.captcha_recaptcha_secret
         verifier: CaptchaBase = GCaptcha()
-    elif captcha_type == CaptchaType.CLOUD_FLARE_TURNSTILE:
-        secret = s.get("captcha_CloudflareSecret")
+    elif config.captcha_type == CaptchaType.CLOUD_FLARE_TURNSTILE:
+        secret = config.captcha_cloudflare_secret
         verifier = TurnstileCaptcha()
     else:
-        l.error(f"未知的验证码类型: {captcha_type}")
+        l.error(f"未知的验证码类型: {config.captcha_type}")
         http_exceptions.raise_internal_error()
 
     if not secret:
-        l.error(f"验证码密钥未配置: captcha_type={captcha_type}")
+        l.error(f"验证码密钥未配置: captcha_type={config.captcha_type}")
         http_exceptions.raise_internal_error()
 
-    # 5. 调用第三方 API 校验
+    # 4. 调用第三方 API 校验
     is_valid = await verifier.verify_captcha(
         CaptchaRequestBase(response=captcha_code, secret=secret)
     )

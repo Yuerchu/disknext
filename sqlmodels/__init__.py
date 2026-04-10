@@ -134,11 +134,12 @@ from .redeem import (
     RedeemCreateRequest, RedeemUseRequest, RedeemInfoResponse, RedeemAdminResponse,
 )
 from .report import Report, ReportReason
-from .setting import (
-    Setting, SettingsType, SiteConfigResponse, AuthMethodConfig,
-    # 管理员DTO
-    SettingItem, SettingsListResponse, SettingsUpdateRequest, SettingsUpdateResponse,
+from .server_config import (
+    ServerConfig, ServerConfigBase, ServerConfigUpdateRequest,
+    CaptchaType, ViewMethod, PWADisplayMode,
+    SiteConfigResponse, AuthMethodConfig,
 )
+from .mail_template import MailTemplate, MailTemplateType
 from .share import (
     Share, ShareBase, ShareCreateRequest, CreateShareResponse, ShareResponse,
     ShareOwnerInfo, ShareObjectItem, ShareDetailResponse,

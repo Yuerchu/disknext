@@ -26,22 +26,15 @@ async def load_secret_key() -> None:
     """
     # 延迟导入以避免循环依赖
     from sqlmodels.database_connection import DatabaseManager
-    from sqlmodels.setting import Setting
+    from sqlmodels.server_config import ServerConfig
 
     global SECRET_KEY
     async for session in DatabaseManager.get_session():
-        setting: Setting = await Setting.get(
-            session,
-            (Setting.type == "auth") & (Setting.name == "secret_key")
-        )   # type: ignore
-        if setting:
-            SECRET_KEY = setting.value
+        config = await ServerConfig.get_instance(session)
+        SECRET_KEY = config.secret_key
 
     if not SECRET_KEY:
-        raise RuntimeError(
-            "JWT SECRET_KEY 未配置，拒绝启动。"
-            "请在 Setting 表中添加 type='auth', name='secret_key' 的记录。"
-        )
+        raise RuntimeError("JWT SECRET_KEY 未配置，拒绝启动。请确保 ServerConfig 已初始化。")
 
 
 def build_token_payload(

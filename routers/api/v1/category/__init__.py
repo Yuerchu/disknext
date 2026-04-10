@@ -2,7 +2,7 @@
 文件分类筛选端点
 
 按文件类型分类（图片/视频/音频/文档）查询用户的所有文件，
-跨目录搜索，支持分页。扩展名映射从数据库 Setting 表读取。
+跨目录搜索，支持分页。扩展名映射从 ServerConfig 读取。
 """
 from typing import Annotated
 
@@ -10,15 +10,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger as l
 
 from middleware.auth import auth_required
-from middleware.dependencies import SessionDep, TableViewRequestDep
+from middleware.dependencies import SessionDep, ServerConfigDep, TableViewRequestDep
 from sqlmodels import (
     FileCategory,
     ListResponse,
     Object,
     ObjectResponse,
     ObjectType,
-    Setting,
-    SettingsType,
     User,
 )
 
@@ -34,6 +32,7 @@ category_router = APIRouter(
 )
 async def router_category_list(
     session: SessionDep,
+    config: ServerConfigDep,
     user: Annotated[User, Depends(auth_required)],
     category: FileCategory,
     table_view: TableViewRequestDep,
@@ -42,7 +41,7 @@ async def router_category_list(
     按文件类型分类查询用户的所有文件
 
     跨所有目录搜索，返回分页结果。
-    扩展名配置从数据库 Setting 表读取（type=file_category）。
+    扩展名配置从 ServerConfig 读取。
 
     认证：
     - JWT token in Authorization header
@@ -63,15 +62,18 @@ async def router_category_list(
     - HTTPException 422: category 参数无效
     - HTTPException 404: 该分类未配置扩展名
     """
-    # 从数据库读取该分类的扩展名配置
-    setting = await Setting.get(
-        session,
-        (Setting.type == SettingsType.FILE_CATEGORY) & (Setting.name == category.value),
-    )
-    if not setting or not setting.value:
+    # 从 ServerConfig 读取该分类的扩展名配置
+    category_attr_map = {
+        FileCategory.IMAGE: config.file_category_image,
+        FileCategory.VIDEO: config.file_category_video,
+        FileCategory.AUDIO: config.file_category_audio,
+        FileCategory.DOCUMENT: config.file_category_document,
+    }
+    extensions_str = category_attr_map.get(category)
+    if not extensions_str:
         raise HTTPException(status_code=404, detail=f"分类 {category.value} 未配置扩展名")
 
-    extensions = [ext.strip() for ext in setting.value.split(",") if ext.strip()]
+    extensions = [ext.strip() for ext in extensions_str.split(",") if ext.strip()]
     if not extensions:
         raise HTTPException(status_code=404, detail=f"分类 {category.value} 扩展名列表为空")
 

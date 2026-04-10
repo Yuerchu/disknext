@@ -22,7 +22,7 @@ from sqlalchemy.orm import sessionmaker
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 from main import app
-from sqlmodels import Group, GroupClaims, GroupOptions, Object, ObjectType, Policy, PolicyType, Setting, SettingsType, User
+from sqlmodels import Group, GroupClaims, GroupOptions, Object, ObjectType, Policy, PolicyType, ServerConfig, User
 from sqlmodels.policy import GroupPolicyLink
 from sqlmodels.auth_identity import AuthIdentity, AuthProviderType
 from sqlmodels.user import UserStatus
@@ -81,43 +81,17 @@ async def test_session(test_db_engine: AsyncEngine) -> AsyncGenerator[AsyncSessi
 async def initialized_db(test_session: AsyncSession) -> AsyncSession:
     """初始化测试数据库（包含基础配置和测试数据）"""
 
-    # 1. 创建基础设置
-    settings = [
-        Setting(type=SettingsType.BASIC, name="siteName", value="DiskNext Test"),
-        Setting(type=SettingsType.BASIC, name="siteURL", value="http://localhost:8000"),
-        Setting(type=SettingsType.BASIC, name="siteTitle", value="DiskNext"),
-        Setting(type=SettingsType.BASIC, name="themes", value='{"default": "#5898d4"}'),
-        Setting(type=SettingsType.BASIC, name="defaultTheme", value="default"),
-        Setting(type=SettingsType.LOGIN, name="login_captcha", value="0"),
-        Setting(type=SettingsType.LOGIN, name="reg_captcha", value="0"),
-        Setting(type=SettingsType.LOGIN, name="forget_captcha", value="0"),
-        Setting(type=SettingsType.LOGIN, name="email_active", value="0"),
-        Setting(type=SettingsType.VIEW, name="home_view_method", value="list"),
-        Setting(type=SettingsType.VIEW, name="share_view_method", value="grid"),
-        Setting(type=SettingsType.AUTHN, name="authn_enabled", value="0"),
-        Setting(type=SettingsType.CAPTCHA, name="captcha_type", value="default"),
-        Setting(type=SettingsType.CAPTCHA, name="captcha_ReCaptchaKey", value=""),
-        Setting(type=SettingsType.CAPTCHA, name="captcha_CloudflareKey", value=""),
-        Setting(type=SettingsType.REGISTER, name="register_enabled", value="1"),
-        Setting(type=SettingsType.AUTH, name="secret_key", value="test_secret_key_for_jwt_token_generation"),
-        Setting(type=SettingsType.AUTH, name="auth_email_password_enabled", value="1"),
-        Setting(type=SettingsType.AUTH, name="auth_phone_sms_enabled", value="0"),
-        Setting(type=SettingsType.AUTH, name="auth_passkey_enabled", value="0"),
-        Setting(type=SettingsType.AUTH, name="auth_magic_link_enabled", value="0"),
-        Setting(type=SettingsType.AUTH, name="auth_password_required", value="1"),
-        Setting(type=SettingsType.AUTH, name="auth_phone_binding_required", value="0"),
-        Setting(type=SettingsType.AUTH, name="auth_email_binding_required", value="1"),
-        Setting(type=SettingsType.OAUTH, name="github_enabled", value="0"),
-        Setting(type=SettingsType.OAUTH, name="qq_enabled", value="0"),
-        Setting(type=SettingsType.AVATAR, name="gravatar_server", value="https://www.gravatar.com/"),
-        Setting(type=SettingsType.AVATAR, name="avatar_size", value="2097152"),
-        Setting(type=SettingsType.AVATAR, name="avatar_size_l", value="200"),
-        Setting(type=SettingsType.AVATAR, name="avatar_size_m", value="130"),
-        Setting(type=SettingsType.AVATAR, name="avatar_size_s", value="50"),
-        Setting(type=SettingsType.PATH, name="avatar_path", value="avatar"),
-    ]
-    for setting in settings:
-        test_session.add(setting)
+    # 1. 创建 ServerConfig 单例
+    server_config = ServerConfig(
+        id=1,
+        site_name="DiskNext Test",
+        site_url="http://localhost:8000",
+        site_title="DiskNext",
+        home_view_method="list",
+        share_view_method="list",
+        secret_key="test_secret_key_for_jwt_token_generation",
+    )
+    test_session.add(server_config)
 
     # 2. 创建默认存储策略
     default_policy = Policy(
@@ -190,13 +164,8 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
     )
     test_session.add(admin_group_options)
 
-    # 5. 添加默认用户组UUID到设置
-    default_group_setting = Setting(
-        type=SettingsType.REGISTER,
-        name="default_group",
-        value=str(default_group.id),
-    )
-    test_session.add(default_group_setting)
+    # 5. 更新 ServerConfig 的 default_group_id
+    server_config.default_group_id = default_group.id
 
     await test_session.commit()
 

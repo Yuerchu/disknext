@@ -1,19 +1,16 @@
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from loguru import logger as l
 
 from middleware.auth import admin_required
-from middleware.dependencies import SessionDep
+from middleware.dependencies import SessionDep, ServerConfigDep
 from sqlmodels import (
     User, ResponseBase,
-    Setting, Object, ObjectType, Share, AdminSummaryResponse, MetricsSummary, LicenseInfo, VersionInfo,
+    Object, ObjectType, Share, AdminSummaryResponse, MetricsSummary, LicenseInfo, VersionInfo,
 )
 from sqlmodel_ext import SQLModelBase
-from sqlmodels.setting import (
-    SettingItem, SettingsListResponse, SettingsUpdateRequest, SettingsUpdateResponse,
-)
-from sqlmodels.setting import SettingsType
+from sqlmodels.server_config import ServerConfig, ServerConfigUpdateRequest
 from utils import http_exceptions
 from utils.conf import appmeta
 
@@ -85,7 +82,10 @@ async def is_admin() -> None:
     description='Get site summary information',
     dependencies=[Depends(admin_required)],
 )
-async def router_admin_get_summary(session: SessionDep) -> AdminSummaryResponse:
+async def router_admin_get_summary(
+    session: SessionDep,
+    config: ServerConfigDep,
+) -> AdminSummaryResponse:
     """
     获取站点概况信息，包括用户数、分享数、文件数等统计指标。
 
@@ -154,14 +154,10 @@ async def router_admin_get_summary(session: SessionDep) -> AdminSummaryResponse:
         generated_at=now,
     )
 
-    # 获取站点 URL（从设置读取）
+    # 获取站点 URL
     site_urls: list[str] = []
-    site_url_setting = await Setting.get(
-        session,
-        (Setting.type == SettingsType.BASIC) & (Setting.name == "siteURL"),
-    )
-    if site_url_setting and site_url_setting.value:
-        site_urls.append(site_url_setting.value)
+    if config.site_url:
+        site_urls.append(config.site_url)
 
     # 许可证信息（Pro 版本从缓存读取，CE 版本永不过期）
     if appmeta.IsPro and get_cached_license:
@@ -214,84 +210,39 @@ def router_admin_get_news() -> ResponseBase:
 @admin_router.patch(
     path='/settings',
     summary='更新设置',
-    description='Update settings',
     dependencies=[Depends(admin_required)],
+    status_code=204,
 )
 async def router_admin_update_settings(
     session: SessionDep,
-    request: SettingsUpdateRequest,
-) -> SettingsUpdateResponse:
+    config: ServerConfigDep,
+    request: ServerConfigUpdateRequest,
+) -> None:
     """
-    批量更新站点设置。
+    更新服务器配置。
 
     :param session: 数据库会话
-    :param request: 更新请求，设置项列表
-    :return: 更新结果
+    :param config: 当前服务器配置
+    :param request: 更新请求（仅包含需要修改的字段）
     """
-    updated_count = 0
-    created_count = 0
-
-    for item in request.settings:
-        existing = await Setting.get(
-            session,
-            (Setting.type == item.type) & (Setting.name == item.name)
-        )
-
-        if existing:
-            existing.value = item.value
-            existing = await existing.save(session)
-            updated_count += 1
-        else:
-            new_setting = Setting(type=item.type, name=item.name, value=item.value)
-            new_setting = await new_setting.save(session)
-            created_count += 1
-
-    l.info(f"管理员更新了 {updated_count} 个设置项，新建了 {created_count} 个设置项")
-    return SettingsUpdateResponse(updated=updated_count, created=created_count)
+    from service.redis.server_config_cache import ServerConfigCache
+    config = await config.update(session, request)
+    await ServerConfigCache.invalidate()
+    l.info("管理员更新了服务器配置")
 
 
 @admin_router.get(
     path='/settings',
     summary='获取设置',
-    description='Get settings',
     dependencies=[Depends(admin_required)],
 )
 async def router_admin_get_settings(
-    session: SessionDep,
-    type: str | None = None,
-    name: str | None = None,
-) -> SettingsListResponse:
+    config: ServerConfigDep,
+) -> ServerConfig:
     """
-    获取站点设置，支持按类型和名称筛选。
-
-    :param session: 数据库会话
-    :param type: 设置类型（可选筛选条件）
-    :param name: 设置名称（可选筛选条件）
-    :return: 设置项列表
+    获取服务器配置。
     """
-    # 构建查询条件
-    conditions = []
-    if type:
-        conditions.append(Setting.type == type)
-    if name:
-        conditions.append(Setting.name == name)
-
-    if conditions:
-        condition = conditions[0]
-        for c in conditions[1:]:
-            condition = condition & c
-    else:
-        condition = None
-
-    settings = await Setting.get(session, condition, fetch_mode="all")
-
-    # 转换为 DTO
-    setting_items = [
-        SettingItem(type=s.type, name=s.name, value=s.value)
-        for s in settings
-    ]
-
-    return SettingsListResponse(settings=setting_items, total=len(setting_items))
+    return config
 
 @admin_aria2_router.post(
     path='/test',

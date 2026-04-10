@@ -1,7 +1,7 @@
 # ============================================================
 # 基础层：安装运行时依赖
 # ============================================================
-FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim AS base
+FROM ghcr.io/astral-sh/uv:latest AS base
 
 WORKDIR /app
 
@@ -38,7 +38,7 @@ RUN uv run python setup_cython.py build_ext --inplace && \
 # ============================================================
 # Pro 版本：包含编译后的 ee/ 模块（仅 __init__.py + .so）
 # ============================================================
-FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim AS pro
+FROM ghcr.io/astral-sh/uv:latest AS pro
 
 WORKDIR /app
 
