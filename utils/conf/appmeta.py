@@ -13,8 +13,6 @@ license_info = {"name": "GPLv3", "url": "https://opensource.org/license/gpl-3.0"
 BackendVersion = "0.0.1"
 """后端版本"""
 
-IsPro: bool = False
-
 mode: str = os.getenv('MODE', 'master')
 """运行模式"""
 

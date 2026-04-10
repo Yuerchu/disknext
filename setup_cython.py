@@ -20,12 +20,18 @@ EE_DIR = Path("ee")
 # 跳过 __init__.py —— 包发现需要原始 .py
 SKIP_NAMES = {"__init__.py"}
 
+# 跳过 Rust 原生扩展目录（由 maturin 编译）
+SKIP_DIRS = {"_license_core"}
+
 
 def _collect_modules() -> list[str]:
     """收集 ee/ 下需要编译的 .py 文件路径（点分模块名）。"""
     modules: list[str] = []
     for py_file in EE_DIR.rglob("*.py"):
         if py_file.name in SKIP_NAMES:
+            continue
+        # 跳过 Rust 原生扩展目录
+        if any(part in SKIP_DIRS for part in py_file.parts):
             continue
         # ee/license.py → ee.license
         module = str(py_file.with_suffix("")).replace("\\", "/").replace("/", ".")

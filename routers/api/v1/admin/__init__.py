@@ -160,13 +160,13 @@ async def router_admin_get_summary(
         site_urls.append(config.site_url)
 
     # 许可证信息（Pro 版本从缓存读取，CE 版本永不过期）
-    if appmeta.IsPro and get_cached_license:
-        payload = get_cached_license()
+    _payload = get_cached_license() if get_cached_license else None
+    if _payload and not _payload.is_expired():
         license_info = LicenseInfo(
-            expired_at=payload.expires_at,
-            signed_at=payload.issued_at,
+            expired_at=_payload.expires_at,
+            signed_at=_payload.issued_at,
             root_domains=[],
-            domains=[payload.domain],
+            domains=[_payload.domain],
             vol_domains=[],
         )
     else:
@@ -181,7 +181,7 @@ async def router_admin_get_summary(
     # 版本信息
     version_info = VersionInfo(
         version=appmeta.BackendVersion,
-        pro=appmeta.IsPro,
+        pro=_payload is not None and not _payload.is_expired(),
         commit="dev",
     )
 

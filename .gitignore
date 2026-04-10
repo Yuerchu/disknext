@@ -74,6 +74,9 @@ statics/
 # Cython 编译产物
 *.c
 
+# Rust 编译产物
+target/
+
 # 许可证密钥（保密）
 license_private.pem
 license.key
