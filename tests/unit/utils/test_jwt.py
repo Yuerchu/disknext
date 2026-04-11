@@ -29,7 +29,7 @@ def _make_group_claims(admin: bool = False) -> GroupClaims:
 def setup_secret_key():
     """为测试设置密钥"""
     import utils.JWT as jwt_module
-    jwt_module.SECRET_KEY = "test_secret_key_for_unit_tests"
+    jwt_module.SECRET_KEY = "410b5fb3ffb54abc222df0e1964fbe85c84ecae17652edc2edc275578ade886a"
     yield
 
 
@@ -45,7 +45,7 @@ def test_create_access_token():
     assert isinstance(result.access_expires, datetime)
 
     # 解码验证
-    decoded = pyjwt.decode(result.access_token, "test_secret_key_for_unit_tests", algorithms=["HS256"])
+    decoded = pyjwt.decode(result.access_token, "410b5fb3ffb54abc222df0e1964fbe85c84ecae17652edc2edc275578ade886a", algorithms=["HS256"])
     assert decoded["sub"] == str(sub)
     assert decoded["jti"] == str(jti)
     assert decoded["status"] == "active"
@@ -62,7 +62,7 @@ def test_create_access_token_custom_expiry():
 
     result = create_access_token(sub=sub, jti=jti, status="active", group=group, expires_delta=custom_expiry)
 
-    decoded = pyjwt.decode(result.access_token, "test_secret_key_for_unit_tests", algorithms=["HS256"])
+    decoded = pyjwt.decode(result.access_token, "410b5fb3ffb54abc222df0e1964fbe85c84ecae17652edc2edc275578ade886a", algorithms=["HS256"])
 
     # 验证过期时间大约是30分钟后
     exp_timestamp = decoded["exp"]
@@ -80,7 +80,7 @@ def test_create_access_token_default_expiry():
 
     result = create_access_token(sub=sub, jti=jti, status="active", group=group)
 
-    decoded = pyjwt.decode(result.access_token, "test_secret_key_for_unit_tests", algorithms=["HS256"])
+    decoded = pyjwt.decode(result.access_token, "410b5fb3ffb54abc222df0e1964fbe85c84ecae17652edc2edc275578ade886a", algorithms=["HS256"])
 
     # 验证过期时间大约是1小时后
     exp_timestamp = decoded["exp"]
@@ -101,7 +101,7 @@ def test_create_refresh_token():
     assert isinstance(result.refresh_expires, datetime)
 
     # 解码验证
-    decoded = pyjwt.decode(result.refresh_token, "test_secret_key_for_unit_tests", algorithms=["HS256"])
+    decoded = pyjwt.decode(result.refresh_token, "410b5fb3ffb54abc222df0e1964fbe85c84ecae17652edc2edc275578ade886a", algorithms=["HS256"])
     assert decoded["sub"] == str(sub)
     assert decoded["token_type"] == "refresh"
     assert "exp" in decoded
@@ -114,7 +114,7 @@ def test_create_refresh_token_default_expiry():
 
     result = create_refresh_token(sub=sub, jti=jti)
 
-    decoded = pyjwt.decode(result.refresh_token, "test_secret_key_for_unit_tests", algorithms=["HS256"])
+    decoded = pyjwt.decode(result.refresh_token, "410b5fb3ffb54abc222df0e1964fbe85c84ecae17652edc2edc275578ade886a", algorithms=["HS256"])
 
     # 验证过期时间大约是30天后
     exp_timestamp = decoded["exp"]
@@ -133,7 +133,7 @@ def test_access_token_contains_group_claims():
 
     result = create_access_token(sub=sub, jti=jti, status="active", group=group)
 
-    decoded = pyjwt.decode(result.access_token, "test_secret_key_for_unit_tests", algorithms=["HS256"])
+    decoded = pyjwt.decode(result.access_token, "410b5fb3ffb54abc222df0e1964fbe85c84ecae17652edc2edc275578ade886a", algorithms=["HS256"])
 
     assert decoded["group"]["admin"] is True
     assert decoded["group"]["name"] == "测试组"
@@ -149,7 +149,7 @@ def test_access_token_does_not_have_token_type():
 
     result = create_access_token(sub=sub, jti=jti, status="active", group=group)
 
-    decoded = pyjwt.decode(result.access_token, "test_secret_key_for_unit_tests", algorithms=["HS256"])
+    decoded = pyjwt.decode(result.access_token, "410b5fb3ffb54abc222df0e1964fbe85c84ecae17652edc2edc275578ade886a", algorithms=["HS256"])
 
     assert "token_type" not in decoded
 
@@ -161,7 +161,7 @@ def test_refresh_token_has_token_type():
 
     result = create_refresh_token(sub=sub, jti=jti)
 
-    decoded = pyjwt.decode(result.refresh_token, "test_secret_key_for_unit_tests", algorithms=["HS256"])
+    decoded = pyjwt.decode(result.refresh_token, "410b5fb3ffb54abc222df0e1964fbe85c84ecae17652edc2edc275578ade886a", algorithms=["HS256"])
 
     assert decoded["token_type"] == "refresh"
 
@@ -180,7 +180,7 @@ def test_token_expired():
 
     # 尝试解码应该抛出过期异常
     with pytest.raises(pyjwt.ExpiredSignatureError):
-        pyjwt.decode(result.access_token, "test_secret_key_for_unit_tests", algorithms=["HS256"])
+        pyjwt.decode(result.access_token, "410b5fb3ffb54abc222df0e1964fbe85c84ecae17652edc2edc275578ade886a", algorithms=["HS256"])
 
 
 def test_token_invalid_signature():
@@ -191,6 +191,7 @@ def test_token_invalid_signature():
 
     result = create_access_token(sub=sub, jti=jti, status="active", group=group)
 
-    # 使用错误的密钥解码
+    # 使用不同的密钥解码（同样 ≥32 字节，但是另一个值）
+    wrong_key = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
     with pytest.raises(pyjwt.InvalidSignatureError):
-        pyjwt.decode(result.access_token, "wrong_secret_key", algorithms=["HS256"])
+        pyjwt.decode(result.access_token, wrong_key, algorithms=["HS256"])

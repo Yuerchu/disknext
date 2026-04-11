@@ -73,7 +73,7 @@ def test_password_verify_expired():
 async def test_totp_generate():
     """测试 TOTP 密钥生成"""
     import utils.JWT as JWT
-    JWT.SECRET_KEY = "test_secret_key_for_totp_generation"
+    JWT.SECRET_KEY = "80ca7af6adc5155ebdb8d51f2a7fa75c801abc927ab0cd65b8e7b334b92610b4"
 
     response = await Password.generate_totp()
 

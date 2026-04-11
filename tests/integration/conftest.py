@@ -90,7 +90,7 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
         site_title="DiskNext",
         home_view_method="list",
         share_view_method="list",
-        secret_key="test_secret_key_for_jwt_token_generation",
+        secret_key="55dd5c582b21b96b81b0421d6e25507877839e64434d704c89db8ef90e4077d8",
     )
     test_session.add(server_config)
 
@@ -273,7 +273,7 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
     await test_session.commit()
 
     # 9. 设置JWT密钥（从数据库加载）
-    JWT.SECRET_KEY = "test_secret_key_for_jwt_token_generation"
+    JWT.SECRET_KEY = "55dd5c582b21b96b81b0421d6e25507877839e64434d704c89db8ef90e4077d8"
 
     # 刷新 group options
     await test_session.refresh(default_group_options)

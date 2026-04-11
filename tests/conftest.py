@@ -101,6 +101,7 @@ os.environ["REDIS_URL"] = _TEST_REDIS_URL
 
 import pytest
 import pytest_asyncio
+from faker import Faker
 from fastapi.testclient import TestClient
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine
@@ -121,7 +122,33 @@ from utils.JWT import create_access_token
 from utils.password.pwd import Password
 
 # 设置测试用 JWT 密钥
-JWT.SECRET_KEY = "test_secret_key_for_jwt_token_generation"
+JWT.SECRET_KEY = "55dd5c582b21b96b81b0421d6e25507877839e64434d704c89db8ef90e4077d8"
+
+
+# ==================== Faker ====================
+
+@pytest.fixture(scope="session")
+def faker() -> Faker:
+    """
+    Session 级共享的 Faker 实例
+
+    使用中文 locale 生成姓名、地址等本地化数据，同时自带所有英文 provider。
+    固定 seed 保证可重现（调试失败时换一个 seed 即可 reproduce 边界场景）。
+    """
+    fake = Faker(['zh_CN', 'en_US'])
+    Faker.seed(20260411)
+    return fake
+
+
+@pytest.fixture(scope="function")
+def faker_random(faker: Faker) -> Faker:
+    """
+    Function 级 Faker，但使用随机 seed（每次调用生成不同数据）
+
+    用于压力/随机化测试，验证方法在任意输入下都健壮。
+    """
+    faker.unique.clear()
+    return faker
 
 
 # ==================== 事件循环 ====================
@@ -494,4 +521,61 @@ async def test_directory(
         "videos": videos.id,
         "work": work.id,
         "personal": personal.id,
+    }
+
+
+# ==================== 通用最小化 setup（用于单元测试） ====================
+
+@pytest_asyncio.fixture(scope="function")
+async def minimal_setup(db_session: AsyncSession, faker: Faker) -> dict[str, object]:
+    """
+    最小化测试环境：1 个 Group + 1 个 User + 1 个 Policy + User 的根目录
+
+    用于需要快速创建一个合法上下文的单元测试，避免每个 test 重复 30 行
+    fixture 代码。返回的字段均为已持久化的模型实例。
+    """
+    group = Group(
+        name=faker.unique.company(),
+        max_storage=10 * 1024 * 1024 * 1024,
+        share_enabled=True,
+        web_dav_enabled=True,
+        admin=False,
+        speed_limit=0,
+    )
+    group = await group.save(db_session)
+
+    policy = Policy(
+        name=f"test_policy_{uuid4().hex[:8]}",
+        type=PolicyType.LOCAL,
+        server=f"/tmp/{faker.uuid4()}",
+        is_private=True,
+        max_size=0,
+    )
+    policy = await policy.save(db_session)
+
+    user = User(
+        email=faker.unique.email(),
+        nickname=faker.name(),
+        status=UserStatus.ACTIVE,
+        storage=0,
+        score=0,
+        group_id=group.id,
+    )
+    user = await user.save(db_session)
+
+    root = Object(
+        name="/",
+        type=ObjectType.FOLDER,
+        parent_id=None,
+        owner_id=user.id,
+        policy_id=policy.id,
+        size=0,
+    )
+    root = await root.save(db_session)
+
+    return {
+        "group": group,
+        "policy": policy,
+        "user": user,
+        "root": root,
     }

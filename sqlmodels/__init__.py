@@ -180,3 +180,6 @@ from .model_base import (
 
 # 通用分页模型
 from sqlmodel_ext import ListResponse
+
+# 注册 PostgreSQL 触发器（必须在 metadata.create_all 之前 import 本模块）
+from . import triggers  # noqa: F401

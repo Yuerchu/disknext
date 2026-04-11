@@ -502,26 +502,10 @@ class ServerConfigBase(SQLModelBase):
     """文档类扩展名（逗号分隔）"""
 
     # ==================== 跨字段校验 ====================
-
-    @model_validator(mode='after')
-    def _validate_captcha_consistency(self) -> Self:
-        """启用第三方验证码时，对应密钥不能为空"""
-        if self.captcha_type == CaptchaType.GCAPTCHA:
-            if not self.captcha_recaptcha_key or not self.captcha_recaptcha_secret:
-                raise ValueError("启用 reCAPTCHA 时，Site Key 和 Secret Key 不能为空")
-        elif self.captcha_type == CaptchaType.CLOUD_FLARE_TURNSTILE:
-            if not self.captcha_cloudflare_key or not self.captcha_cloudflare_secret:
-                raise ValueError("启用 Cloudflare Turnstile 时，Site Key 和 Secret Key 不能为空")
-        return self
-
-    @model_validator(mode='after')
-    def _validate_oauth_consistency(self) -> Self:
-        """启用 OAuth 时，client_id/secret 不能为空"""
-        if self.is_github_enabled and (not self.github_client_id or not self.github_client_secret):
-            raise ValueError("启用 GitHub OAuth 时，Client ID 和 Client Secret 不能为空")
-        if self.is_qq_enabled and (not self.qq_client_id or not self.qq_client_secret):
-            raise ValueError("启用 QQ OAuth 时，App ID 和 App Key 不能为空")
-        return self
+    #
+    # captcha/oauth 一致性约束已下沉到 PostgreSQL trigger
+    # （见本文件末尾 _CAPTCHA_OAUTH_TRIGGER_DDL），由数据库统一兜底，
+    # 避免应用层模型构造与 DB 写入两处重复校验。
 
     @model_validator(mode='after')
     def _validate_avatar_size_order(self) -> Self:
@@ -593,38 +577,11 @@ class ServerConfig(ServerConfigBase, TableBaseMixin):
 # ==================== 更新请求 DTO ====================
 
 class ServerConfigUpdateRequest(ServerConfigBase, all_fields_optional=True):
-    """管理员更新请求（所有字段可选，仅传入需要修改的字段）"""
+    """管理员更新请求（所有字段可选，仅传入需要修改的字段）
 
-    @model_validator(mode='after')
-    def _validate_captcha_consistency(self) -> Self:
-        """UpdateRequest 中字段可能为 None，跳过未传入字段的校验"""
-        if self.captcha_type is not None:
-            if self.captcha_type == CaptchaType.GCAPTCHA:
-                if self.captcha_recaptcha_key is not None and not self.captcha_recaptcha_key:
-                    raise ValueError("reCAPTCHA Site Key 不能设为空")
-                if self.captcha_recaptcha_secret is not None and not self.captcha_recaptcha_secret:
-                    raise ValueError("reCAPTCHA Secret Key 不能设为空")
-            elif self.captcha_type == CaptchaType.CLOUD_FLARE_TURNSTILE:
-                if self.captcha_cloudflare_key is not None and not self.captcha_cloudflare_key:
-                    raise ValueError("Cloudflare Turnstile Site Key 不能设为空")
-                if self.captcha_cloudflare_secret is not None and not self.captcha_cloudflare_secret:
-                    raise ValueError("Cloudflare Turnstile Secret Key 不能设为空")
-        return self
-
-    @model_validator(mode='after')
-    def _validate_oauth_consistency(self) -> Self:
-        """UpdateRequest 中字段可能为 None，跳过未传入字段的校验"""
-        if self.is_github_enabled and self.is_github_enabled is True:
-            if self.github_client_id is not None and not self.github_client_id:
-                raise ValueError("GitHub Client ID 不能设为空")
-            if self.github_client_secret is not None and not self.github_client_secret:
-                raise ValueError("GitHub Client Secret 不能设为空")
-        if self.is_qq_enabled and self.is_qq_enabled is True:
-            if self.qq_client_id is not None and not self.qq_client_id:
-                raise ValueError("QQ App ID 不能设为空")
-            if self.qq_client_secret is not None and not self.qq_client_secret:
-                raise ValueError("QQ App Key 不能设为空")
-        return self
+    captcha/oauth 一致性由 PostgreSQL trigger 在 UPDATE 时强制校验，
+    DTO 层不再做重复检查。
+    """
 
     @model_validator(mode='after')
     def _validate_avatar_size_order(self) -> Self:

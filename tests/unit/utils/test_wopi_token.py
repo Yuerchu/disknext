@@ -11,7 +11,7 @@ import utils.JWT as JWT
 from utils.JWT.wopi_token import create_wopi_token, verify_wopi_token
 
 # 确保测试 secret key
-JWT.SECRET_KEY = "test_secret_key_for_jwt_token_generation"
+JWT.SECRET_KEY = "55dd5c582b21b96b81b0421d6e25507877839e64434d704c89db8ef90e4077d8"
 
 
 class TestWopiToken:

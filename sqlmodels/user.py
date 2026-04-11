@@ -12,7 +12,7 @@ from sqlmodel import Field, Relationship
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel.main import RelationshipInfo
 
-from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, TableViewRequest, ListResponse, Str255
+from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, TableViewRequest, ListResponse
 
 from .auth_identity import AuthProviderType
 from .color import ChromaticColor, NeutralColor, ThemeColorsBase
@@ -1080,7 +1080,7 @@ class User(UserBase, UUIDTableBaseMixin):
             .where(User.id == self.id)
             .values(storage=func.greatest(0, User.storage + delta))
         )
-        await session.execute(stmt)
+        await session.exec(stmt)
 
         if commit:
             await session.commit()
