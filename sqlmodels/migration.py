@@ -238,7 +238,7 @@ async def init_default_user() -> None:
 async def init_default_policy() -> None:
     from .policy import Policy, PolicyType
     from .database_connection import DatabaseManager
-    from service.storage import LocalStorageService
+    from utils.storage import LocalStorageService
 
     log.info('初始化默认存储策略...')
 

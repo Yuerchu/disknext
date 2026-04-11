@@ -109,7 +109,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.orm import sessionmaker
 
 from main import app
-from service.redis import RedisManager
+from utils.redis import RedisManager
 from sqlmodels.database_connection import DatabaseManager
 from sqlmodels.auth_identity import AuthIdentity, AuthProviderType
 from sqlmodels.group import Group, GroupClaims, GroupOptions

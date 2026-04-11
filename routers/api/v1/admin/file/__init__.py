@@ -12,7 +12,7 @@ from middleware.dependencies import SessionDep, TableViewRequestDep
 from sqlmodels import (
     JWTPayload, Policy, PolicyType, User, ListResponse,
     Object, ObjectType, AdminFileResponse, FileBanRequest, )
-from service.storage import LocalStorageService
+from utils.storage import LocalStorageService
 
 async def _set_ban_recursive(
     session: AsyncSession,

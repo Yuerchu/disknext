@@ -79,7 +79,7 @@ class RedisManager:
         在应用关闭时调用。
         """
         if cls._client is not None:
-            await cls._client.close()
+            await cls._client.aclose()
             cls._client = None
             cls._is_initialized = False
             l.info("Redis 连接已关闭")

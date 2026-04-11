@@ -12,7 +12,7 @@ from sqlmodels import (
     PolicyUpdateRequest, ResponseBase, ListResponse, Object,
 )
 from sqlmodel_ext import SQLModelBase
-from service.storage import DirectoryCreationError, LocalStorageService, S3StorageService
+from utils.storage import DirectoryCreationError, LocalStorageService, S3StorageService
 
 admin_policy_router = APIRouter(
     prefix='/policy',
@@ -546,7 +546,7 @@ async def router_policy_test_s3(
     :param request: 测试请求
     :return: 测试结果
     """
-    from service.storage import S3APIError
+    from utils.storage import S3APIError
 
     # 构造临时 Policy 对象用于创建 S3StorageService
     temp_policy = Policy(

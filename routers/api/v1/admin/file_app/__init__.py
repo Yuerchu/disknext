@@ -12,7 +12,7 @@ from sqlalchemy import select
 
 from middleware.auth import admin_required
 from middleware.dependencies import SessionDep, TableViewRequestDep
-from service.wopi import parse_wopi_discovery_xml
+from utils.wopi import parse_wopi_discovery_xml
 from sqlmodels import (
     FileApp,
     FileAppCreateRequest,

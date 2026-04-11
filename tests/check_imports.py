@@ -59,7 +59,7 @@ def main():
         ("sqlmodels.database", "数据库连接"),
         ("utils.password.pwd", "密码工具"),
         ("utils.JWT.JWT", "JWT 工具"),
-        ("service.user.login", "登录服务"),
+        ("sqlmodels.user", "用户模型（含登录逻辑）"),
     ]
 
     results = []

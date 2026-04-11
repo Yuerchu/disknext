@@ -189,7 +189,7 @@ async def router_user_settings_avatar(
     - 400: 文件类型不支持 / 图片无法解析
     - 413: 文件过大
     """
-    from service.avatar import (
+    from utils.avatar import (
         ALLOWED_CONTENT_TYPES,
         get_avatar_settings,
         process_and_save_avatar,
@@ -243,7 +243,7 @@ async def router_user_settings_avatar_gravatar(
     错误处理：
     - 400: 用户没有邮箱
     """
-    from service.avatar import delete_avatar_files
+    from utils.avatar import delete_avatar_files
 
     if not user.email:
         http_exceptions.raise_bad_request("Gravatar 需要邮箱，请先绑定邮箱")
@@ -273,7 +273,7 @@ async def router_user_settings_avatar_delete(
     1. 如果当前是 FILE 头像，删除本地文件
     2. 更新 User.avatar = "default"
     """
-    from service.avatar import delete_avatar_files
+    from utils.avatar import delete_avatar_files
 
     if user.avatar == "file":
         await delete_avatar_files(session, user.id)

@@ -13,7 +13,7 @@ from loguru import logger as l
 from wsgidav.dc.base_dc import BaseDomainController
 
 from routers.dav.provider import EventLoopRef, _get_session
-from service.redis.webdav_auth_cache import WebDAVAuthCache
+from utils.redis.webdav_auth_cache import WebDAVAuthCache
 from sqlmodels.user import User, UserStatus
 from sqlmodels.webdav import WebDAV
 from utils.password.pwd import Password, PasswordStatus

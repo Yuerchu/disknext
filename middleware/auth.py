@@ -8,7 +8,7 @@ from sqlmodels.user import JWTPayload, User, UserStatus
 from utils import JWT
 from .dependencies import SessionDep
 from utils import http_exceptions
-from service.redis.user_ban_store import UserBanStore
+from utils.redis.user_ban_store import UserBanStore
 
 
 async def jwt_required(

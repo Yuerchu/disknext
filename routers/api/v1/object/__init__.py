@@ -41,14 +41,7 @@ from sqlmodels import (
     INTERNAL_NAMESPACES,
     USER_WRITABLE_NAMESPACES,
 )
-from service.storage import (
-    LocalStorageService,
-    adjust_user_storage,
-    copy_object_recursive,
-    migrate_file_with_task,
-    migrate_directory_files,
-)
-from service.storage.object import soft_delete_objects
+from utils.storage import LocalStorageService, migrate_file_with_task, migrate_directory_files
 from sqlmodels.database_connection import DatabaseManager
 from utils import http_exceptions
 
@@ -197,7 +190,7 @@ async def router_object_delete(
         objects_to_delete.append(obj)
 
     if objects_to_delete:
-        deleted_count = await soft_delete_objects(session, objects_to_delete)
+        deleted_count = await Object.soft_delete_batch(session, objects_to_delete)
         l.info(f"用户 {user_id} 软删除了 {deleted_count} 个对象到回收站")
 
 
@@ -388,14 +381,14 @@ async def router_object_copy(
             continue
 
         # 递归复制
-        count, ids, copied_size = await copy_object_recursive(session, src, dst.id, user_id)
+        count, ids, copied_size = await src.copy_recursive(session, dst.id, user_id)
         copied_count += count
         new_ids.extend(ids)
         total_copied_size += copied_size
 
     # 更新用户存储配额
     if total_copied_size > 0:
-        await adjust_user_storage(session, user_id, total_copied_size)
+        await user.adjust_storage(session, total_copied_size)
 
     l.info(f"用户 {user_id} 复制了 {copied_count} 个对象")
 

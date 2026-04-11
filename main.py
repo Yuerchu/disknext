@@ -7,8 +7,8 @@ from loguru import logger as l
 from routers import router
 from routers.dav import dav_app
 from routers.dav.provider import EventLoopRef
-from service.redis import RedisManager
-from service.storage import S3StorageService
+from utils.redis import RedisManager
+from utils.storage import S3StorageService
 from sqlmodels.database_connection import DatabaseManager
 from sqlmodels.migration import migration
 from utils import JWT

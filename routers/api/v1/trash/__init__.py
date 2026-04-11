@@ -14,11 +14,6 @@ from middleware.auth import auth_required
 from middleware.dependencies import SessionDep
 from sqlmodels import Object, User
 from sqlmodels.object import TrashDeleteRequest, TrashItemResponse, TrashRestoreRequest
-from service.storage.object import (
-    permanently_delete_objects,
-    restore_objects,
-    soft_delete_objects,
-)
 
 trash_router = APIRouter(
     prefix="/trash",
@@ -93,7 +88,7 @@ async def router_trash_restore(
             objects_to_restore.append(obj)
 
     if objects_to_restore:
-        restored_count = await restore_objects(session, objects_to_restore, user_id)
+        restored_count = await Object.restore_batch(session, objects_to_restore, user_id)
         l.info(f"用户 {user_id} 从回收站恢复了 {restored_count} 个对象")
 
 
@@ -132,7 +127,7 @@ async def router_trash_delete(
             objects_to_delete.append(obj)
 
     if objects_to_delete:
-        deleted_count = await permanently_delete_objects(session, objects_to_delete, user_id)
+        deleted_count = await Object.permanently_delete_batch(session, objects_to_delete, user_id)
         l.info(f"用户 {user_id} 永久删除了 {deleted_count} 个对象")
 
 
@@ -157,5 +152,5 @@ async def router_trash_empty(
     trash_items = await Object.get_trash_items(session, user_id)
 
     if trash_items:
-        deleted_count = await permanently_delete_objects(session, trash_items, user_id)
+        deleted_count = await Object.permanently_delete_batch(session, trash_items, user_id)
         l.info(f"用户 {user_id} 清空回收站，共删除 {deleted_count} 个对象")

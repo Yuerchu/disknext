@@ -126,7 +126,7 @@ def require_captcha(scene: 'CaptchaScene') -> Callable[..., Awaitable[None]]:
 
     :param scene: 验证码使用场景（LOGIN / REGISTER / FORGET）
     """
-    from service.captcha import CaptchaScene, verify_captcha_if_needed
+    from utils.captcha import CaptchaScene, verify_captcha_if_needed
 
     async def _verify_captcha(
             config: ServerConfigDep,

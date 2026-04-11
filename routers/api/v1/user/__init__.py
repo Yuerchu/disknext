@@ -16,15 +16,13 @@ from webauthn import (
 from webauthn.helpers import bytes_to_base64url, options_to_json
 from webauthn.helpers.structs import PublicKeyCredentialDescriptor
 
-import service
 import sqlmodels
 from middleware.auth import auth_required
 from middleware.dependencies import SessionDep, ServerConfigDep, require_captcha
-from service.captcha import CaptchaScene
-from service.redis.challenge_store import ChallengeStore
-from service.webauthn import get_rp_config
+from utils.captcha import CaptchaScene
+from utils.redis.challenge_store import ChallengeStore
 from sqlmodels.auth_identity import AuthIdentity, AuthProviderType
-from sqlmodels.user import UserStatus
+from sqlmodels.user import User, UserStatus
 from sqlmodels.user_authn import UserAuthn
 from utils import JWT, Password, http_exceptions
 from .settings import user_settings_router
@@ -65,7 +63,7 @@ async def router_user_session(
     - 428: 需要两步验证
     - 501: 暂未实现的登录方式
     """
-    return await service.user.unified_login(session, request, config)
+    return await User.unified_login(session, request, config)
 
 
 @user_router.post(
@@ -365,7 +363,7 @@ async def router_user_avatar(
     """
     import aiofiles.os
 
-    from service.avatar import (
+    from utils.avatar import (
         get_avatar_file_path,
         get_avatar_settings,
         gravatar_url,
@@ -520,7 +518,7 @@ async def router_user_authn_start(
     if not config.is_authn_enabled:
         http_exceptions.raise_bad_request("Passkey 未启用")
 
-    rp_id, rp_name, _origin = get_rp_config(config)
+    rp_id, rp_name, _origin = config.get_rp_config()
 
     # 查询用户已注册凭证，用于 exclude_credentials
     existing_authns: list[UserAuthn] = await UserAuthn.get(
@@ -582,7 +580,7 @@ async def router_user_authn_finish(
     if challenge is None:
         http_exceptions.raise_bad_request("注册会话已过期，请重新开始")
 
-    rp_id, _rp_name, origin = get_rp_config(config)
+    rp_id, _rp_name, origin = config.get_rp_config()
 
     # 验证注册响应
     try:
@@ -655,7 +653,7 @@ async def router_user_authn_options(
     if not config.is_authn_enabled:
         http_exceptions.raise_bad_request("Passkey 未启用")
 
-    rp_id, _rp_name, _origin = get_rp_config(config)
+    rp_id, _rp_name, _origin = config.get_rp_config()
 
     options = generate_authentication_options(rp_id=rp_id)
 

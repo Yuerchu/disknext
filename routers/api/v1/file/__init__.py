@@ -46,7 +46,7 @@ from sqlmodels import (
 )
 import orjson
 
-from service.storage import LocalStorageService, S3StorageService, adjust_user_storage
+from utils.storage import LocalStorageService, S3StorageService
 from utils.JWT import create_download_token, DOWNLOAD_TOKEN_TTL
 from utils.JWT.wopi_token import create_wopi_token
 from utils import http_exceptions
@@ -234,7 +234,7 @@ async def create_upload_session(
 
     # 预扣存储空间（与创建会话在同一事务中提交，防止并发绕过配额）
     if request.file_size > 0:
-        await adjust_user_storage(session, user.id, request.file_size, commit=False)
+        await user.adjust_storage(session, request.file_size, commit=False)
 
     # 创建上传会话
     upload_session = UploadSession(
@@ -419,7 +419,9 @@ async def upload_chunk(
         # 调整存储配额差值（创建会话时已预扣 file_size，这里只补差）
         size_diff = uploaded_size - file_size
         if size_diff != 0:
-            await adjust_user_storage(session, user_id, size_diff, commit=False)
+            refreshed_user = await User.get(session, User.id == user_id)
+            if refreshed_user:
+                await refreshed_user.adjust_storage(session, size_diff, commit=False)
 
         # 统一提交所有更改
         await session.commit()
@@ -470,7 +472,7 @@ async def delete_upload_session(
 
     # 释放预扣的存储空间
     if upload_session.file_size > 0:
-        await adjust_user_storage(session, user.id, -upload_session.file_size)
+        await user.adjust_storage(session, -upload_session.file_size)
 
     # 删除会话记录
     await UploadSession.delete(session, upload_session)
@@ -515,7 +517,7 @@ async def clear_upload_sessions(
 
         # 释放预扣的存储空间
         if upload_session.file_size > 0:
-            await adjust_user_storage(session, user.id, -upload_session.file_size)
+            await user.adjust_storage(session, -upload_session.file_size)
 
         await UploadSession.delete(session, upload_session)
         deleted_count += 1
@@ -1198,7 +1200,9 @@ async def patch_file_content(
     physical_file.size = new_size
     physical_file = await physical_file.save(session, commit=False)
     if size_diff != 0:
-        await adjust_user_storage(session, owner_id, size_diff, commit=False)
+        owner = await User.get(session, User.id == owner_id)
+        if owner:
+            await owner.adjust_storage(session, size_diff, commit=False)
     await session.commit()
 
     new_hash = hashlib.sha256(new_bytes).hexdigest()

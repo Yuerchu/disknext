@@ -225,7 +225,7 @@ async def router_admin_update_settings(
     :param config: 当前服务器配置
     :param request: 更新请求（仅包含需要修改的字段）
     """
-    from service.redis.server_config_cache import ServerConfigCache
+    from utils.redis.server_config_cache import ServerConfigCache
     config = await config.update(session, request)
     await ServerConfigCache.invalidate()
     l.info("管理员更新了服务器配置")

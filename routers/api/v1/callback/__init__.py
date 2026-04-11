@@ -3,7 +3,7 @@ from fastapi.responses import PlainTextResponse
 from loguru import logger as l
 
 from sqlmodels import ResponseBase
-import service.oauth
+import utils.oauth
 from utils import http_exceptions
 
 callback_router = APIRouter(
@@ -58,11 +58,11 @@ async def router_callback_github(
         PlainTextResponse: A response containing the user information from GitHub.
     """
     try:
-        access_token = await service.oauth.github.get_access_token(code)
+        access_token = await utils.oauth.github.get_access_token(code)
         if not access_token:
             return PlainTextResponse("GitHub 认证失败", status_code=400)
 
-        user_data = await service.oauth.github.get_user_info(access_token.access_token)
+        user_data = await utils.oauth.github.get_user_info(access_token.access_token)
         # [TODO] 把 access_token 和 user_data 写数据库，生成 JWT，重定向到前端
         l.info(f"GitHub OAuth 回调成功: user={user_data.user_data.login}")
 

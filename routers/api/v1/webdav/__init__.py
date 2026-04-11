@@ -14,7 +14,7 @@ from sqlmodels import (
     WebDAVCreateRequest,
     WebDAVUpdateRequest,
 )
-from service.redis.webdav_auth_cache import WebDAVAuthCache
+from utils.redis.webdav_auth_cache import WebDAVAuthCache
 from utils import http_exceptions
 from utils.password.pwd import Password
 

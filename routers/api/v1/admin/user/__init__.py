@@ -6,7 +6,7 @@ from sqlalchemy import func
 
 from middleware.auth import admin_required
 from middleware.dependencies import SessionDep, ServerConfigDep, TableViewRequestDep, UserFilterParamsDep
-from service.redis.user_ban_store import UserBanStore
+from utils.redis.user_ban_store import UserBanStore
 from sqlmodels import (
     User, ResponseBase, UserPublic, ListResponse,
     Group, Object, ObjectType,

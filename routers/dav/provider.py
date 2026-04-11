@@ -20,7 +20,7 @@ from wsgidav.dav_error import (
 )
 from wsgidav.dav_provider import DAVCollection, DAVNonCollection, DAVProvider
 
-from service.storage import LocalStorageService, adjust_user_storage
+from utils.storage import LocalStorageService
 from sqlmodels.database_connection import DatabaseManager
 from sqlmodels.object import Object, ObjectType
 from sqlmodels.physical_file import PhysicalFile
@@ -136,12 +136,10 @@ async def _create_file(
 
 async def _soft_delete_object(object_id: UUID) -> None:
     """软删除对象（移入回收站）"""
-    from service.storage import soft_delete_objects
-
     async with _get_session() as session:
         obj = await Object.get(session, Object.id == object_id)
         if obj:
-            await soft_delete_objects(session, [obj])
+            await Object.soft_delete_batch(session, [obj])
 
 
 async def _finalize_upload(
@@ -179,7 +177,9 @@ async def _finalize_upload(
 
         # 更新用户存储用量
         if size > 0:
-            await adjust_user_storage(session, owner_id, size)
+            user = await User.get(session, User.id == owner_id)
+            if user:
+                await user.adjust_storage(session, size)
 
 
 async def _move_object(
@@ -202,13 +202,11 @@ async def _copy_object_recursive(
     owner_id: UUID,
 ) -> None:
     """递归复制对象"""
-    from service.storage import copy_object_recursive
-
     async with _get_session() as session:
         src = await Object.get(session, Object.id == src_id)
         if not src:
             return
-        await copy_object_recursive(session, src, dst_parent_id, owner_id, new_name=dst_name)
+        await src.copy_recursive(session, dst_parent_id, owner_id)
 
 
 # ==================== 辅助工具 ====================

@@ -14,7 +14,7 @@ from loguru import logger as l
 
 from middleware.dependencies import SessionDep
 from sqlmodels import Object, PhysicalFile, Policy, PolicyType, User, WopiFileInfo
-from service.storage import LocalStorageService
+from utils.storage import LocalStorageService
 from utils import http_exceptions
 from utils.JWT.wopi_token import verify_wopi_token
 
@@ -188,8 +188,10 @@ async def put_file(
         # 更新用户存储配额
         size_diff = new_size - old_size
         if size_diff != 0:
-            from service.storage import adjust_user_storage
-            await adjust_user_storage(session, file_obj.owner_id, size_diff, commit=False)
+            from sqlmodels.user import User
+            owner = await User.get(session, User.id == file_obj.owner_id)
+            if owner:
+                await owner.adjust_storage(session, size_diff, commit=False)
 
         await session.commit()
 
