@@ -29,9 +29,6 @@ htmlcov/
 .coverage
 coverage.xml
 
-*.db
-*.sqlite
-*.sqlite3
 *.log
 logs/
 data/
