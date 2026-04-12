@@ -5,7 +5,7 @@ from datetime import datetime
 
 from sqlmodel import Field, Relationship, CheckConstraint, Index
 
-from sqlmodel_ext import SQLModelBase, TableBaseMixin
+from sqlmodel_ext import SQLModelBase, TableBaseMixin, Str255, Str2048, Text2K, Text10K
 
 if TYPE_CHECKING:
     from .download import Download
@@ -48,7 +48,7 @@ class TaskSummaryBase(SQLModelBase):
     progress: int
     """进度（0-100）"""
 
-    error: str | None
+    error: Text2K | None
     """错误信息"""
 
     user_id: UUID
@@ -64,7 +64,7 @@ class TaskSummaryBase(SQLModelBase):
 class TaskSummary(TaskSummaryBase):
     """任务摘要，用于管理员列表展示"""
 
-    username: str | None
+    username: Str255 | None
     """用户名"""
 
     @classmethod
@@ -82,13 +82,13 @@ class TaskSummary(TaskSummaryBase):
 class TaskPropsBase(SQLModelBase):
     """任务属性基础模型"""
 
-    source_path: str | None = None
+    source_path: Str2048 | None = None
     """源路径"""
 
-    dest_path: str | None = None
+    dest_path: Str2048 | None = None
     """目标路径"""
 
-    file_ids: str | None = None
+    file_ids: Text10K | None = None
     """文件ID列表（逗号分隔）"""
 
     source_policy_id: UUID | None = None

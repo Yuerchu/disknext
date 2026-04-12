@@ -31,7 +31,7 @@ class Aria2ConfigurationBase(SQLModelBase):
     rpc_url: Str255 | None = None
     """RPC地址"""
 
-    rpc_secret: str | None = None
+    rpc_secret: Str255 | None = None
     """RPC密钥"""
 
     temp_path: Str255 | None = None

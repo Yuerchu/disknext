@@ -2,7 +2,7 @@ from enum import StrEnum
 
 from sqlmodel import UniqueConstraint
 
-from sqlmodel_ext import SQLModelBase, TableBaseMixin
+from sqlmodel_ext import SQLModelBase, TableBaseMixin, Text100K
 
 
 class MailTemplateType(StrEnum):
@@ -19,7 +19,7 @@ class MailTemplateBase(SQLModelBase):
     type: MailTemplateType
     """模板类型"""
 
-    content: str
+    content: Text100K
     """HTML 模板内容（Jinja2 变量）"""
 
 

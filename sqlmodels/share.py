@@ -5,7 +5,7 @@ from uuid import UUID
 
 from sqlmodel import Field, Relationship, text, UniqueConstraint, Index
 
-from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str64, Str255
+from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str64, Str128, Str255
 
 from .model_base import ResponseBase
 from .object import ObjectType
@@ -24,7 +24,7 @@ class ShareBase(SQLModelBase):
     object_id: UUID
     """关联的对象UUID"""
 
-    password: str | None = None
+    password: Str128 | None = None
     """分享密码"""
 
     expires: datetime | None = None
@@ -134,13 +134,13 @@ class ShareResponse(SQLModelBase):
     id: UUID
     """分享ID"""
 
-    code: str
+    code: Str64
     """分享码"""
 
     object_id: UUID
     """关联对象UUID"""
 
-    source_name: str | None
+    source_name: Str255 | None
     """源名称"""
 
     views: int
@@ -174,10 +174,10 @@ class ShareResponse(SQLModelBase):
 class ShareOwnerInfo(SQLModelBase):
     """分享者公开信息 DTO"""
 
-    nickname: str | None
+    nickname: Str255 | None
     """昵称"""
 
-    avatar: str
+    avatar: Str255
     """头像"""
 
 
@@ -187,7 +187,7 @@ class ShareObjectItem(SQLModelBase):
     id: UUID
     """对象UUID"""
 
-    name: str
+    name: Str255
     """名称"""
 
     type: ObjectType
@@ -234,7 +234,7 @@ class ShareListItemBase(SQLModelBase):
     id: UUID
     """分享ID"""
 
-    code: str
+    code: Str64
     """分享码"""
 
     views: int
@@ -265,10 +265,10 @@ class ShareListItemBase(SQLModelBase):
 class AdminShareListItem(ShareListItemBase):
     """管理员分享列表项 DTO，添加关联字段"""
 
-    username: str | None
+    username: Str255 | None
     """用户名"""
 
-    object_name: str | None
+    object_name: Str255 | None
     """对象名称"""
 
     @classmethod

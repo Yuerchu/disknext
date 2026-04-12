@@ -9,7 +9,7 @@ from sqlalchemy import BigInteger
 from sqlmodel import Field, Relationship, CheckConstraint, Index, text
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str255, Str256
+from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str24, Str64, Str128, Str255, Str256
 
 from .policy import PolicyType
 
@@ -42,7 +42,7 @@ class FileCategory(StrEnum):
 class ObjectBase(SQLModelBase):
     """对象基础字段，供数据库模型和 DTO 共享"""
 
-    name: str
+    name: str = Field(min_length=1, max_length=255)
     """对象名称（文件名或目录名）"""
 
     type: ObjectType
@@ -73,7 +73,7 @@ class ObjectMoveUpdate(SQLModelBase):
     parent_id: UUID
     """新的父目录UUID"""
 
-    name: str
+    name: str = Field(min_length=1, max_length=255)
     """新名称"""
 
 
@@ -83,7 +83,7 @@ class DirectoryCreateRequest(SQLModelBase):
     parent_id: UUID
     """父目录UUID"""
 
-    name: str
+    name: str = Field(min_length=1, max_length=255)
     """目录名称"""
 
     policy_id: UUID | None = None
@@ -93,7 +93,7 @@ class DirectoryCreateRequest(SQLModelBase):
 class ObjectMoveRequest(SQLModelBase):
     """移动对象请求 DTO"""
 
-    src_ids: list[UUID]
+    src_ids: list[UUID] = Field(min_length=1, max_length=100)
     """源对象UUID列表"""
 
     dst_id: UUID
@@ -103,7 +103,7 @@ class ObjectMoveRequest(SQLModelBase):
 class ObjectDeleteRequest(SQLModelBase):
     """删除对象请求 DTO"""
 
-    ids: list[UUID]
+    ids: list[UUID] = Field(min_length=1, max_length=100)
     """待删除对象UUID列表"""
 
 
@@ -132,7 +132,7 @@ class PolicyResponse(SQLModelBase):
     id: UUID
     """策略UUID"""
 
-    name: str
+    name: Str255
     """策略名称"""
 
     type: PolicyType
@@ -1269,7 +1269,7 @@ class ObjectSwitchPolicyRequest(SQLModelBase):
 class ObjectCopyRequest(SQLModelBase):
     """复制对象请求 DTO"""
 
-    src_ids: list[UUID]
+    src_ids: list[UUID] = Field(min_length=1, max_length=100)
     """源对象UUID列表"""
 
     dst_id: UUID
@@ -1292,7 +1292,7 @@ class ObjectPropertyResponse(SQLModelBase):
     id: UUID
     """对象UUID"""
 
-    name: str
+    name: Str255
     """对象名称"""
 
     type: ObjectType
@@ -1301,7 +1301,7 @@ class ObjectPropertyResponse(SQLModelBase):
     size: int
     """文件大小（字节）"""
 
-    mime_type: str | None = None
+    mime_type: Str128 | None = None
     """MIME类型"""
 
     created_at: datetime
@@ -1318,10 +1318,10 @@ class ObjectPropertyDetailResponse(ObjectPropertyResponse):
     """对象详细属性响应 DTO（继承基本属性）"""
 
     # 校验和（从 PhysicalFile 读取）
-    checksum_md5: str | None = None
+    checksum_md5: Str64 | None = None
     """MD5校验和"""
 
-    checksum_sha256: str | None = None
+    checksum_sha256: Str64 | None = None
     """SHA256校验和"""
 
     # 分享统计
@@ -1335,7 +1335,7 @@ class ObjectPropertyDetailResponse(ObjectPropertyResponse):
     """总下载次数"""
 
     # 存储信息
-    policy_name: str | None = None
+    policy_name: Str255 | None = None
     """存储策略名称"""
 
     reference_count: int = 1
@@ -1354,10 +1354,10 @@ class AdminFileResponse(ObjectResponse):
     owner_id: UUID
     """所有者UUID"""
 
-    owner_email: str
+    owner_email: Str255
     """所有者邮箱"""
 
-    policy_name: str
+    policy_name: Str255
     """存储策略名称"""
 
     is_banned: bool = False
@@ -1443,12 +1443,12 @@ class TrashItemResponse(SQLModelBase):
 class TrashRestoreRequest(SQLModelBase):
     """恢复对象请求 DTO"""
 
-    ids: list[UUID]
+    ids: list[UUID] = Field(min_length=1, max_length=100)
     """待恢复对象UUID列表"""
 
 
 class TrashDeleteRequest(SQLModelBase):
     """永久删除对象请求 DTO"""
 
-    ids: list[UUID]
+    ids: list[UUID] = Field(min_length=1, max_length=100)
     """待永久删除对象UUID列表"""

@@ -20,7 +20,7 @@ from uuid import UUID
 
 from sqlmodel import Field, Relationship, UniqueConstraint
 
-from sqlmodel_ext import SQLModelBase, TableBaseMixin, UUIDTableBaseMixin, Str100, Str255, Text1024
+from sqlmodel_ext import SQLModelBase, TableBaseMixin, UUIDTableBaseMixin, Str64, Str100, Str255, Str500, Text1024
 
 if TYPE_CHECKING:
     from .group import Group
@@ -61,25 +61,25 @@ class FileAppSummary(SQLModelBase):
     id: UUID
     """应用UUID"""
 
-    name: str
+    name: Str100
     """应用名称"""
 
-    app_key: str
+    app_key: Str64
     """应用唯一标识"""
 
     type: FileAppType
     """应用类型"""
 
-    icon: str | None = None
+    icon: Str255 | None = None
     """图标名称/URL"""
 
-    description: str | None = None
+    description: Str500 | None = None
     """应用描述"""
 
-    iframe_url_template: str | None = None
+    iframe_url_template: Text1024 | None = None
     """iframe URL 模板"""
 
-    wopi_editor_url_template: str | None = None
+    wopi_editor_url_template: Text1024 | None = None
     """WOPI 编辑器 URL 模板"""
 
 
@@ -149,10 +149,10 @@ class FileAppCreateRequest(SQLModelBase):
     wopi_editor_url_template: Text1024 | None = None
     """WOPI 编辑器 URL 模板"""
 
-    extensions: list[str] = []
+    extensions: list[str] = Field(default=[], max_length=200)
     """关联的扩展名列表"""
 
-    allowed_group_ids: list[UUID] = []
+    allowed_group_ids: list[UUID] = Field(default=[], max_length=50)
     """允许访问的用户组UUID列表"""
 
 
@@ -196,19 +196,19 @@ class FileAppResponse(SQLModelBase):
     id: UUID
     """应用UUID"""
 
-    name: str
+    name: Str100
     """应用名称"""
 
-    app_key: str
+    app_key: Str64
     """应用唯一标识"""
 
     type: FileAppType
     """应用类型"""
 
-    icon: str | None = None
+    icon: Str255 | None = None
     """图标名称/URL"""
 
-    description: str | None = None
+    description: Str500 | None = None
     """应用描述"""
 
     is_enabled: bool = True
@@ -217,19 +217,19 @@ class FileAppResponse(SQLModelBase):
     is_restricted: bool = False
     """是否限制用户组访问"""
 
-    iframe_url_template: str | None = None
+    iframe_url_template: Text1024 | None = None
     """iframe URL 模板"""
 
-    wopi_discovery_url: str | None = None
+    wopi_discovery_url: Str500 | None = None
     """WOPI 发现端点 URL"""
 
-    wopi_editor_url_template: str | None = None
+    wopi_editor_url_template: Text1024 | None = None
     """WOPI 编辑器 URL 模板"""
 
-    extensions: list[str] = []
+    extensions: list[str] = Field(default=[], max_length=200)
     """关联的扩展名列表"""
 
-    allowed_group_ids: list[UUID] = []
+    allowed_group_ids: list[UUID] = Field(default=[], max_length=50)
     """允许访问的用户组UUID列表"""
 
     @classmethod
@@ -270,14 +270,14 @@ class FileAppListResponse(SQLModelBase):
 class ExtensionUpdateRequest(SQLModelBase):
     """扩展名全量替换请求 DTO"""
 
-    extensions: list[str]
+    extensions: list[str] = Field(max_length=200)
     """扩展名列表（小写，无点号）"""
 
 
 class GroupAccessUpdateRequest(SQLModelBase):
     """用户组权限全量替换请求 DTO"""
 
-    group_ids: list[UUID]
+    group_ids: list[UUID] = Field(max_length=50)
     """允许访问的用户组UUID列表"""
 
 

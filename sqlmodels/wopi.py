@@ -5,7 +5,7 @@ WOPI（Web Application Open Platform Interface）协议模型
 """
 from uuid import UUID
 
-from sqlmodel_ext import SQLModelBase
+from sqlmodel_ext import SQLModelBase, Str64, Str255
 
 
 class WopiFileInfo(SQLModelBase):
@@ -16,25 +16,25 @@ class WopiFileInfo(SQLModelBase):
     参考: https://learn.microsoft.com/en-us/microsoft-365/cloud-storage-partner-program/rest/files/checkfileinfo
     """
 
-    base_file_name: str
+    base_file_name: Str255
     """文件名（含扩展名）"""
 
     size: int
     """文件大小（字节）"""
 
-    owner_id: str
+    owner_id: Str64
     """文件所有者标识"""
 
-    user_id: str
+    user_id: Str64
     """当前用户标识"""
 
-    user_friendly_name: str
+    user_friendly_name: Str255
     """用户显示名"""
 
-    version: str
+    version: Str64
     """文件版本标识（使用 updated_at）"""
 
-    sha256: str = ""
+    sha256: Str64 = ""
     """文件 SHA256 哈希（如果可用）"""
 
     user_can_write: bool = False

@@ -6,12 +6,9 @@ from .auth_identity import (
     ChangePasswordRequest,
 )
 from .user import (
-    BatchDeleteRequest,
     JWTPayload,
     MagicLinkRequest,
     UnifiedLoginRequest,
-    UnifiedRegisterRequest,
-    RefreshTokenRequest,
     AccessTokenBase,
     RefreshTokenBase,
     TokenResponse,

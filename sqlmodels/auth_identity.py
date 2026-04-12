@@ -10,7 +10,7 @@ from uuid import UUID
 
 from sqlmodel import Field, Relationship, UniqueConstraint
 
-from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str100, Str128, Str255, Text1024
+from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str100, Str128, Str255, Str512, Str2048, Text1024
 
 if TYPE_CHECKING:
     from .user import User
@@ -49,13 +49,13 @@ class AuthIdentityResponse(SQLModelBase):
     provider: AuthProviderType
     """提供者类型"""
 
-    identifier: str
+    identifier: Str255
     """标识符（邮箱/手机号/OAuth openid）"""
 
-    display_name: str | None = None
+    display_name: Str100 | None = None
     """显示名称（OAuth 昵称等）"""
 
-    avatar_url: str | None = None
+    avatar_url: Str512 | None = None
     """头像 URL"""
 
     is_primary: bool = False
@@ -71,13 +71,13 @@ class BindIdentityRequest(SQLModelBase):
     provider: AuthProviderType
     """提供者类型"""
 
-    identifier: str
+    identifier: str = Field(min_length=1, max_length=255)
     """标识符（邮箱/手机号/OAuth code）"""
 
-    credential: str | None = None
+    credential: Str512 | None = None
     """凭证（密码、验证码等）"""
 
-    redirect_uri: str | None = None
+    redirect_uri: Str2048 | None = None
     """OAuth 回调地址"""
 
 

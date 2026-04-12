@@ -5,7 +5,7 @@ from uuid import UUID
 
 from sqlmodel import Field, Relationship, text
 
-from sqlmodel_ext import SQLModelBase, TableBaseMixin
+from sqlmodel_ext import SQLModelBase, TableBaseMixin, Str64
 
 if TYPE_CHECKING:
     from .product import Product
@@ -40,7 +40,7 @@ class RedeemCreateRequest(SQLModelBase):
 class RedeemUseRequest(SQLModelBase):
     """使用兑换码请求 DTO"""
 
-    code: str
+    code: str = Field(min_length=1, max_length=64)
     """兑换码"""
 
 

@@ -13,7 +13,7 @@ from uuid import UUID
 from sqlalchemy import JSON
 from sqlmodel import Field, Relationship
 
-from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str100
+from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str100, Str255, Str500
 
 if TYPE_CHECKING:
     from .user import User
@@ -96,29 +96,29 @@ class CustomPropertyCreateRequest(SQLModelBase):
     type: CustomPropertyType
     """属性值类型"""
 
-    icon: str | None = None
+    icon: Str100 | None = None
     """图标标识"""
 
-    options: list[str] | None = None
+    options: list[Str255] | None = Field(default=None, max_length=50)
     """可选值列表（仅 select/multi_select 类型）"""
 
-    default_value: str | None = None
+    default_value: Str500 | None = None
     """默认值"""
 
 
 class CustomPropertyUpdateRequest(SQLModelBase):
     """更新自定义属性请求 DTO"""
 
-    name: str | None = None
+    name: Str100 | None = None
     """属性显示名称"""
 
-    icon: str | None = None
+    icon: Str100 | None = None
     """图标标识"""
 
-    options: list[str] | None = None
+    options: list[Str255] | None = Field(default=None, max_length=50)
     """可选值列表"""
 
-    default_value: str | None = None
+    default_value: Str500 | None = None
     """默认值"""
 
     sort_order: int | None = None

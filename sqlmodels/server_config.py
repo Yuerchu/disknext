@@ -7,7 +7,7 @@ from pydantic_extra_types.color import Color
 from sqlmodel import Field, col
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from sqlmodel_ext import SQLModelBase, TableBaseMixin
+from sqlmodel_ext import SQLModelBase, TableBaseMixin, Str128, Str255, Str2048, Text5K, Text10K
 
 from .auth_identity import AuthProviderType
 
@@ -27,16 +27,16 @@ class AuthMethodConfig(SQLModelBase):
 class SiteConfigResponse(SQLModelBase):
     """站点配置响应 DTO"""
 
-    title: str = "DiskNext"
+    title: Str128 = "DiskNext"
     """网站标题"""
 
-    site_notice: str | None = None
+    site_notice: Text5K | None = None
     """网站公告"""
 
-    logo_light: str | None = None
+    logo_light: Str2048 | None = None
     """网站Logo URL"""
 
-    logo_dark: str | None = None
+    logo_dark: Str2048 | None = None
     """网站Logo URL（深色模式）"""
 
     register_enabled: bool = True
@@ -54,7 +54,7 @@ class SiteConfigResponse(SQLModelBase):
     captcha_type: 'CaptchaType' = "default"
     """验证码类型"""
 
-    captcha_key: str | None = None
+    captcha_key: Str255 | None = None
     """验证码 public key（DEFAULT 类型时为 None）"""
 
     auth_methods: list[AuthMethodConfig] = []
@@ -72,13 +72,13 @@ class SiteConfigResponse(SQLModelBase):
     avatar_max_size: int = 2097152
     """头像文件最大字节数（默认 2MB）"""
 
-    footer_code: str | None = None
+    footer_code: Text10K | None = None
     """自定义页脚代码"""
 
-    tos_url: str | None = None
+    tos_url: Str2048 | None = None
     """服务条款 URL"""
 
-    privacy_url: str | None = None
+    privacy_url: Str2048 | None = None
     """隐私政策 URL"""
 
 

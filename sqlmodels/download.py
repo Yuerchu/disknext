@@ -4,7 +4,7 @@ from uuid import UUID
 
 from sqlmodel import Field, Relationship, UniqueConstraint, Index
 
-from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, TableBaseMixin, Str255
+from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, TableBaseMixin, Str64, Str255
 
 if TYPE_CHECKING:
     from .user import User
@@ -55,10 +55,10 @@ class DownloadAria2InfoBase(SQLModelBase):
     upload_length: int = 0
     """已上传大小（字节）"""
 
-    error_code: str | None = None
+    error_code: Str64 | None = None
     """错误代码"""
 
-    error_message: str | None = None
+    error_message: Str255 | None = None
     """错误信息"""
 
 

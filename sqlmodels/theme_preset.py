@@ -74,7 +74,7 @@ class ThemePresetResponse(SQLModelBase):
     id: UUID
     """预设UUID"""
 
-    name: str
+    name: Str100
     """预设名称"""
 
     is_default: bool

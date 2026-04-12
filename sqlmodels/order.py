@@ -6,7 +6,7 @@ from uuid import UUID
 from sqlalchemy import Numeric
 from sqlmodel import Field, Relationship
 
-from sqlmodel_ext import SQLModelBase, TableBaseMixin, Str255
+from sqlmodel_ext import SQLModelBase, TableBaseMixin, Str64, Str255
 
 if TYPE_CHECKING:
     from .product import Product
@@ -50,7 +50,7 @@ class CreateOrderRequest(SQLModelBase):
     num: int = Field(default=1, ge=1)
     """购买数量"""
 
-    method: str
+    method: str = Field(min_length=1, max_length=64)
     """支付方式"""
 
 
@@ -60,13 +60,13 @@ class OrderResponse(SQLModelBase):
     id: int
     """订单ID"""
 
-    order_no: str
+    order_no: Str255
     """订单号"""
 
     type: OrderType
     """订单类型"""
 
-    method: str | None = None
+    method: Str64 | None = None
     """支付方式"""
 
     product_id: UUID | None = None
@@ -75,7 +75,7 @@ class OrderResponse(SQLModelBase):
     num: int
     """购买数量"""
 
-    name: str
+    name: Str255
     """商品名称"""
 
     price: float

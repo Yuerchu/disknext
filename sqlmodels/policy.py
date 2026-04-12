@@ -4,7 +4,7 @@ from uuid import UUID
 from enum import StrEnum
 from sqlmodel import Field, Relationship, text
 
-from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str64, Str255
+from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str64, Str255, Str2048
 
 if TYPE_CHECKING:
     from .object import Object
@@ -55,10 +55,10 @@ class PolicyBase(SQLModelBase):
     base_url: Str255 | None = None
     """访问文件的基础URL"""
 
-    access_key: str | None = None
+    access_key: Str255 | None = None
     """Access Key"""
 
-    secret_key: str | None = None
+    secret_key: Str255 | None = None
     """Secret Key"""
 
     max_size: int = Field(default=0, ge=0)
@@ -86,13 +86,13 @@ class PolicySummary(SQLModelBase):
     id: UUID
     """策略UUID"""
 
-    name: str
+    name: Str255
     """策略名称"""
 
     type: PolicyType
     """策略类型"""
 
-    server: str | None
+    server: Str255 | None
     """服务器地址"""
 
     max_size: int
@@ -106,10 +106,10 @@ class PolicyCreateRequest(PolicyBase):
     """创建存储策略请求 DTO，包含 PolicyOptions 扁平字段"""
 
     # PolicyOptions 字段（平铺到请求体中，与 GroupCreateRequest 模式一致）
-    token: str | None = None
+    token: Str255 | None = None
     """访问令牌"""
 
-    file_type: str | None = None
+    file_type: Str2048 | None = None
     """允许的文件类型"""
 
     mimetype: str | None = Field(default=None, max_length=127)
@@ -146,10 +146,10 @@ class PolicyUpdateRequest(SQLModelBase):
     base_url: Str255 | None = None
     """访问文件的基础URL"""
 
-    access_key: str | None = None
+    access_key: Str255 | None = None
     """Access Key"""
 
-    secret_key: str | None = None
+    secret_key: Str255 | None = None
     """Secret Key"""
 
     max_size: int | None = Field(default=None, ge=0)
@@ -168,10 +168,10 @@ class PolicyUpdateRequest(SQLModelBase):
     """是否开启源链接访问"""
 
     # PolicyOptions 字段
-    token: str | None = None
+    token: Str255 | None = None
     """访问令牌"""
 
-    file_type: str | None = None
+    file_type: Str2048 | None = None
     """允许的文件类型"""
 
     mimetype: str | None = Field(default=None, max_length=127)

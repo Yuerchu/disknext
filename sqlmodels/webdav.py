@@ -4,6 +4,7 @@ WebDAV 账户模型
 管理用户的 WebDAV 连接账户，每个账户对应一个挂载根路径。
 通过 HTTP Basic Auth 认证访问 DAV 协议端点。
 """
+from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
 
@@ -23,7 +24,7 @@ class WebDAVBase(SQLModelBase):
     name: Str255
     """账户名称（同一用户下唯一）"""
 
-    root: str = "/"
+    root: Str255 = "/"
     """挂载根目录路径"""
 
     readonly: bool = False
@@ -66,7 +67,7 @@ class WebDAVCreateRequest(SQLModelBase):
     password: Str255 = Field(min_length=1)
     """账户密码（明文，服务端哈希后存储）"""
 
-    root: str = "/"
+    root: Str255 = "/"
     """挂载根目录路径"""
 
     readonly: bool = False
@@ -82,7 +83,7 @@ class WebDAVUpdateRequest(SQLModelBase):
     password: Str255 | None = Field(default=None, min_length=1)
     """新密码（为 None 时不修改）"""
 
-    root: str | None = None
+    root: Str255 | None = None
     """新挂载根目录路径（为 None 时不修改）"""
 
     readonly: bool | None = None
@@ -98,10 +99,10 @@ class WebDAVAccountResponse(SQLModelBase):
     id: int
     """账户ID"""
 
-    name: str
+    name: Str255
     """账户名称"""
 
-    root: str
+    root: Str255
     """挂载根目录路径"""
 
     readonly: bool
@@ -110,8 +111,8 @@ class WebDAVAccountResponse(SQLModelBase):
     use_proxy: bool
     """是否使用代理下载"""
 
-    created_at: str
+    created_at: datetime
     """创建时间"""
 
-    updated_at: str
+    updated_at: datetime
     """更新时间"""

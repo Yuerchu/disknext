@@ -5,7 +5,7 @@ from uuid import UUID
 from sqlalchemy import Column, Text
 from sqlmodel import Field, Relationship
 
-from sqlmodel_ext import SQLModelBase, TableBaseMixin, Str32, Str100, Str255
+from sqlmodel_ext import SQLModelBase, TableBaseMixin, Str32, Str100, Str255, Text5K
 
 if TYPE_CHECKING:
     from .user import User
@@ -16,10 +16,10 @@ if TYPE_CHECKING:
 class AuthnFinishRequest(SQLModelBase):
     """WebAuthn 注册完成请求 DTO"""
 
-    credential: str
+    credential: str = Field(min_length=1, max_length=5000)
     """前端 navigator.credentials.create() 返回的 JSON 字符串"""
 
-    name: str | None = None
+    name: Str100 | None = None
     """用户自定义的凭证名称"""
 
 
@@ -29,19 +29,19 @@ class AuthnDetailResponse(SQLModelBase):
     id: int
     """凭证数据库 ID"""
 
-    credential_id: str
-    """凭证 ID（Base64URL 编码）"""
+    credential_id: Str255
+    """凭�� ID（Base64URL 编码）"""
 
-    name: str | None = None
+    name: Str100 | None = None
     """用户自定义的凭证名称"""
 
-    credential_device_type: str
+    credential_device_type: Str32
     """凭证设备类型"""
 
     credential_backed_up: bool
     """凭证是否已备份"""
 
-    transports: str | None = None
+    transports: Str255 | None = None
     """支持的传输方式"""
 
     created_at: datetime

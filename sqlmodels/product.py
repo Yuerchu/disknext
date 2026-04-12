@@ -50,13 +50,13 @@ class PaymentMethod(StrEnum):
 class ProductBase(SQLModelBase):
     """商品基础字段"""
 
-    name: str
+    name: Str255
     """商品名称"""
 
     type: ProductType
     """商品类型"""
 
-    description: str | None = None
+    description: str | None = Field(default=None, max_length=1000)
     """商品描述"""
 
 

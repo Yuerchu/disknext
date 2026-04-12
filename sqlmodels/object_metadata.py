@@ -25,7 +25,7 @@ from uuid import UUID
 
 from sqlmodel import Field, UniqueConstraint, Index, Relationship
 
-from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str255
+from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str255, Text2K
 
 if TYPE_CHECKING:
     from .object import Object
@@ -116,12 +116,12 @@ class MetadataPatchItem(SQLModelBase):
     key: Str255
     """元数据键名"""
 
-    value: str | None = None
+    value: Text2K | None = None
     """值，None 表示删除此条目"""
 
 
 class MetadataPatchRequest(SQLModelBase):
     """元数据批量更新请求 DTO"""
 
-    patches: list[MetadataPatchItem]
+    patches: list[MetadataPatchItem] = Field(min_length=1, max_length=100)
     """补丁列表"""

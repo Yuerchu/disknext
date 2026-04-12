@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 class GroupBase(SQLModelBase):
     """用户组基础字段，供数据库模型和 DTO 共享"""
 
-    name: str
+    name: Str255
     """用户组名称"""
 
 
@@ -85,7 +85,7 @@ class GroupCreateRequest(GroupAllOptionsBase):
     source_batch: int = Field(default=0, ge=0)
     """批量获取源地址数量（覆盖基类以添加 ge 约束）"""
 
-    policy_ids: list[UUID] = []
+    policy_ids: list[UUID] = Field(default=[], max_length=50)
     """关联的存储策略UUID列表"""
 
 
@@ -120,7 +120,7 @@ class GroupUpdateRequest(SQLModelBase):
     aria2: bool | None = None
     redirected_source: bool | None = None
 
-    policy_ids: list[UUID] | None = None
+    policy_ids: list[UUID] | None = Field(default=None, max_length=50)
     """关联的存储策略UUID列表"""
 
 
