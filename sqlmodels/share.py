@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 from datetime import datetime
 from uuid import UUID
 
-from sqlmodel import Field, Relationship, text, UniqueConstraint, Index
+from sqlmodel import Field, Relationship, UniqueConstraint, Index
 
 from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str64, Str128, Str255
 
@@ -65,19 +65,19 @@ class Share(SQLModelBase, UUIDTableBaseMixin):
     )
     """关联的对象UUID"""
 
-    views: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
+    views: int = 0
     """浏览次数"""
 
-    downloads: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
+    downloads: int = 0
     """下载次数"""
 
-    remain_downloads: int | None = Field(default=None)
+    remain_downloads: int | None = None
     """剩余下载次数 (NULL为不限制)"""
 
-    expires: datetime | None = Field(default=None)
+    expires: datetime | None = None
     """过期时间 (NULL为永不过期)"""
 
-    preview_enabled: bool = Field(default=True, sa_column_kwargs={"server_default": text("true")})
+    preview_enabled: bool = True
     """是否允许预览"""
 
     source_name: Str255 | None = None
@@ -101,10 +101,7 @@ class Share(SQLModelBase, UUIDTableBaseMixin):
     object: "Object" = Relationship(back_populates="shares")
     """关联的对象"""
 
-    reports: list["Report"] = Relationship(
-        back_populates="share",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
-    )
+    reports: list["Report"] = Relationship(back_populates="share", cascade_delete=True)
     """举报列表"""
 
     @property

@@ -105,7 +105,7 @@ class Order(SQLModelBase, TableBaseMixin):
     product_id: UUID | None = Field(default=None, foreign_key="product.id", ondelete="SET NULL")
     """关联商品UUID"""
 
-    num: int = Field(default=1, sa_column_kwargs={"server_default": "1"})
+    num: int = 1
     """购买数量"""
 
     name: Str255

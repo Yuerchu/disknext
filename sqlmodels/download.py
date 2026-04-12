@@ -176,14 +176,12 @@ class Download(DownloadBase, UUIDTableBaseMixin):
     # 关系
     aria2_info: DownloadAria2Info | None = Relationship(
         back_populates="download",
-        sa_relationship_kwargs={"uselist": False, "cascade": "all, delete-orphan"},
+        sa_relationship_kwargs={"uselist": False},
+        cascade_delete=True,
     )
     """Aria2下载信息"""
 
-    aria2_files: list[DownloadAria2File] = Relationship(
-        back_populates="download",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
-    )
+    aria2_files: list[DownloadAria2File] = Relationship(back_populates="download", cascade_delete=True)
     """Aria2文件列表"""
 
     user: "User" = Relationship(back_populates="downloads")

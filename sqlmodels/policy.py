@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 from enum import StrEnum
-from sqlmodel import Field, Relationship, text
+from sqlmodel import Field, Relationship
 
 from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str64, Str255, Str2048
 
@@ -208,13 +208,13 @@ class PolicyOptionsBase(SQLModelBase):
     od_redirect: Str255 | None = None
     """OneDrive重定向地址"""
 
-    chunk_size: int = Field(default=52428800, sa_column_kwargs={"server_default": "52428800"})
+    chunk_size: int = 52428800
     """分片上传大小（字节），默认50MB"""
 
-    s3_path_style: bool = Field(default=False, sa_column_kwargs={"server_default": text("false")})
+    s3_path_style: bool = False
     """是否使用S3路径风格"""
 
-    s3_region: Str64 = Field(default='us-east-1', sa_column_kwargs={"server_default": "'us-east-1'"})
+    s3_region: Str64 = 'us-east-1'
     """S3 区域（如 us-east-1、ap-southeast-1），仅 S3 策略使用"""
 
 
@@ -240,22 +240,23 @@ class Policy(PolicyBase, UUIDTableBaseMixin):
     name: Str255 = Field(unique=True)
     """策略名称"""
 
-    is_private: bool = Field(default=True, sa_column_kwargs={"server_default": text("true")})
+    is_private: bool = True
     """是否为私有空间"""
 
-    max_size: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
+    max_size: int = 0
     """允许上传的最大文件尺寸（字节）"""
 
-    auto_rename: bool = Field(default=False, sa_column_kwargs={"server_default": text("false")})
+    auto_rename: bool = False
     """是否自动重命名"""
 
-    is_origin_link_enable: bool = Field(default=False, sa_column_kwargs={"server_default": text("false")})
+    is_origin_link_enable: bool = False
     """是否开启源链接访问"""
 
     # 一对一关系：策略选项
     options: PolicyOptions | None = Relationship(
         back_populates="policy",
-        sa_relationship_kwargs={"uselist": False, "cascade": "all, delete-orphan"},
+        sa_relationship_kwargs={"uselist": False},
+        cascade_delete=True,
     )
     """策略的扩展选项"""
 

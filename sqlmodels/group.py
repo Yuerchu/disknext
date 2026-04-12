@@ -2,10 +2,9 @@
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from sqlalchemy import BigInteger
-from sqlmodel import Field, Relationship, text
+from sqlmodel import Field, Relationship
 
-from sqlmodel_ext import SQLModelBase, TableBaseMixin, UUIDTableBaseMixin, Str255
+from sqlmodel_ext import SQLModelBase, TableBaseMixin, UUIDTableBaseMixin, Str255, NonNegativeBigInt
 
 if TYPE_CHECKING:
     from .user import User
@@ -261,25 +260,26 @@ class Group(GroupBase, UUIDTableBaseMixin):
     name: Str255 = Field(unique=True)
     """用户组名"""
 
-    max_storage: int = Field(default=0, sa_type=BigInteger, sa_column_kwargs={"server_default": "0"})
+    max_storage: NonNegativeBigInt = 0
     """最大存储空间（字节）"""
 
-    share_enabled: bool = Field(default=False, sa_column_kwargs={"server_default": text("false")})
+    share_enabled: bool = False
     """是否允许创建分享"""
 
-    web_dav_enabled: bool = Field(default=False, sa_column_kwargs={"server_default": text("false")})
+    web_dav_enabled: bool = False
     """是否允许使用WebDAV"""
 
     admin: bool = False
     """是否为管理员组"""
 
-    speed_limit: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
+    speed_limit: int = 0
     """速度限制 (KB/s), 0为不限制"""
 
     # 一对一关系：用户组选项
     options: GroupOptions | None = Relationship(
         back_populates="group",
-        sa_relationship_kwargs={"uselist": False, "cascade": "all, delete-orphan"}
+        sa_relationship_kwargs={"uselist": False},
+        cascade_delete=True,
     )
 
     # 多对多关系：用户组可以关联多个存储策略

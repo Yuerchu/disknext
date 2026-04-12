@@ -5,11 +5,10 @@ from uuid import UUID
 
 from enum import StrEnum
 from loguru import logger as l
-from sqlalchemy import BigInteger
 from sqlmodel import Field, Relationship, CheckConstraint, Index, text
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str24, Str64, Str128, Str255, Str256
+from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, NonNegativeBigInt, PositiveBigInt, Str24, Str64, Str128, Str255, Str256
 
 from .policy import PolicyType
 
@@ -138,7 +137,7 @@ class PolicyResponse(SQLModelBase):
     type: PolicyType
     """存储类型"""
 
-    max_size: int = Field(ge=0, default=0, sa_type=BigInteger)
+    max_size: NonNegativeBigInt = 0
     """单文件最大限制，单位字节，0表示不限制"""
 
     file_type: list[str] | None = None
@@ -211,7 +210,7 @@ class Object(ObjectBase, UUIDTableBaseMixin):
 
     # ==================== 文件专属字段 ====================
 
-    size: int = Field(default=0, sa_type=BigInteger, sa_column_kwargs={"server_default": "0"})
+    size: NonNegativeBigInt = 0
     """文件大小（字节），目录为 0"""
 
     upload_session_id: Str255 | None = Field(default=None, unique=True, index=True)
@@ -251,7 +250,7 @@ class Object(ObjectBase, UUIDTableBaseMixin):
 
     # ==================== 封禁相关字段 ====================
 
-    is_banned: bool = Field(default=False, sa_column_kwargs={"server_default": text("false")})
+    is_banned: bool = False
     """是否被封禁"""
 
     banned_at: datetime | None = None
@@ -262,7 +261,6 @@ class Object(ObjectBase, UUIDTableBaseMixin):
         foreign_key="user.id",
         index=True,
         ondelete="SET NULL",
-        sa_column_kwargs={"name": "banned_by"}
     )
     """封禁操作者UUID"""
 
@@ -309,30 +307,19 @@ class Object(ObjectBase, UUIDTableBaseMixin):
 
     children: list["Object"] = Relationship(
         back_populates="parent",
-        sa_relationship_kwargs={
-            "cascade": "all, delete-orphan",
-            "foreign_keys": "[Object.parent_id]",
-        },
+        cascade_delete=True,
+        sa_relationship_kwargs={"foreign_keys": "[Object.parent_id]"},
     )
     """子对象（文件和子目录）"""
 
     # 仅文件有效的关系
-    metadata_entries: list["ObjectMetadata"] = Relationship(
-        back_populates="object",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
-    )
+    metadata_entries: list["ObjectMetadata"] = Relationship(back_populates="object", cascade_delete=True)
     """元数据键值对列表"""
 
-    source_links: list["SourceLink"] = Relationship(
-        back_populates="object",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
-    )
+    source_links: list["SourceLink"] = Relationship(back_populates="object", cascade_delete=True)
     """源链接列表（仅文件有效）"""
 
-    shares: list["Share"] = Relationship(
-        back_populates="object",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
-    )
+    shares: list["Share"] = Relationship(back_populates="object", cascade_delete=True)
     """分享列表"""
 
     physical_file: "PhysicalFile" = Relationship(back_populates="objects")
@@ -1112,10 +1099,10 @@ class UploadSessionBase(SQLModelBase):
     file_name: Str255
     """原始文件名"""
 
-    file_size: int = Field(ge=0, sa_type=BigInteger)
+    file_size: NonNegativeBigInt
     """文件总大小（字节）"""
 
-    chunk_size: int = Field(ge=1, sa_type=BigInteger)
+    chunk_size: PositiveBigInt
     """分片大小（字节）"""
 
     total_chunks: int = Field(ge=1)
@@ -1134,7 +1121,7 @@ class UploadSession(UploadSessionBase, UUIDTableBaseMixin):
     uploaded_chunks: int = 0
     """已上传分片数"""
 
-    uploaded_size: int = Field(default=0, sa_type=BigInteger)
+    uploaded_size: NonNegativeBigInt = 0
     """已上传大小（字节）"""
 
     storage_path: str | None = Field(default=None, max_length=512)

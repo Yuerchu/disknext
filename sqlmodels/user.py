@@ -479,60 +479,38 @@ class User(UserBase, UUIDTableBaseMixin):
         }
     )
 
-    auth_identities: list["AuthIdentity"] = Relationship(
-        back_populates="user",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
-    )
+    auth_identities: list["AuthIdentity"] = Relationship(back_populates="user", cascade_delete=True)
     """用户的认证身份列表"""
 
-    downloads: list["Download"] = Relationship(
-        back_populates="user",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
-    )
+    downloads: list["Download"] = Relationship(back_populates="user", cascade_delete=True)
+
     objects: list["Object"] = Relationship(
         back_populates="owner",
-        sa_relationship_kwargs={
-            "cascade": "all, delete-orphan",
-            "foreign_keys": "[Object.owner_id]"
-        }
+        cascade_delete=True,
+        sa_relationship_kwargs={"foreign_keys": "[Object.owner_id]"},
     )
     """用户的所有对象（文件和目录）"""
-    orders: list["Order"] = Relationship(
-        back_populates="user",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
-    )
+
+    orders: list["Order"] = Relationship(back_populates="user", cascade_delete=True)
+
     redeems: list["Redeem"] = Relationship(
         back_populates="user",
-        sa_relationship_kwargs={
-            "cascade": "all, delete-orphan",
-            "foreign_keys": "[Redeem.used_by]"
-        }
+        cascade_delete=True,
+        sa_relationship_kwargs={"foreign_keys": "[Redeem.used_by]"},
     )
     """用户使用过的兑换码列表"""
-    shares: list["Share"] = Relationship(
-        back_populates="user",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
-    )
-    storage_packs: list["StoragePack"] = Relationship(
-        back_populates="user",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
-    )
-    tags: list["Tag"] = Relationship(
-        back_populates="user",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
-    )
-    tasks: list["Task"] = Relationship(
-        back_populates="user",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
-    )
-    webdavs: list["WebDAV"] = Relationship(
-        back_populates="user",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
-    )
-    authns: list["UserAuthn"] = Relationship(
-        back_populates="user",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
-    )
+
+    shares: list["Share"] = Relationship(back_populates="user", cascade_delete=True)
+
+    storage_packs: list["StoragePack"] = Relationship(back_populates="user", cascade_delete=True)
+
+    tags: list["Tag"] = Relationship(back_populates="user", cascade_delete=True)
+
+    tasks: list["Task"] = Relationship(back_populates="user", cascade_delete=True)
+
+    webdavs: list["WebDAV"] = Relationship(back_populates="user", cascade_delete=True)
+
+    authns: list["UserAuthn"] = Relationship(back_populates="user", cascade_delete=True)
 
     async def issue_tokens(self, session: AsyncSession) -> "TokenResponse":
         """

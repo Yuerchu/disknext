@@ -3,10 +3,10 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from sqlalchemy import Numeric, BigInteger
-from sqlmodel import Field, Relationship, text
+from sqlalchemy import Numeric
+from sqlmodel import Field, Relationship
 
-from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str255
+from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, NonNegativeBigInt, Str255
 
 if TYPE_CHECKING:
     from .order import Order
@@ -161,14 +161,14 @@ class Product(ProductBase, UUIDTableBaseMixin):
     price: Decimal = Field(sa_type=Numeric(12, 2), default=Decimal("0.00"))
     """商品价格（元）"""
 
-    is_active: bool = Field(default=True, sa_column_kwargs={"server_default": text("true")})
+    is_active: bool = True
     """是否上架"""
 
-    sort_order: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
+    sort_order: int = 0
     """排序权重（越大越靠前）"""
 
     # storage_pack 专用
-    size: int | None = Field(default=None, sa_type=BigInteger)
+    size: NonNegativeBigInt | None = None
     """容量大小（字节），type=storage_pack 时必填"""
 
     duration_days: int | None = None

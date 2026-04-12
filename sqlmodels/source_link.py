@@ -20,7 +20,7 @@ class SourceLink(SQLModelBase, TableBaseMixin):
     name: Str255
     """链接名称"""
 
-    downloads: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
+    downloads: int = 0
     """通过此链接的下载次数"""
 
     # 外键

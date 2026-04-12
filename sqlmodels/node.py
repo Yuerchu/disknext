@@ -1,7 +1,7 @@
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from sqlmodel import Field, Relationship, text, Index
+from sqlmodel import Field, Relationship, Index
 
 from sqlmodel_ext import SQLModelBase, TableBaseMixin, Str255
 
@@ -94,7 +94,8 @@ class Node(SQLModelBase, TableBaseMixin):
     # 关系
     aria2_config: Aria2Configuration | None = Relationship(
         back_populates="node",
-        sa_relationship_kwargs={"uselist": False, "cascade": "all, delete-orphan"},
+        sa_relationship_kwargs={"uselist": False},
+        cascade_delete=True,
     )
     """Aria2配置"""
 

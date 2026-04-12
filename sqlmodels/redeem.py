@@ -3,7 +3,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from sqlmodel import Field, Relationship, text
+from sqlmodel import Field, Relationship
 
 from sqlmodel_ext import SQLModelBase, TableBaseMixin, Str64
 
@@ -99,13 +99,13 @@ class Redeem(SQLModelBase, TableBaseMixin):
     product_id: UUID | None = Field(default=None, foreign_key="product.id", ondelete="SET NULL")
     """关联商品UUID"""
 
-    num: int = Field(default=1, sa_column_kwargs={"server_default": "1"})
+    num: int = 1
     """可兑换数量/时长等"""
 
     code: str = Field(unique=True, index=True)
     """兑换码，唯一"""
 
-    is_used: bool = Field(default=False, sa_column_kwargs={"server_default": text("false")})
+    is_used: bool = False
     """是否已使用"""
 
     used_at: datetime | None = None

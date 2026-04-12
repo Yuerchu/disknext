@@ -356,15 +356,9 @@ class FileApp(SQLModelBase, UUIDTableBaseMixin):
     """WOPI 编辑器 URL 模板，支持 {wopi_src} {access_token} {access_token_ttl}"""
 
     # 关系
-    extensions: list["FileAppExtension"] = Relationship(
-        back_populates="app",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
-    )
+    extensions: list["FileAppExtension"] = Relationship(back_populates="app", cascade_delete=True)
 
-    user_defaults: list["UserFileAppDefault"] = Relationship(
-        back_populates="app",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
-    )
+    user_defaults: list["UserFileAppDefault"] = Relationship(back_populates="app", cascade_delete=True)
 
     allowed_groups: list["Group"] = Relationship(
         link_model=FileAppGroupLink,

@@ -148,7 +148,8 @@ class Task(SQLModelBase, TableBaseMixin):
     # 关系
     props: TaskProps | None = Relationship(
         back_populates="task",
-        sa_relationship_kwargs={"uselist": False, "cascade": "all, delete-orphan"},
+        sa_relationship_kwargs={"uselist": False},
+        cascade_delete=True,
     )
     """任务属性"""
 

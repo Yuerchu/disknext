@@ -19,9 +19,11 @@ class ReportReason(StrEnum):
 class Report(SQLModelBase, TableBaseMixin):
     """举报模型"""
 
-    reason: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
+    reason: int = 0
     """举报原因 [TODO] 待定义枚举"""
-    description: Str255 | None = Field(default=None, description="补充描述")
+
+    description: Str255 | None = None
+    """补充描述"""
     
     # 外键
     share_id: UUID = Field(

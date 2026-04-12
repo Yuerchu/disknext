@@ -2,10 +2,9 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from sqlalchemy import BigInteger
 from sqlmodel import Field, Relationship
 
-from sqlmodel_ext import SQLModelBase, TableBaseMixin, Str255
+from sqlmodel_ext import SQLModelBase, TableBaseMixin, NonNegativeBigInt, Str255
 
 if TYPE_CHECKING:
     from .user import User
@@ -49,7 +48,7 @@ class StoragePack(SQLModelBase, TableBaseMixin):
     expired_time: datetime | None = Field(default=None, index=True)
     """过期时间"""
 
-    size: int = Field(sa_type=BigInteger)
+    size: NonNegativeBigInt
     """容量包大小（字节）"""
 
     product_id: UUID | None = Field(default=None, foreign_key="product.id", ondelete="SET NULL")
