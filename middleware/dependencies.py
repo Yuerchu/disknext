@@ -18,8 +18,8 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from sqlmodels.database_connection import DatabaseManager
 from sqlmodels.server_config import ServerConfig
-from sqlmodel_ext import TimeFilterRequest, TableViewRequest
 from sqlmodels.user import UserFilterParams, UserStatus
+from sqlmodel_ext import TimeFilterRequest, TableViewRequest
 
 
 # --- 数据库会话依赖 ---
@@ -92,22 +92,22 @@ TableViewRequestDep: TypeAlias = Annotated[TableViewRequest, Depends(_get_table_
 # --- 用户筛选依赖 ---
 
 async def _get_user_filter_params(
-    group_id: Annotated[UUID | None, Query(description="按用户组UUID筛选")] = None,
-    email: Annotated[str | None, Query(max_length=50, description="按邮箱模糊搜索")] = None,
-    nickname: Annotated[str | None, Query(max_length=50, description="按昵称模糊搜索")] = None,
-    status: Annotated[UserStatus | None, Query(description="按用户状态筛选")] = None,
+    group_id: Annotated[UUID | None, Query()] = None,
+    email_contains: Annotated[str | None, Query(max_length=255)] = None,
+    nickname_contains: Annotated[str | None, Query(max_length=255)] = None,
+    status: Annotated[UserStatus | None, Query()] = None,
 ) -> UserFilterParams:
-    """解析用户过滤查询参数"""
+    """解析用户筛选查询参数"""
     return UserFilterParams(
         group_id=group_id,
-        email_contains=email,
-        nickname_contains=nickname,
+        email_contains=email_contains,
+        nickname_contains=nickname_contains,
         status=status,
     )
 
 
 UserFilterParamsDep: TypeAlias = Annotated[UserFilterParams, Depends(_get_user_filter_params)]
-"""获取用户筛选参数的依赖（用于管理员用户列表）"""
+"""用户筛选参数依赖（用于管理员用户列表）"""
 
 
 # --- 验证码校验依赖 ---

@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from sqlmodels.group import GroupClaims
 
 oauth2_scheme = OAuth2PasswordBearer(
-    scheme_name='获取 JWT Bearer 令牌',
+    scheme_name='JWT-Bearer',
     description='用于获取 JWT Bearer 令牌，需要以表单的形式提交',
     tokenUrl="/api/v1/user/session",
     refreshUrl="/api/v1/user/session/refresh",

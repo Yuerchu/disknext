@@ -221,7 +221,7 @@ class TestAdminGroupAccessManagement:
     ) -> None:
         """全量替换用户组权限"""
         app_id = setup_admin_app["app_id"]
-        admin_user = await User.get(initialized_db, User.email == "admin@disknext.local")
+        admin_user = await User.get(initialized_db, User.email == "admin@yxqi.cn")
         group_id = admin_user.group_id
 
         response = await async_client.put(

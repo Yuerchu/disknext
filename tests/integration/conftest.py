@@ -185,7 +185,7 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
 
     admin_user = User(
         id=uuid4(),
-        email="admin@disknext.local",
+        email="admin@yxqi.cn",
         nickname="管理员",
         status=UserStatus.ACTIVE,
         storage=0,
@@ -227,7 +227,7 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
 
     admin_user_identity = AuthIdentity(
         provider=AuthProviderType.EMAIL_PASSWORD,
-        identifier="admin@disknext.local",
+        identifier="admin@yxqi.cn",
         credential=Password.hash("adminpass123"),
         is_primary=True,
         is_verified=True,
@@ -297,7 +297,7 @@ def test_user_info() -> dict[str, str]:
 def admin_user_info() -> dict[str, str]:
     """管理员用户信息"""
     return {
-        "email": "admin@disknext.local",
+        "email": "admin@yxqi.cn",
         "password": "adminpass123",
     }
 
@@ -340,7 +340,7 @@ async def test_user_token(initialized_db: AsyncSession) -> str:
 @pytest_asyncio.fixture
 async def admin_user_token(initialized_db: AsyncSession) -> str:
     """生成管理员的JWT token"""
-    user = await User.get(initialized_db, User.email == "admin@disknext.local")
+    user = await User.get(initialized_db, User.email == "admin@yxqi.cn")
     group = await Group.get(initialized_db, Group.id == user.group_id)
     group_options = await GroupOptions.get(initialized_db, GroupOptions.group_id == group.id)
     group_claims = _build_group_claims(group, group_options)

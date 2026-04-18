@@ -198,7 +198,7 @@ async def init_default_user() -> None:
             hashed_admin_password = Password.hash(admin_password)
 
             admin_user = User(
-                email="admin@disknext.local",
+                email="admin@yxqi.cn",
                 nickname="admin",
                 group_id=admin_group.id,
             )
@@ -208,7 +208,7 @@ async def init_default_user() -> None:
             # 创建 AuthIdentity（邮箱密码身份）
             await AuthIdentity(
                 provider=AuthProviderType.EMAIL_PASSWORD,
-                identifier="admin@disknext.local",
+                identifier="admin@yxqi.cn",
                 credential=hashed_admin_password,
                 is_primary=True,
                 is_verified=True,
@@ -231,7 +231,7 @@ async def init_default_user() -> None:
             ).save(session)
 
             log.warning('请注意，账号密码仅显示一次，请妥善保管')
-            log.info(f'初始管理员邮箱: admin@disknext.local')
+            log.info(f'初始管理员邮箱: admin@yxqi.cn')
             log.info(f'初始管理员密码: {admin_password}')
 
 

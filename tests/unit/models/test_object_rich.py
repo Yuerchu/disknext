@@ -1,12 +1,11 @@
 """
 Object 充血模型方法的单元测试
 
-覆盖从 service/storage/object.py 迁入 Object 类的业务方法：
+覆盖 Object 类的业务方法：
 - soft_delete_batch
 - restore_batch + _resolve_name_conflict
-- permanently_delete_batch + _collect_file_entries_all
+- delete(cleanup_storage=True) + _collect_physical_file_refs
 - copy_recursive
-- delete_recursive
 
 使用 Faker 生成随机数据覆盖各种边界情况。
 """

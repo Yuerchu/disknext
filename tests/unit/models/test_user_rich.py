@@ -23,7 +23,7 @@ from sqlmodels.group import Group, GroupOptions
 from sqlmodels.server_config import ServerConfig
 from sqlmodels.user import (
     TokenResponse,
-    UnifiedLoginRequest,
+    UnifiedAuthRequest,
     User,
     UserStatus,
 )
@@ -174,7 +174,7 @@ class TestLoginEmailPassword:
 
         await _make_user_with_password(db_session, group, email, password)
 
-        request = UnifiedLoginRequest(
+        request = UnifiedAuthRequest(
             provider=AuthProviderType.EMAIL_PASSWORD,
             identifier=email,
             credential=password,
@@ -187,7 +187,7 @@ class TestLoginEmailPassword:
     async def test_missing_credential_raises_400(
         self, db_session: AsyncSession, faker: Faker
     ):
-        request = UnifiedLoginRequest(
+        request = UnifiedAuthRequest(
             provider=AuthProviderType.EMAIL_PASSWORD,
             identifier=faker.email(),
             credential=None,
@@ -200,7 +200,7 @@ class TestLoginEmailPassword:
     async def test_empty_credential_raises_400(
         self, db_session: AsyncSession, faker: Faker
     ):
-        request = UnifiedLoginRequest(
+        request = UnifiedAuthRequest(
             provider=AuthProviderType.EMAIL_PASSWORD,
             identifier=faker.email(),
             credential="",
@@ -213,7 +213,7 @@ class TestLoginEmailPassword:
     async def test_unknown_email_raises_401(
         self, db_session: AsyncSession, faker: Faker
     ):
-        request = UnifiedLoginRequest(
+        request = UnifiedAuthRequest(
             provider=AuthProviderType.EMAIL_PASSWORD,
             identifier=faker.email(),  # 数据库里没有
             credential="any_password",
@@ -230,7 +230,7 @@ class TestLoginEmailPassword:
         email = faker.unique.email()
         await _make_user_with_password(db_session, group, email, "correct_password")
 
-        request = UnifiedLoginRequest(
+        request = UnifiedAuthRequest(
             provider=AuthProviderType.EMAIL_PASSWORD,
             identifier=email,
             credential="wrong_password",
@@ -251,7 +251,7 @@ class TestLoginEmailPassword:
             status=UserStatus.ADMIN_BANNED,
         )
 
-        request = UnifiedLoginRequest(
+        request = UnifiedAuthRequest(
             provider=AuthProviderType.EMAIL_PASSWORD,
             identifier=email,
             credential=password,
@@ -272,7 +272,7 @@ class TestLoginEmailPassword:
             status=UserStatus.SYSTEM_BANNED,
         )
 
-        request = UnifiedLoginRequest(
+        request = UnifiedAuthRequest(
             provider=AuthProviderType.EMAIL_PASSWORD,
             identifier=email,
             credential=password,
@@ -299,7 +299,7 @@ class TestLoginEmailPassword:
             db_session, group, email, password, extra_data=extra_data,
         )
 
-        request = UnifiedLoginRequest(
+        request = UnifiedAuthRequest(
             provider=AuthProviderType.EMAIL_PASSWORD,
             identifier=email,
             credential=password,
@@ -327,7 +327,7 @@ class TestLoginEmailPassword:
             db_session, group, email, password, extra_data=extra_data,
         )
 
-        request = UnifiedLoginRequest(
+        request = UnifiedAuthRequest(
             provider=AuthProviderType.EMAIL_PASSWORD,
             identifier=email,
             credential=password,
@@ -356,7 +356,7 @@ class TestLoginEmailPassword:
         )
 
         totp = pyotp.TOTP(totp_secret)
-        request = UnifiedLoginRequest(
+        request = UnifiedAuthRequest(
             provider=AuthProviderType.EMAIL_PASSWORD,
             identifier=email,
             credential=password,
@@ -471,7 +471,7 @@ class TestUnifiedLoginDispatch:
         await _make_user_with_password(db_session, group, email, password)
 
         config = _make_config(email_password=True)
-        request = UnifiedLoginRequest(
+        request = UnifiedAuthRequest(
             provider=AuthProviderType.EMAIL_PASSWORD,
             identifier=email,
             credential=password,
@@ -485,7 +485,7 @@ class TestUnifiedLoginDispatch:
         self, db_session: AsyncSession, faker: Faker
     ):
         config = _make_config(email_password=False)
-        request = UnifiedLoginRequest(
+        request = UnifiedAuthRequest(
             provider=AuthProviderType.EMAIL_PASSWORD,
             identifier=faker.email(),
             credential="any",
@@ -499,7 +499,7 @@ class TestUnifiedLoginDispatch:
         self, db_session: AsyncSession, faker: Faker
     ):
         config = _make_config(phone_sms=True)
-        request = UnifiedLoginRequest(
+        request = UnifiedAuthRequest(
             provider=AuthProviderType.PHONE_SMS,
             identifier=faker.phone_number(),
             credential="123456",
@@ -520,7 +520,7 @@ class TestLoginFuzz:
     ):
         """10 个随机邮箱 + 随机密码，不存在于数据库 → 全部 401"""
         for _ in range(10):
-            request = UnifiedLoginRequest(
+            request = UnifiedAuthRequest(
                 provider=AuthProviderType.EMAIL_PASSWORD,
                 identifier=faker.unique.email(),
                 credential=faker.password(length=20),
@@ -541,7 +541,7 @@ class TestLoginFuzz:
             password = faker.password(length=length)
             await _make_user_with_password(db_session, group, email, password)
 
-            request = UnifiedLoginRequest(
+            request = UnifiedAuthRequest(
                 provider=AuthProviderType.EMAIL_PASSWORD,
                 identifier=email,
                 credential=password,
@@ -568,7 +568,7 @@ class TestLoginFuzz:
             email = faker.unique.email()
             await _make_user_with_password(db_session, group, email, password)
 
-            request = UnifiedLoginRequest(
+            request = UnifiedAuthRequest(
                 provider=AuthProviderType.EMAIL_PASSWORD,
                 identifier=email,
                 credential=password,

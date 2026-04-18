@@ -202,8 +202,7 @@ async def create_upload_session(
         raise HTTPException(status_code=409, detail="同名文件已存在")
 
     # 计算分片信息
-    options = await policy.awaitable_attrs.options
-    chunk_size = options.chunk_size if options else 52428800  # 默认 50MB
+    chunk_size = policy.chunk_size
     total_chunks = max(1, (request.file_size + chunk_size - 1) // chunk_size) if request.file_size > 0 else 1
 
     # 生成存储路径

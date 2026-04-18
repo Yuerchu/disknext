@@ -41,7 +41,8 @@ from sqlmodels import (
     INTERNAL_NAMESPACES,
     USER_WRITABLE_NAMESPACES,
 )
-from utils.storage import LocalStorageService, migrate_file_with_task, migrate_directory_files
+from utils.storage import LocalStorageService
+from utils.storage.migrate import migrate_file_with_task, migrate_directory_files
 from sqlmodels.database_connection import DatabaseManager
 from utils import http_exceptions
 

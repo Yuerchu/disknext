@@ -69,7 +69,7 @@ app = FastAPI(
     license_info=appmeta.license_info,
     lifespan=lifespan.lifespan,
     debug=appmeta.debug,
-    openapi_url="/openapi.json" if appmeta.debug else None,
+    #openapi_url="/openapi.json" if appmeta.debug else None,
 )
 # 添加跨域 CORS 中间件,仅在调试模式下启用,以允许所有来源访问 API
 if appmeta.debug:
@@ -84,7 +84,7 @@ if appmeta.debug:
 
 @app.exception_handler(Exception)
 async def handle_unexpected_exceptions(
-    request: Request, 
+    request: Request,
     exc: Exception
 ) -> NoReturn:
     """
@@ -103,33 +103,7 @@ if _has_ee:
 # 挂载 WebDAV 协议端点（优先于 SPA catch-all）
 app.mount("/dav", dav_app)
 
-# 挂载前端静态文件（仅当 statics/ 目录存在时，即 Docker 部署环境）
-if STATICS_DIR.is_dir():
-    from starlette.staticfiles import StaticFiles
-    from fastapi.responses import FileResponse
-
-    _assets_dir: Path = STATICS_DIR / "assets"
-    if _assets_dir.is_dir():
-        app.mount("/assets", StaticFiles(directory=_assets_dir), name="assets")
-
-    @app.get("/{path:path}")
-    async def spa_fallback(path: str) -> FileResponse:
-        """
-        SPA fallback 路由
-
-        优先级：API 路由 > /assets 静态挂载 > 此 catch-all 路由。
-        若请求路径对应 statics/ 下的真实文件则直接返回，否则返回 index.html。
-        """
-        file_path: Path = (STATICS_DIR / path).resolve()
-        # 防止路径穿越
-        if file_path.is_relative_to(STATICS_DIR) and path and file_path.is_file():
-            return FileResponse(file_path)
-        return FileResponse(STATICS_DIR / "index.html")
-
-    l.info(f"前端静态文件已挂载: {STATICS_DIR}")
-
 # 防止直接运行 main.py
 if __name__ == "__main__":
     l.error("请用 fastapi ['dev', 'run'] 命令启动服务")
     exit(1)
-    

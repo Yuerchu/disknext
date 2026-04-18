@@ -1,4 +1,3 @@
-from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -8,7 +7,7 @@ from sqlmodel import Field
 from middleware.auth import admin_required
 from middleware.dependencies import SessionDep, TableViewRequestDep
 from sqlmodels import (
-    Policy, PolicyCreateRequest, PolicyOptions, PolicyType, PolicySummary,
+    Policy, PolicyCreateRequest, PolicyType, PolicySummary,
     PolicyUpdateRequest, ResponseBase, ListResponse, Object,
 )
 from sqlmodel_ext import SQLModelBase
@@ -88,8 +87,26 @@ class PolicyDetailResponse(SQLModelBase):
     is_origin_link_enable: bool
     """是否启用外链"""
 
-    options: dict[str, Any] | None
-    """策略选项"""
+    token: str | None
+    """访问令牌"""
+
+    file_type: str | None
+    """允许的文件类型"""
+
+    mimetype: str | None
+    """MIME类型"""
+
+    od_redirect: str | None
+    """OneDrive重定向地址"""
+
+    chunk_size: int
+    """分片上传大小（字节）"""
+
+    s3_path_style: bool
+    """是否使用S3路径风格"""
+
+    s3_region: str
+    """S3 区域"""
 
     groups: list[PolicyGroupInfo]
     """关联的用户组"""
@@ -143,14 +160,6 @@ class PolicyTestS3Response(SQLModelBase):
 
     message: str
     """测试结果消息"""
-
-
-# ==================== Options 字段集合（用于分离 Policy 与 Options 字段） ====================
-
-_OPTIONS_FIELDS: set[str] = {
-    'token', 'file_type', 'mimetype', 'od_redirect',
-    'chunk_size', 's3_path_style', 's3_region',
-}
 
 
 @admin_policy_router.get(
@@ -292,22 +301,8 @@ async def router_policy_add_policy(
     if existing:
         raise HTTPException(status_code=409, detail="策略名称已存在")
 
-    # 创建策略对象
-    policy = Policy(
-        name=request.name,
-        type=request.type,
-        server=request.server,
-        bucket_name=request.bucket_name,
-        is_private=request.is_private,
-        base_url=request.base_url,
-        access_key=request.access_key,
-        secret_key=request.secret_key,
-        max_size=request.max_size,
-        auto_rename=request.auto_rename,
-        dir_name_rule=request.dir_name_rule,
-        file_name_rule=request.file_name_rule,
-        is_origin_link_enable=request.is_origin_link_enable,
-    )
+    # 创建策略对象（所有字段已合并到 Policy 表）
+    policy = Policy.model_validate(request, from_attributes=True)
 
     # 对于本地存储策略，创建物理目录
     if policy.type == PolicyType.LOCAL:
@@ -318,21 +313,7 @@ async def router_policy_add_policy(
         except DirectoryCreationError as e:
             raise HTTPException(status_code=500, detail=f"创建存储目录失败: {e}")
 
-    # 保存到数据库
     policy = await policy.save(session)
-
-    # 创建策略选项
-    options = PolicyOptions(
-        policy_id=policy.id,
-        token=request.token,
-        file_type=request.file_type,
-        mimetype=request.mimetype,
-        od_redirect=request.od_redirect,
-        chunk_size=request.chunk_size,
-        s3_path_style=request.s3_path_style,
-        s3_region=request.s3_region,
-    )
-    options = await options.save(session)
 
 @admin_policy_router.post(
     path='/cors',
@@ -406,7 +387,7 @@ async def router_policy_get_policy(
     :param policy_id: 存储策略UUID
     :return: 策略详情
     """
-    policy = await Policy.get_exist_one(session, policy_id, load=Policy.options)
+    policy = await Policy.get_exist_one(session, policy_id)
 
     # 获取使用此策略的用户组
     groups = await policy.awaitable_attrs.groups
@@ -415,21 +396,9 @@ async def router_policy_get_policy(
     object_count = await Object.count(session, Object.policy_id == policy_id)
 
     return PolicyDetailResponse(
+        **policy.model_dump(),
         id=str(policy.id),
-        name=policy.name,
         type=policy.type.value,
-        server=policy.server,
-        bucket_name=policy.bucket_name,
-        is_private=policy.is_private,
-        base_url=policy.base_url,
-        access_key=policy.access_key,
-        secret_key=policy.secret_key,
-        max_size=policy.max_size,
-        auto_rename=policy.auto_rename,
-        dir_name_rule=policy.dir_name_rule,
-        file_name_rule=policy.file_name_rule,
-        is_origin_link_enable=policy.is_origin_link_enable,
-        options=policy.options.model_dump() if policy.options else None,
         groups=[PolicyGroupInfo(id=str(g.id), name=g.name) for g in groups],
         object_count=object_count,
     )
@@ -497,7 +466,7 @@ async def router_policy_update_policy(
     :param policy_id: 存储策略UUID
     :param request: 更新请求
     """
-    policy = await Policy.get_exist_one(session, policy_id, load=Policy.options)
+    policy = await Policy.get_exist_one(session, policy_id)
 
     # 检查名称唯一性（如果要更新名称）
     if request.name and request.name != policy.name:
@@ -505,26 +474,10 @@ async def router_policy_update_policy(
         if existing:
             raise HTTPException(status_code=409, detail="策略名称已存在")
 
-    # 分离 Policy 字段和 Options 字段
-    all_data = request.model_dump(exclude_unset=True)
-    policy_data = {k: v for k, v in all_data.items() if k not in _OPTIONS_FIELDS}
-    options_data = {k: v for k, v in all_data.items() if k in _OPTIONS_FIELDS}
-
-    # 更新 Policy 基础字段
-    if policy_data:
-        for key, value in policy_data.items():
-            setattr(policy, key, value)
-        policy = await policy.save(session)
-
-    # 更新或创建 PolicyOptions
-    if options_data:
-        if policy.options:
-            for key, value in options_data.items():
-                setattr(policy.options, key, value)
-            policy.options = await policy.options.save(session)
-        else:
-            options = PolicyOptions(policy_id=policy.id, **options_data)
-            options = await options.save(session)
+    # 直接更新 Policy 字段（所有字段已合并到单表）
+    update_data = request.model_dump(exclude_unset=True)
+    if update_data:
+        policy = await policy.update(session, update_data)
 
     l.info(f"管理员更新了存储策略: {policy_id}")
 

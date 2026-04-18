@@ -84,17 +84,15 @@ class S3StorageService:
     # ==================== 工厂方法 ====================
 
     @classmethod
-    async def from_policy(cls, policy: Policy) -> 'S3StorageService':
+    @classmethod
+    def from_policy(cls, policy: Policy) -> 'S3StorageService':
         """
-        根据 Policy 异步创建 S3StorageService（自动加载 options）
+        根据 Policy 创建 S3StorageService
 
-        :param policy: 存储策略
+        :param policy: 存储策略（s3_region 和 s3_path_style 已在 Policy 表中）
         :return: S3StorageService 实例
         """
-        options = await policy.awaitable_attrs.options
-        region = options.s3_region if options else 'us-east-1'
-        is_path_style = options.s3_path_style if options else False
-        return cls(policy, region=region, is_path_style=is_path_style)
+        return cls(policy, region=policy.s3_region, is_path_style=policy.s3_path_style)
 
     # ==================== HTTP Session 管理 ====================
 

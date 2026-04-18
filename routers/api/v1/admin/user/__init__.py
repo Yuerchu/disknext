@@ -8,9 +8,8 @@ from middleware.auth import admin_required
 from middleware.dependencies import SessionDep, ServerConfigDep, TableViewRequestDep, UserFilterParamsDep
 from utils.redis.user_ban_store import UserBanStore
 from sqlmodels import (
-    User, ResponseBase, UserPublic, ListResponse,
+    User, UserPublic, ListResponse,
     Group, Object, ObjectType,
-    BatchDeleteRequest,
 )
 from sqlmodels.auth_identity import AuthIdentity, AuthProviderType
 from sqlmodels.user import (
@@ -200,7 +199,6 @@ async def router_admin_update_user(
 async def router_admin_delete_users(
     session: SessionDep,
     config: ServerConfigDep,
-    request: BatchDeleteRequest,
 ) -> None:
     """
     批量删除用户及其所有数据。
@@ -212,16 +210,17 @@ async def router_admin_delete_users(
     :param request: 批量删除请求，包含待删除用户的 UUID 列表
     :return: 删除结果（已删除数 / 总请求数）
     """
-    for uid in request.ids:
-        user = await User.get(session, User.id == uid, load=User.group)
+    raise HTTPException(503)
+    # for uid in request.ids:
+    #     user = await User.get(session, User.id == uid, load=User.group)
 
-        # 安全检查：默认管理员不允许被删除
-        if user and config.default_admin_id == uid:
-            raise HTTPException(status_code=403, detail=f"默认管理员不允许被删除")
-        
-        if user:
-            await User.delete(session, user)
-            l.info(f"管理员删除了用户: {user.email}")
+    #     # 安全检查：默认管理员不允许被删除
+    #     if user and config.default_admin_id == uid:
+    #         raise HTTPException(status_code=403, detail=f"默认管理员不允许被删除")
+
+    #     if user:
+    #         await User.delete(session, user)
+    #         l.info(f"管理员删除了用户: {user.email}")
 
 
 @admin_user_router.post(

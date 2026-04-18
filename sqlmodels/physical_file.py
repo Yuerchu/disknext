@@ -12,13 +12,17 @@
 from typing import TYPE_CHECKING
 from uuid import UUID
 
+from loguru import logger as l
 from sqlmodel import Field, Relationship, Index
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, NonNegativeBigInt, Str32, Str64
 
+from .policy import Policy
+from utils.storage.factory import create_storage_service
+
 if TYPE_CHECKING:
     from .object import Object
-    from .policy import Policy
 
 
 class PhysicalFileBase(SQLModelBase):
@@ -90,3 +94,33 @@ class PhysicalFile(PhysicalFileBase, UUIDTableBaseMixin):
     def can_be_deleted(self) -> bool:
         """是否可以物理删除（引用计数为0）"""
         return self.reference_count == 0
+
+    async def cleanup_if_unreferenced(self, session: AsyncSession, *, commit: bool = False) -> bool:
+        """
+        减少引用计数，归零时删除物理文件和 DB 记录。
+
+        物理删除失败仅记录警告（孤立文件可后续清理），不阻塞 DB 删除。
+
+        :param session: 数据库会话
+        :param commit: 是否提交事务
+        :return: 是否已物理删除
+        """
+        self.decrement_reference()
+        if not self.can_be_deleted:
+            await self.save(session, commit=commit)
+            l.debug(f"物理文件仍有 {self.reference_count} 个引用: {self.storage_path}")
+            return False
+
+        # 物理删除
+        policy = await Policy.get(session, Policy.id == self.policy_id)
+        if policy:
+            try:
+                storage = create_storage_service(policy)
+                await storage.delete_file(self.storage_path)
+                l.debug(f"物理文件已删除: {self.storage_path}")
+            except Exception as e:
+                l.warning(f"物理删除失败（孤立文件可后续清理）: {self.storage_path}, error={e}")
+
+        await PhysicalFile.delete(session, self, commit=commit)
+        l.debug(f"物理文件记录已删除: {self.storage_path}")
+        return True

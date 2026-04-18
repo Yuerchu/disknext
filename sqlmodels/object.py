@@ -12,12 +12,13 @@ from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, NonNegativeBigInt, Po
 
 from .policy import PolicyType
 
+from .physical_file import PhysicalFile
+from .user import User
+
 if TYPE_CHECKING:
-    from .user import User
     from .policy import Policy
     from .source_link import SourceLink
     from .share import Share
-    from .physical_file import PhysicalFile
     from .uri import DiskNextURI
     from .object_metadata import ObjectMetadata
 
@@ -710,217 +711,110 @@ class Object(ObjectBase, UUIDTableBaseMixin):
         await session.commit()
         return restored_count
 
-    # ==================== 永久删除 ====================
+    # ==================== 删除（硬删除） ====================
 
-    async def _collect_file_entries_all(
+    async def _collect_physical_file_refs(
         self,
         session: AsyncSession,
         user_id: UUID,
-    ) -> tuple[list[tuple[UUID, str, UUID]], int, int]:
+        *,
+        include_deleted: bool = False,
+    ) -> tuple[list[UUID], int]:
         """
-        BFS 收集子树中所有文件的物理文件信息（包含已删除和未删除的子对象）
+        BFS 收集子树中所有 PhysicalFile ID 和总文件大小
 
         :param session: 数据库会话
         :param user_id: 用户UUID
-        :return: (文件条目列表[(obj_id, name, physical_file_id)], 总对象数, 总文件大小)
+        :param include_deleted: True 时包含已软删除的子对象（永久删除场景）
+        :return: (physical_file_id 列表, 总文件大小)
         """
-        file_entries: list[tuple[UUID, str, UUID]] = []
-        total_count = 1
+        physical_file_ids: list[UUID] = []
         total_file_size = 0
 
-        # 根对象本身是文件
         if self.is_file and self.physical_file_id:
-            file_entries.append((self.id, self.name, self.physical_file_id))
+            physical_file_ids.append(self.physical_file_id)
             total_file_size += self.size
 
-        # BFS 遍历子目录
         if self.is_folder:
+            get_children = Object.get_all_children if include_deleted else Object.get_children
             queue: list[UUID] = [self.id]
             while queue:
                 parent_id = queue.pop(0)
-                children = await Object.get_all_children(session, user_id, parent_id)
+                children = await get_children(session, user_id, parent_id)
                 for child in children:
-                    total_count += 1
                     if child.is_file and child.physical_file_id:
-                        file_entries.append((child.id, child.name, child.physical_file_id))
+                        physical_file_ids.append(child.physical_file_id)
                         total_file_size += child.size
                     elif child.is_folder:
                         queue.append(child.id)
 
-        return file_entries, total_count, total_file_size
+        return physical_file_ids, total_file_size
 
     @classmethod
-    async def permanently_delete_batch(
+    async def delete(
         cls,
         session: AsyncSession,
-        objects: list["Object"],
-        user_id: UUID,
+        instances: 'Object | list[Object] | None' = None,
+        *,
+        condition: 'ColumnElement[bool] | bool | None' = None,
+        commit: bool = True,
+        cleanup_storage: bool = False,
+        release_quota: bool = True,
     ) -> int:
         """
-        永久删除回收站中的对象
+        删除对象，可选物理文件清理和配额释放
 
-        验证对象在回收站中（deleted_at IS NOT NULL），
-        BFS 收集所有子文件的 PhysicalFile 信息，
-        处理引用计数，引用为 0 时物理删除文件，
-        最后硬删除根 Object（CASCADE 自动清理子对象）。
+        ``cleanup_storage=True`` 时启用完整清理：
 
-        :param session: 数据库会话
-        :param objects: 待永久删除的对象列表
-        :param user_id: 用户UUID
-        :return: 永久删除的对象数量
-        """
-        from .physical_file import PhysicalFile
-        from .policy import Policy
-        from .user import User
-        from utils.storage.local_storage import LocalStorageService
-        from utils.storage.s3_storage import S3StorageService
-
-        total_deleted = 0
-
-        for obj in objects:
-            if not obj.deleted_at:
-                l.warning(f"对象 {obj.id} 不在回收站中，跳过永久删除")
-                continue
-
-            root_id = obj.id
-            file_entries, obj_count, total_file_size = await obj._collect_file_entries_all(
-                session, user_id
-            )
-
-            # 处理 PhysicalFile 引用计数
-            for obj_id, obj_name, physical_file_id in file_entries:
-                physical_file = await PhysicalFile.get(session, PhysicalFile.id == physical_file_id)
-                if not physical_file:
-                    continue
-
-                physical_file.decrement_reference()
-
-                if physical_file.can_be_deleted:
-                    # 物理删除文件
-                    policy = await Policy.get(session, Policy.id == physical_file.policy_id)
-                    if policy:
-                        try:
-                            if policy.type == PolicyType.LOCAL:
-                                storage_service = LocalStorageService(policy)
-                                await storage_service.delete_file(physical_file.storage_path)
-                            elif policy.type == PolicyType.S3:
-                                s3_service = await S3StorageService.from_policy(policy)
-                                await s3_service.delete_file(physical_file.storage_path)
-                            l.debug(f"物理文件已删除: {obj_name}")
-                        except Exception as e:
-                            l.warning(f"物理删除文件失败: {obj_name}, 错误: {e}")
-
-                    await PhysicalFile.delete(session, physical_file, commit=False)
-                    l.debug(f"物理文件记录已删除: {physical_file.storage_path}")
-                else:
-                    physical_file = await physical_file.save(session, commit=False)
-                    l.debug(f"物理文件仍有 {physical_file.reference_count} 个引用: {physical_file.storage_path}")
-
-            # 更新用户存储配额
-            if total_file_size > 0:
-                user = await User.get(session, User.id == user_id)
-                if user:
-                    await user.adjust_storage(session, -total_file_size, commit=False)
-
-            # 硬删除根对象，CASCADE 自动删除所有子对象
-            await cls.delete(session, condition=cls.id == root_id, commit=False)
-
-            total_deleted += obj_count
-
-        # 统一提交所有变更
-        await session.commit()
-        return total_deleted
-
-    # ==================== 递归删除（硬删除） ====================
-
-    async def delete_recursive(
-        self,
-        session: AsyncSession,
-        user_id: UUID,
-    ) -> int:
-        """
-        删除对象及其所有子对象（硬删除）
-
-        两阶段策略：
-        1. BFS 只读收集所有文件的 PhysicalFile 信息
-        2. 批量处理引用计数，最后删除根对象触发 CASCADE
+        1. BFS 收集子树所有 PhysicalFile 引用（删除前）
+        2. 释放用户配额（同事务）
+        3. 硬删除 DB 记录（CASCADE 处理子对象）
+        4. PhysicalFile 引用计数清理 + 物理删除
 
         :param session: 数据库会话
-        :param user_id: 用户UUID
-        :return: 删除的对象数量
+        :param instances: 要删除的对象实例或列表
+        :param condition: WHERE 条件（不支持与 cleanup_storage 同时使用）
+        :param commit: 是否提交事务
+        :param cleanup_storage: 是否清理物理文件
+        :param release_quota: 是否释放用户配额
+        :return: 删除的记录数
         """
-        from .physical_file import PhysicalFile
-        from .policy import Policy
-        from .user import User
-        from utils.storage.local_storage import LocalStorageService
-        from utils.storage.s3_storage import S3StorageService
+        if cleanup_storage and condition is not None:
+            raise ValueError("cleanup_storage 不支持与 condition 同时使用，请使用实例删除模式")
 
-        # 阶段一：只读收集
-        root_id = self.id
-        file_entries: list[tuple[UUID, str, UUID]] = []
-        total_count = 1
-        total_file_size = 0
+        # Phase 1: 收集物理文件引用和配额数据（DB 删除前）
+        physical_file_ids: list[UUID] = []
+        quota_map: dict[UUID, int] = {}
 
-        if self.is_file and self.physical_file_id:
-            file_entries.append((self.id, self.name, self.physical_file_id))
-            total_file_size += self.size
+        if cleanup_storage and instances is not None:
+            instance_list = instances if isinstance(instances, list) else [instances]
+            for obj in instance_list:
+                is_trash = obj.deleted_at is not None
+                refs, file_size = await obj._collect_physical_file_refs(
+                    session, obj.owner_id, include_deleted=is_trash,
+                )
+                physical_file_ids.extend(refs)
+                if release_quota and file_size > 0:
+                    quota_map[obj.owner_id] = quota_map.get(obj.owner_id, 0) + file_size
 
-        if self.is_folder:
-            queue: list[UUID] = [self.id]
-            while queue:
-                parent_id = queue.pop(0)
-                children = await Object.get_children(session, user_id, parent_id)
-                for child in children:
-                    total_count += 1
-                    if child.is_file and child.physical_file_id:
-                        file_entries.append((child.id, child.name, child.physical_file_id))
-                        total_file_size += child.size
-                    elif child.is_folder:
-                        queue.append(child.id)
-
-        # 阶段二：批量处理 PhysicalFile 引用
-        for obj_id, obj_name, physical_file_id in file_entries:
-            physical_file = await PhysicalFile.get(session, PhysicalFile.id == physical_file_id)
-            if not physical_file:
-                continue
-
-            physical_file.decrement_reference()
-
-            if physical_file.can_be_deleted:
-                policy = await Policy.get(session, Policy.id == physical_file.policy_id)
-                if policy:
-                    try:
-                        if policy.type == PolicyType.LOCAL:
-                            storage_service = LocalStorageService(policy)
-                            await storage_service.delete_file(physical_file.storage_path)
-                        elif policy.type == PolicyType.S3:
-                            options = await policy.awaitable_attrs.options
-                            s3_service = S3StorageService(
-                                policy,
-                                region=options.s3_region if options else 'us-east-1',
-                                is_path_style=options.s3_path_style if options else False,
-                            )
-                            await s3_service.delete_file(physical_file.storage_path)
-                        l.debug(f"物理文件已删除: {obj_name}")
-                    except Exception as e:
-                        l.warning(f"物理删除文件失败: {obj_name}, 错误: {e}")
-
-                await PhysicalFile.delete(session, physical_file, commit=False)
-                l.debug(f"物理文件记录已删除: {physical_file.storage_path}")
-            else:
-                physical_file = await physical_file.save(session, commit=False)
-                l.debug(f"物理文件仍有 {physical_file.reference_count} 个引用: {physical_file.storage_path}")
-
-        # 阶段三：更新用户存储配额
-        if total_file_size > 0:
-            user = await User.get(session, User.id == user_id)
+        # Phase 2: 释放配额（同事务）
+        for owner_id, total_size in quota_map.items():
+            user = await User.get(session, User.id == owner_id)
             if user:
-                await user.adjust_storage(session, -total_file_size, commit=False)
+                await user.adjust_storage(session, -total_size, commit=False)
 
-        # 阶段四：删除根对象，CASCADE 自动删除所有子对象
-        await Object.delete(session, condition=Object.id == root_id)
+        # Phase 3: 硬删除 DB 记录（CASCADE 自动清理子对象）
+        deleted_count: int = await super().delete(
+            session, instances, condition=condition, commit=commit,
+        )
 
-        return total_count
+        # Phase 4: PhysicalFile 引用计数清理 + 物理删除
+        for pf_id in physical_file_ids:
+            pf = await PhysicalFile.get(session, PhysicalFile.id == pf_id)
+            if pf:
+                await pf.cleanup_if_unreferenced(session)
+
+        return deleted_count
 
     # ==================== 复制 ====================
 
@@ -941,17 +835,6 @@ class Object(ObjectBase, UUIDTableBaseMixin):
         :param user_id: 用户UUID
         :return: (复制数量, 新对象UUID列表, 复制的总文件大小)
         """
-        return await self._copy_recursive_impl(session, dst_parent_id, user_id)
-
-    async def _copy_recursive_impl(
-        self,
-        session: AsyncSession,
-        dst_parent_id: UUID,
-        user_id: UUID,
-    ) -> tuple[int, list[UUID], int]:
-        """递归复制内部实现"""
-        from .physical_file import PhysicalFile
-
         copied_count = 0
         new_ids: list[UUID] = []
         total_copied_size = 0
@@ -963,7 +846,6 @@ class Object(ObjectBase, UUIDTableBaseMixin):
         src_size = self.size
         src_physical_file_id = self.physical_file_id
 
-        # 创建新的 Object 记录
         new_obj = Object(
             name=self.name,
             type=self.type,
@@ -975,7 +857,7 @@ class Object(ObjectBase, UUIDTableBaseMixin):
             physical_file_id=self.physical_file_id,
         )
 
-        # 如果是文件，增加物理文件引用计数
+        # 文件：增加物理文件引用计数
         if src_is_file and src_physical_file_id:
             physical_file = await PhysicalFile.get(session, PhysicalFile.id == src_physical_file_id)
             if physical_file:
@@ -987,12 +869,12 @@ class Object(ObjectBase, UUIDTableBaseMixin):
         copied_count += 1
         new_ids.append(new_obj.id)
 
-        # 如果是目录，递归复制子对象
+        # 目录：递归复制子对象
         if src_is_folder:
             children = await Object.get_children(session, user_id, src_id)
             for child in children:
-                child_count, child_ids, child_size = await child._copy_recursive_impl(
-                    session, new_obj.id, user_id
+                child_count, child_ids, child_size = await child.copy_recursive(
+                    session, new_obj.id, user_id,
                 )
                 copied_count += child_count
                 new_ids.extend(child_ids)
@@ -1013,15 +895,13 @@ class Object(ObjectBase, UUIDTableBaseMixin):
         :param session: 数据库会话
         :param dest_policy: 目标存储策略
         """
-        from .physical_file import PhysicalFile
-        from .policy import Policy
-        from utils.storage.local_storage import LocalStorageService
-        from utils.storage.s3_storage import S3StorageService
+        from utils.storage.factory import create_storage_service
+        from utils.storage import LocalStorageService
 
         if self.type != ObjectType.FILE:
             raise ValueError(f"只能迁移文件对象，当前类型: {self.type}")
 
-        src_policy: Policy = await self.awaitable_attrs.policy
+        src_policy = await self.awaitable_attrs.policy
         old_physical: PhysicalFile | None = await self.awaitable_attrs.physical_file
 
         if not old_physical:
@@ -1033,15 +913,8 @@ class Object(ObjectBase, UUIDTableBaseMixin):
             return
 
         # 1. 创建存储服务
-        if src_policy.type == PolicyType.LOCAL:
-            src_service: LocalStorageService | S3StorageService = LocalStorageService(src_policy)
-        else:
-            src_service = await S3StorageService.from_policy(src_policy)
-
-        if dest_policy.type == PolicyType.LOCAL:
-            dest_service: LocalStorageService | S3StorageService = LocalStorageService(dest_policy)
-        else:
-            dest_service = await S3StorageService.from_policy(dest_policy)
+        src_service = create_storage_service(src_policy)
+        dest_service = create_storage_service(dest_policy)
 
         # 2. 从源存储读取文件
         if isinstance(src_service, LocalStorageService):
@@ -1074,19 +947,8 @@ class Object(ObjectBase, UUIDTableBaseMixin):
         self.physical_file_id = new_physical.id
         await self.save(session)
 
-        # 6. 旧 PhysicalFile 引用计数 -1
-        old_physical.decrement_reference()
-        if old_physical.can_be_deleted:
-            try:
-                if isinstance(src_service, LocalStorageService):
-                    await src_service.delete_file(old_physical.storage_path)
-                else:
-                    await src_service.delete_file(old_physical.storage_path)
-            except Exception as e:
-                l.warning(f"删除源文件失败（不影响迁移结果）: {old_physical.storage_path}: {e}")
-            await PhysicalFile.delete(session, old_physical)
-        else:
-            old_physical = await old_physical.save(session)
+        # 6. 旧 PhysicalFile 清理
+        await old_physical.cleanup_if_unreferenced(session)
 
         l.info(f"文件迁移完成: {self.name} ({self.id}), {src_policy.name} → {dest_policy.name}")
 

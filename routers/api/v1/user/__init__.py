@@ -61,7 +61,7 @@ def _check_provider_enabled(config: ServerConfig, provider: AuthProviderType) ->
 
 async def _login_email_password(
         session: AsyncSession,
-        request: sqlmodels.UnifiedLoginRequest,
+        request: sqlmodels.UnifiedAuthRequest,
 ) -> User:
     """邮箱+密码登录"""
     if not request.credential:
@@ -111,7 +111,7 @@ async def _login_email_password(
 
 async def _login_oauth(
         session: AsyncSession,
-        request: sqlmodels.UnifiedLoginRequest,
+        request: sqlmodels.UnifiedAuthRequest,
         provider: AuthProviderType,
         config: ServerConfig,
 ) -> User:
@@ -254,7 +254,7 @@ async def _auto_register_oauth_user(
 
 async def _login_passkey(
         session: AsyncSession,
-        request: sqlmodels.UnifiedLoginRequest,
+        request: sqlmodels.UnifiedAuthRequest,
         config: ServerConfig,
 ) -> User:
     """
@@ -320,7 +320,7 @@ async def _login_passkey(
 
 async def _login_magic_link(
         session: AsyncSession,
-        request: sqlmodels.UnifiedLoginRequest,
+        request: sqlmodels.UnifiedAuthRequest,
 ) -> User:
     """
     Magic Link 登录
@@ -379,7 +379,7 @@ async def _login_magic_link(
 async def router_user_session(
     session: SessionDep,
     config: ServerConfigDep,
-    request: sqlmodels.UnifiedLoginRequest,
+    request: sqlmodels.UnifiedAuthRequest,
 ) -> sqlmodels.TokenResponse:
     """
     统一登录端点
@@ -423,32 +423,28 @@ async def router_user_session(
 @user_router.post(
     path='/session/refresh',
     summary="用刷新令牌刷新会话",
-    description="Refresh the user session using a refresh token."
+    description="客户端在 Authorization header 中传递 refresh_token，验证后签发新的双令牌。"
 )
 async def router_user_session_refresh(
     session: SessionDep,
-    request: sqlmodels.RefreshTokenRequest,
+    token: Annotated[str, Depends(JWT.oauth2_scheme)],
 ) -> sqlmodels.TokenResponse:
     """
-    使用 refresh_token 签发新的 access_token 和 refresh_token。
+    使用 refresh_token 签发新的 access_token 和 refresh_token
+
+    认证：Authorization: Bearer <refresh_token>
 
     流程：
-    1. 解码 refresh_token JWT
+    1. 从 Authorization header 解码 refresh_token JWT
     2. 验证 token_type 为 refresh
     3. 验证用户存在且状态正常
     4. 签发新的 access_token + refresh_token
-
-    :param session: 数据库会话
-    :param request: 刷新令牌请求
-    :return: 新的 TokenResponse
     """
-
     try:
-        payload = jwt.decode(request.refresh_token, JWT.SECRET_KEY, algorithms=["HS256"])
+        payload = jwt.decode(token, JWT.SECRET_KEY, algorithms=["HS256"])
     except jwt.InvalidTokenError:
         http_exceptions.raise_unauthorized("刷新令牌无效或已过期")
 
-    # 验证是 refresh token
     if payload.get("token_type") != "refresh":
         http_exceptions.raise_unauthorized("非刷新令牌")
 
@@ -456,40 +452,14 @@ async def router_user_session_refresh(
     if not user_id_str:
         http_exceptions.raise_unauthorized("令牌缺少用户标识")
 
-    user_id = UUID(user_id_str)
-    user = await sqlmodels.User.get(session, sqlmodels.User.id == user_id, load=sqlmodels.User.group)
+    user = await User.get(session, User.id == UUID(user_id_str), load=User.group)
     if not user:
         http_exceptions.raise_unauthorized("用户不存在")
 
     if user.status != UserStatus.ACTIVE:
         http_exceptions.raise_forbidden("账户已被禁用")
 
-    # 加载 GroupOptions（获取最新权限）
-    group_options = await sqlmodels.GroupOptions.get(
-        session,
-        sqlmodels.GroupOptions.group_id == user.group_id,
-    )
-    user.group.options = group_options
-    group_claims = sqlmodels.GroupClaims.from_group(user.group)
-
-    # 签发新令牌
-    access_token = JWT.create_access_token(
-        sub=user.id,
-        jti=uuid4(),
-        status=user.status.value,
-        group=group_claims,
-    )
-    refresh_token = JWT.create_refresh_token(
-        sub=user.id,
-        jti=uuid4(),
-    )
-
-    return sqlmodels.TokenResponse(
-        access_token=access_token.access_token,
-        access_expires=access_token.access_expires,
-        refresh_token=refresh_token.refresh_token,
-        refresh_expires=refresh_token.refresh_expires,
-    )
+    return await user.issue_tokens(session)
 
 @user_router.post(
     path='/',
@@ -500,7 +470,7 @@ async def router_user_session_refresh(
 async def router_user_register(
     session: SessionDep,
     config: ServerConfigDep,
-    request: sqlmodels.UnifiedRegisterRequest,
+    request: sqlmodels.UnifiedAuthRequest,
 ) -> None:
     """
     统一注册端点
@@ -568,7 +538,7 @@ async def router_user_register(
     # 6. 创建用户
     new_user = sqlmodels.User(
         email=request.identifier,
-        nickname=request.nickname,
+        nickname=request.identifier,
         group_id=default_group.id,
     )
     new_user_id = new_user.id

@@ -58,8 +58,8 @@ class UserBase(SQLModelBase):
 
 # ==================== DTO 模型 ====================
 
-class UnifiedLoginRequest(SQLModelBase):
-    """统一登录请求 DTO"""
+class UnifiedAuthRequest(SQLModelBase):
+    """统一授权请求 DTO"""
 
     provider: AuthProviderType
     """登录方式"""
@@ -301,6 +301,22 @@ class MagicLinkRequest(SQLModelBase):
     """验证码"""
 
 
+class UserFilterParams(SQLModelBase):
+    """用户筛选参数（管理员用户列表）"""
+
+    group_id: UUID | None = None
+    """按用户组筛选"""
+
+    email_contains: Str255 | None = None
+    """邮箱模糊搜索"""
+
+    nickname_contains: Str255 | None = None
+    """昵称模糊搜索"""
+
+    status: UserStatus | None = None
+    """按状态筛选"""
+
+
 # ==================== 管理员用户管理 DTO ====================
 
 class UserAdminCreateRequest(SQLModelBase):
@@ -406,13 +422,13 @@ class User(UserBase, UUIDTableBaseMixin):
     status: UserStatus = UserStatus.ACTIVE
     """用户状态"""
 
-    storage: NonNegativeBigInt
+    storage: NonNegativeBigInt = 0
     """已用存储空间（字节）"""
 
-    avatar: HttpUrl | None = Field(default=None, max_length=255)
-    """头像地址"""
+    avatar: AvatarType = AvatarType.DEFAULT
+    """头像类型"""
 
-    score: NonNegativeBigInt
+    score: NonNegativeBigInt = 0
     """用户积分"""
 
     group_expires: datetime | None = None

@@ -127,7 +127,7 @@ async def router_trash_delete(
             objects_to_delete.append(obj)
 
     if objects_to_delete:
-        deleted_count = await Object.permanently_delete_batch(session, objects_to_delete, user_id)
+        deleted_count = await Object.delete(session, objects_to_delete, cleanup_storage=True)
         l.info(f"用户 {user_id} 永久删除了 {deleted_count} 个对象")
 
 
@@ -152,5 +152,5 @@ async def router_trash_empty(
     trash_items = await Object.get_trash_items(session, user_id)
 
     if trash_items:
-        deleted_count = await Object.permanently_delete_batch(session, trash_items, user_id)
+        deleted_count = await Object.delete(session, trash_items, cleanup_storage=True)
         l.info(f"用户 {user_id} 清空回收站，共删除 {deleted_count} 个对象")

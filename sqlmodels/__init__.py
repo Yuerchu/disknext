@@ -8,7 +8,7 @@ from .auth_identity import (
 from .user import (
     JWTPayload,
     MagicLinkRequest,
-    UnifiedLoginRequest,
+    UnifiedAuthRequest,
     AccessTokenBase,
     RefreshTokenBase,
     TokenResponse,
@@ -119,7 +119,7 @@ from .order import (
     CreateOrderRequest, OrderResponse,
 )
 from .policy import (
-    Policy, PolicyBase, PolicyCreateRequest, PolicyOptions, PolicyOptionsBase,
+    Policy, PolicyBase, PolicyCreateRequest,
     PolicyType, PolicySummary, PolicyUpdateRequest,
 )
 from .product import (

@@ -76,6 +76,27 @@ class PolicyBase(SQLModelBase):
     is_origin_link_enable: bool = False
     """是否开启源链接访问"""
 
+    token: str | None = None
+    """访问令牌"""
+
+    file_type: str | None = None
+    """允许的文件类型"""
+
+    mimetype: str | None = Field(default=None, max_length=127)
+    """MIME类型"""
+
+    od_redirect: Str255 | None = None
+    """OneDrive重定向地址"""
+
+    chunk_size: int = 52428800
+    """分片上传大小（字节），默认50MB"""
+
+    s3_path_style: bool = False
+    """是否使用S3路径风格"""
+
+    s3_region: Str64 = 'us-east-1'
+    """S3 区域（如 us-east-1、ap-southeast-1），仅 S3 策略使用"""
+
 
 # ==================== DTO 模型 ====================
 
@@ -103,29 +124,10 @@ class PolicySummary(SQLModelBase):
 
 
 class PolicyCreateRequest(PolicyBase):
-    """创建存储策略请求 DTO，包含 PolicyOptions 扁平字段"""
-
-    # PolicyOptions 字段（平铺到请求体中，与 GroupCreateRequest 模式一致）
-    token: Str255 | None = None
-    """访问令牌"""
-
-    file_type: Str2048 | None = None
-    """允许的文件类型"""
-
-    mimetype: str | None = Field(default=None, max_length=127)
-    """MIME类型"""
-
-    od_redirect: Str255 | None = None
-    """OneDrive重定向地址"""
+    """创建存储策略请求 DTO"""
 
     chunk_size: int = Field(default=52428800, ge=1)
-    """分片上传大小（字节），默认50MB"""
-
-    s3_path_style: bool = False
-    """是否使用S3路径风格"""
-
-    s3_region: Str64 = 'us-east-1'
-    """S3 区域（如 us-east-1、ap-southeast-1），仅 S3 策略使用"""
+    """分片上传大小（字节），默认50MB（覆盖基类以添加 ge 约束）"""
 
 
 class PolicyUpdateRequest(SQLModelBase):
@@ -167,7 +169,6 @@ class PolicyUpdateRequest(SQLModelBase):
     is_origin_link_enable: bool | None = None
     """是否开启源链接访问"""
 
-    # PolicyOptions 字段
     token: Str255 | None = None
     """访问令牌"""
 
@@ -193,86 +194,17 @@ class PolicyUpdateRequest(SQLModelBase):
 # ==================== 数据库模型 ====================
 
 
-class PolicyOptionsBase(SQLModelBase):
-    """存储策略选项的基础模型"""
-
-    token: str | None = Field(default=None)
-    """访问令牌"""
-
-    file_type: str | None = Field(default=None)
-    """允许的文件类型"""
-
-    mimetype: str | None = Field(default=None, max_length=127)
-    """MIME类型"""
-
-    od_redirect: Str255 | None = None
-    """OneDrive重定向地址"""
-
-    chunk_size: int = 52428800
-    """分片上传大小（字节），默认50MB"""
-
-    s3_path_style: bool = False
-    """是否使用S3路径风格"""
-
-    s3_region: Str64 = 'us-east-1'
-    """S3 区域（如 us-east-1、ap-southeast-1），仅 S3 策略使用"""
-
-
-class PolicyOptions(PolicyOptionsBase, UUIDTableBaseMixin):
-    """存储策略选项模型（与Policy一对一关联）"""
-
-    policy_id: UUID = Field(
-        foreign_key="policy.id",
-        unique=True,
-        ondelete="CASCADE"
-    )
-    """关联的策略UUID"""
-
-    # 反向关系
-    policy: "Policy" = Relationship(back_populates="options")
-    """关联的策略"""
-
-
 class Policy(PolicyBase, UUIDTableBaseMixin):
     """存储策略模型"""
 
-    # 覆盖基类字段以添加数据库专有配置
     name: Str255 = Field(unique=True)
     """策略名称"""
-
-    is_private: bool = True
-    """是否为私有空间"""
-
-    max_size: int = 0
-    """允许上传的最大文件尺寸（字节）"""
-
-    auto_rename: bool = False
-    """是否自动重命名"""
-
-    is_origin_link_enable: bool = False
-    """是否开启源链接访问"""
-
-    # 一对一关系：策略选项
-    options: PolicyOptions | None = Relationship(
-        back_populates="policy",
-        sa_relationship_kwargs={"uselist": False},
-        cascade_delete=True,
-    )
-    """策略的扩展选项"""
 
     # 关系
     objects: list["Object"] = Relationship(back_populates="policy")
     """策略下的所有对象"""
 
-    # 多对多关系：策略可以被多个用户组使用
     groups: list["Group"] = Relationship(
         back_populates="policies",
         link_model=GroupPolicyLink,
     )
-    
-    @staticmethod
-    async def create(
-        policy: 'Policy | None' = None,
-        **kwargs
-    ):
-        pass

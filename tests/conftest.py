@@ -376,7 +376,7 @@ async def admin_user(db_session: AsyncSession) -> dict[str, str | UUID]:
 
     password = "admin_password_456"
     admin = User(
-        email="admin@disknext.local",
+        email="admin@yxqi.cn",
         nickname="管理员",
         status=UserStatus.ACTIVE,
         storage=0,
@@ -387,7 +387,7 @@ async def admin_user(db_session: AsyncSession) -> dict[str, str | UUID]:
 
     admin_identity = AuthIdentity(
         provider=AuthProviderType.EMAIL_PASSWORD,
-        identifier="admin@disknext.local",
+        identifier="admin@yxqi.cn",
         credential=Password.hash(password),
         is_primary=True,
         is_verified=True,

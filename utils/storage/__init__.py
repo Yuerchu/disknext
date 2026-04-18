@@ -6,6 +6,7 @@
 - S3 存储服务
 - 命名规则解析器
 - 存储异常定义
+- 存储服务工厂函数
 """
 from .exceptions import (
     DirectoryCreationError,
@@ -19,7 +20,7 @@ from .exceptions import (
     UploadSessionExpiredError,
     UploadSessionNotFoundError,
 )
+from .factory import create_storage_service
 from .local_storage import LocalStorageService
-from .migrate import migrate_file_with_task, migrate_directory_files
 from .naming_rule import NamingContext, NamingRuleParser
 from .s3_storage import S3StorageService
