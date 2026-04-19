@@ -11,7 +11,6 @@ from sqlmodels import (
     User, UserPublic, ListResponse,
     Group, Object, ObjectType,
 )
-from sqlmodels.auth_identity import AuthIdentity, AuthProviderType
 from sqlmodels.user import (
     UserAdminCreateRequest, UserAdminUpdateRequest, UserCalibrateResponse, UserStatus,
 )
@@ -90,19 +89,11 @@ async def router_admin_create_user(
     :param request: 创建用户请求 DTO
     :return: 创建结果
     """
-    # 如果提供了邮箱，检查唯一性（User 表和 AuthIdentity 表）
+    # 如果提供了邮箱，检查唯一性
     if request.email:
         existing_user = await User.get(session, User.email == request.email)
         if existing_user:
             raise HTTPException(status_code=409, detail="该邮箱已被注册")
-
-        existing_identity = await AuthIdentity.get(
-            session,
-            (AuthIdentity.provider == AuthProviderType.EMAIL_PASSWORD)
-            & (AuthIdentity.identifier == request.email),
-        )
-        if existing_identity:
-            raise HTTPException(status_code=409, detail="该邮箱已被绑定")
 
     # 验证用户组存在
     group = await Group.get(session, Group.id == request.group_id)
@@ -114,20 +105,9 @@ async def router_admin_create_user(
         nickname=request.nickname,
         group_id=request.group_id,
         status=request.status,
+        password_hash=Password.hash(request.password) if request.password else None,
     )
     user = await user.save(session)
-
-    # 如果提供了邮箱和密码，创建邮箱密码认证身份
-    if request.email and request.password:
-        identity = AuthIdentity(
-            provider=AuthProviderType.EMAIL_PASSWORD,
-            identifier=request.email,
-            credential=Password.hash(request.password),
-            is_primary=True,
-            is_verified=True,
-            user_id=user.id,
-        )
-        identity = await identity.save(session)
 
     user = await User.get(session, User.id == user.id, load=User.group)
     return user.to_public()

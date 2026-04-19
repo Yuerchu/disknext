@@ -1,8 +1,5 @@
 from .auth_identity import (
-    AuthIdentity,
-    AuthIdentityResponse,
     AuthProviderType,
-    BindIdentityRequest,
     ChangePasswordRequest,
 )
 from .user import (

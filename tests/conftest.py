@@ -112,7 +112,6 @@ from sqlalchemy.orm import sessionmaker
 from main import app
 from utils.redis import RedisManager
 from sqlmodels.database_connection import DatabaseManager
-from sqlmodels.auth_identity import AuthIdentity, AuthProviderType
 from sqlmodels.group import Group, GroupClaims, GroupOptions
 from sqlmodels.object import Object, ObjectType
 from sqlmodels.policy import Policy, PolicyType
@@ -298,18 +297,9 @@ async def test_user(db_session: AsyncSession) -> dict[str, str | UUID]:
         storage=0,
         score=100,
         group_id=group.id,
+        password_hash=Password.hash(password),
     )
     user = await user.save(db_session)
-
-    identity = AuthIdentity(
-        provider=AuthProviderType.EMAIL_PASSWORD,
-        identifier="testuser@test.local",
-        credential=Password.hash(password),
-        is_primary=True,
-        is_verified=True,
-        user_id=user.id,
-    )
-    await identity.save(db_session)
 
     root_folder = Object(
         name="/",
@@ -382,18 +372,9 @@ async def admin_user(db_session: AsyncSession) -> dict[str, str | UUID]:
         storage=0,
         score=9999,
         group_id=admin_group.id,
+        password_hash=Password.hash(password),
     )
     admin = await admin.save(db_session)
-
-    admin_identity = AuthIdentity(
-        provider=AuthProviderType.EMAIL_PASSWORD,
-        identifier="admin@yxqi.cn",
-        credential=Password.hash(password),
-        is_primary=True,
-        is_verified=True,
-        user_id=admin.id,
-    )
-    await admin_identity.save(db_session)
 
     root_folder = Object(
         name="/",

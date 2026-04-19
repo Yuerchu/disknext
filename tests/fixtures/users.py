@@ -2,13 +2,12 @@
 用户测试数据工厂
 
 提供创建测试用户的便捷方法。
-用户密码凭证通过 AuthIdentity 管理，不再存储在 User 表中。
+密码凭证直接存储在 User.password_hash 字段中。
 """
 from uuid import UUID
 
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from sqlmodels.auth_identity import AuthIdentity, AuthProviderType
 from sqlmodels.user import User, UserStatus
 from utils.password.pwd import Password
 
@@ -31,7 +30,7 @@ class UserFactory:
             session: 数据库会话
             group_id: 用户组UUID
             email: 用户邮箱（默认: test_user_{随机}@test.local）
-            password: 明文密码（默认: password123），若提供则同时创建 AuthIdentity
+            password: 明文密码（默认: password123）
             **kwargs: 其他用户字段
 
         返回:
@@ -54,25 +53,13 @@ class UserFactory:
             group_id=group_id,
             avatar=kwargs.get("avatar", "default"),
             group_expires=kwargs.get("group_expires"),
-            theme=kwargs.get("theme", "system"),
             language=kwargs.get("language", "zh-CN"),
             timezone=kwargs.get("timezone", 8),
             previous_group_id=kwargs.get("previous_group_id"),
+            password_hash=Password.hash(password),
         )
 
         user = await user.save(session)
-
-        # 创建邮箱密码认证身份
-        identity = AuthIdentity(
-            provider=AuthProviderType.EMAIL_PASSWORD,
-            identifier=email,
-            credential=Password.hash(password),
-            is_primary=True,
-            is_verified=True,
-            user_id=user.id,
-        )
-        identity = await identity.save(session)
-
         return user
 
     @staticmethod
@@ -110,21 +97,10 @@ class UserFactory:
             score=9999,
             group_id=admin_group_id,
             avatar="default",
+            password_hash=Password.hash(password),
         )
 
         admin = await admin.save(session)
-
-        # 创建邮箱密码认证身份
-        identity = AuthIdentity(
-            provider=AuthProviderType.EMAIL_PASSWORD,
-            identifier=email,
-            credential=Password.hash(password),
-            is_primary=True,
-            is_verified=True,
-            user_id=admin.id,
-        )
-        identity = await identity.save(session)
-
         return admin
 
     @staticmethod
@@ -157,21 +133,10 @@ class UserFactory:
             score=0,
             group_id=group_id,
             avatar="default",
+            password_hash=Password.hash("banned_password"),
         )
 
         banned_user = await banned_user.save(session)
-
-        # 创建邮箱密码认证身份
-        identity = AuthIdentity(
-            provider=AuthProviderType.EMAIL_PASSWORD,
-            identifier=email,
-            credential=Password.hash("banned_password"),
-            is_primary=True,
-            is_verified=True,
-            user_id=banned_user.id,
-        )
-        identity = await identity.save(session)
-
         return banned_user
 
     @staticmethod
@@ -206,19 +171,8 @@ class UserFactory:
             score=100,
             group_id=group_id,
             avatar="default",
+            password_hash=Password.hash("password123"),
         )
 
         user = await user.save(session)
-
-        # 创建邮箱密码认证身份
-        identity = AuthIdentity(
-            provider=AuthProviderType.EMAIL_PASSWORD,
-            identifier=email,
-            credential=Password.hash("password123"),
-            is_primary=True,
-            is_verified=True,
-            user_id=user.id,
-        )
-        identity = await identity.save(session)
-
         return user

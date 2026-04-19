@@ -90,7 +90,7 @@ class UserAuthn(SQLModelBase, TableBaseMixin):
     """所属用户UUID"""
 
     # 关系
-    user: "User" = Relationship(back_populates="authns")
+    user: "User" = Relationship(back_populates="passkeys")
 
     def to_detail_response(self) -> AuthnDetailResponse:
         """转换为详情响应 DTO"""

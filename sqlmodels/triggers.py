@@ -21,6 +21,8 @@ PostgreSQL 触发器定义
 from sqlalchemy import DDL, event
 
 from .server_config import ServerConfig
+from .user import User
+from .user_authn import UserAuthn
 
 
 # ==================== ServerConfig: captcha / oauth 一致性 ====================
@@ -126,3 +128,92 @@ event.listen(
     "before_drop",
     DDL(_SERVERCONFIG_CAPTCHA_OAUTH_FN_DROP).execute_if(dialect='postgresql'),
 )
+
+
+# ==================== User: 至少一种登录方式 ====================
+#
+# 业务规则：
+#   用户必须至少保有一种可用的登录方式。
+#   password_hash / phone / github_id / qq_id 至少一个非空，
+#   或者 userauthn 表中存在关联的 Passkey 凭证。
+#
+# 两个触发器协同：
+#   1. user BEFORE UPDATE — 防止把 User 行上最后一个认证字段清空
+#   2. userauthn BEFORE DELETE — 防止删除最后一把 Passkey
+
+_USER_AUTH_FN = '''
+CREATE OR REPLACE FUNCTION user_check_auth_method()
+RETURNS TRIGGER AS $fn$
+BEGIN
+    IF NEW.password_hash IS NULL
+       AND NEW.phone IS NULL
+       AND NEW.github_id IS NULL
+       AND NEW.qq_id IS NULL
+       AND NOT EXISTS (SELECT 1 FROM userauthn WHERE user_id = NEW.id)
+    THEN
+        RAISE EXCEPTION '用户必须至少有一种登录方式'
+            USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+END;
+$fn$ LANGUAGE plpgsql;
+'''
+
+_USER_AUTH_TRG_DROP = 'DROP TRIGGER IF EXISTS user_auth_method_trg ON "user"'
+
+_USER_AUTH_TRG_CREATE = '''
+CREATE TRIGGER user_auth_method_trg
+BEFORE UPDATE ON "user"
+FOR EACH ROW
+EXECUTE FUNCTION user_check_auth_method()
+'''
+
+_USER_AUTH_FN_DROP = "DROP FUNCTION IF EXISTS user_check_auth_method()"
+
+for _ddl in (_USER_AUTH_FN, _USER_AUTH_TRG_DROP, _USER_AUTH_TRG_CREATE):
+    event.listen(User.__table__, "after_create", DDL(_ddl).execute_if(dialect='postgresql'))
+for _ddl in (_USER_AUTH_TRG_DROP, _USER_AUTH_FN_DROP):
+    event.listen(User.__table__, "before_drop", DDL(_ddl).execute_if(dialect='postgresql'))
+
+
+# ==================== UserAuthn: 防止删除最后一个认证方式 ====================
+
+_AUTHN_LAST_AUTH_FN = '''
+CREATE OR REPLACE FUNCTION userauthn_check_last_auth()
+RETURNS TRIGGER AS $fn$
+DECLARE
+    remaining int;
+    has_other bool;
+BEGIN
+    SELECT count(*) INTO remaining
+    FROM userauthn WHERE user_id = OLD.user_id AND id != OLD.id;
+
+    SELECT (password_hash IS NOT NULL OR phone IS NOT NULL
+            OR github_id IS NOT NULL OR qq_id IS NOT NULL)
+    INTO has_other
+    FROM "user" WHERE id = OLD.user_id;
+
+    IF remaining = 0 AND NOT COALESCE(has_other, FALSE) THEN
+        RAISE EXCEPTION '不能删除最后一个认证方式'
+            USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN OLD;
+END;
+$fn$ LANGUAGE plpgsql;
+'''
+
+_AUTHN_LAST_AUTH_TRG_DROP = "DROP TRIGGER IF EXISTS userauthn_last_auth_trg ON userauthn"
+
+_AUTHN_LAST_AUTH_TRG_CREATE = '''
+CREATE TRIGGER userauthn_last_auth_trg
+BEFORE DELETE ON userauthn
+FOR EACH ROW
+EXECUTE FUNCTION userauthn_check_last_auth()
+'''
+
+_AUTHN_LAST_AUTH_FN_DROP = "DROP FUNCTION IF EXISTS userauthn_check_last_auth()"
+
+for _ddl in (_AUTHN_LAST_AUTH_FN, _AUTHN_LAST_AUTH_TRG_DROP, _AUTHN_LAST_AUTH_TRG_CREATE):
+    event.listen(UserAuthn.__table__, "after_create", DDL(_ddl).execute_if(dialect='postgresql'))
+for _ddl in (_AUTHN_LAST_AUTH_TRG_DROP, _AUTHN_LAST_AUTH_FN_DROP):
+    event.listen(UserAuthn.__table__, "before_drop", DDL(_ddl).execute_if(dialect='postgresql'))

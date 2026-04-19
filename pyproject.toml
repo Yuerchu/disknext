@@ -35,6 +35,7 @@ dependencies = [
     "wsgidav>=4.3.0",
     "a2wsgi>=1.10.0",
     "email-validator>=2.3.0",
+    "pydantic-extra-types[phonenumbers]>=2.11.1",
 ]
 
 [project.optional-dependencies]

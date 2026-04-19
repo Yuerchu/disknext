@@ -9,7 +9,6 @@ from httpx import AsyncClient
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from sqlmodels import Group, GroupClaims, GroupOptions, Object, ObjectType, User
-from sqlmodels.auth_identity import AuthIdentity, AuthProviderType
 from sqlmodels.user import UserStatus
 from utils import Password
 from utils.JWT import create_access_token
@@ -57,20 +56,11 @@ async def no_webdav_headers(initialized_db: AsyncSession) -> dict[str, str]:
         score=0,
         group_id=group.id,
         avatar="default",
+        password_hash=Password.hash("nowebdav123"),
     )
     initialized_db.add(user)
     await initialized_db.commit()
     await initialized_db.refresh(user)
-
-    identity = AuthIdentity(
-        provider=AuthProviderType.EMAIL_PASSWORD,
-        identifier="nowebdav@test.local",
-        credential=Password.hash("nowebdav123"),
-        is_primary=True,
-        is_verified=True,
-        user_id=user.id,
-    )
-    initialized_db.add(identity)
 
     from sqlmodels import Policy
     policy = await Policy.get(initialized_db, Policy.name == "本地存储")

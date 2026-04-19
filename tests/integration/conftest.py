@@ -20,7 +20,6 @@ from sqlalchemy.orm import sessionmaker
 from main import app
 from sqlmodels import Group, GroupClaims, GroupOptions, Object, ObjectType, Policy, PolicyType, ServerConfig, User
 from sqlmodels.policy import GroupPolicyLink
-from sqlmodels.auth_identity import AuthIdentity, AuthProviderType
 from sqlmodels.user import UserStatus
 from utils import Password
 from utils.JWT import create_access_token
@@ -180,6 +179,7 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
         score=0,
         group_id=default_group.id,
         avatar="default",
+        password_hash=Password.hash("testpass123"),
     )
     test_session.add(test_user)
 
@@ -192,6 +192,7 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
         score=0,
         group_id=admin_group.id,
         avatar="default",
+        password_hash=Password.hash("adminpass123"),
     )
     test_session.add(admin_user)
 
@@ -204,6 +205,7 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
         score=0,
         group_id=default_group.id,
         avatar="default",
+        password_hash=Password.hash("banned123"),
     )
     test_session.add(banned_user)
 
@@ -213,39 +215,6 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
     await test_session.refresh(test_user)
     await test_session.refresh(admin_user)
     await test_session.refresh(banned_user)
-
-    # 7. 创建认证身份
-    test_user_identity = AuthIdentity(
-        provider=AuthProviderType.EMAIL_PASSWORD,
-        identifier="testuser@test.local",
-        credential=Password.hash("testpass123"),
-        is_primary=True,
-        is_verified=True,
-        user_id=test_user.id,
-    )
-    test_session.add(test_user_identity)
-
-    admin_user_identity = AuthIdentity(
-        provider=AuthProviderType.EMAIL_PASSWORD,
-        identifier="admin@yxqi.cn",
-        credential=Password.hash("adminpass123"),
-        is_primary=True,
-        is_verified=True,
-        user_id=admin_user.id,
-    )
-    test_session.add(admin_user_identity)
-
-    banned_user_identity = AuthIdentity(
-        provider=AuthProviderType.EMAIL_PASSWORD,
-        identifier="banneduser@test.local",
-        credential=Password.hash("banned123"),
-        is_primary=True,
-        is_verified=True,
-        user_id=banned_user.id,
-    )
-    test_session.add(banned_user_identity)
-
-    await test_session.commit()
 
     # 8. 创建用户根目录
     test_user_root = Object(

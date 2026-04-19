@@ -164,7 +164,6 @@ async def init_default_group() -> None:
             # 游客组不关联存储策略（无法上传）
 
 async def init_default_user() -> None:
-    from .auth_identity import AuthIdentity, AuthProviderType
     from .user import User
     from .group import Group
     from .object import Object, ObjectType
@@ -191,29 +190,19 @@ async def init_default_user() -> None:
             default_policy = await Policy.get(session, Policy.name == "本地存储")
             if not default_policy:
                 raise RuntimeError("默认存储策略不存在，无法创建管理员用户")
-            default_policy_id = default_policy.id  # 在后续 save 前保存 UUID
+            default_policy_id = default_policy.id
 
             # 生成管理员密码
             admin_password = Password.generate(8)
-            hashed_admin_password = Password.hash(admin_password)
 
             admin_user = User(
                 email="admin@yxqi.cn",
                 nickname="admin",
                 group_id=admin_group.id,
+                password_hash=Password.hash(admin_password),
             )
-            admin_user_id = admin_user.id  # 在 save 前保存 UUID
+            admin_user_id = admin_user.id
             admin_user = await admin_user.save(session)
-
-            # 创建 AuthIdentity（邮箱密码身份）
-            await AuthIdentity(
-                provider=AuthProviderType.EMAIL_PASSWORD,
-                identifier="admin@yxqi.cn",
-                credential=hashed_admin_password,
-                is_primary=True,
-                is_verified=True,
-                user_id=admin_user_id,
-            ).save(session)
 
             # 记录默认管理员 ID 到 ServerConfig
             config = await ServerConfig.get(session, col(ServerConfig.id) == 1)

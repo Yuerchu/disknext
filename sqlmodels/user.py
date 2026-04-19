@@ -4,13 +4,17 @@ from typing import Literal, TYPE_CHECKING, TypeVar
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, EmailStr
+from pydantic_extra_types.phone_numbers import PhoneNumber
 from sqlalchemy import BinaryExpression, ClauseElement, and_
 from sqlalchemy import update as sql_update
 from sqlalchemy.sql.functions import func
 from sqlmodel import Field, Relationship
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel.main import RelationshipInfo
-from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, TableViewRequest, ListResponse, NonNegativeBigInt, HttpUrl, Str32, Str64, Str128, Str255
+from sqlmodel_ext import (
+    SQLModelBase, UUIDTableBaseMixin, TableViewRequest, ListResponse,
+    NonNegativeBigInt, HttpUrl, SafeHttpUrl, Str32, Str64, Str128, Str255, Text1024,
+)
 
 from .auth_identity import AuthProviderType
 from .color import ChromaticColor, NeutralColor, ThemeColorsBase
@@ -19,7 +23,6 @@ from .model_base import ResponseBase
 T = TypeVar("T", bound="User")
 
 if TYPE_CHECKING:
-    from .auth_identity import AuthIdentity
     from .group import Group
     from .download import Download
     from .object import Object
@@ -72,6 +75,9 @@ class UnifiedAuthRequest(SQLModelBase):
 
     two_fa_code: str | None = Field(default=None, min_length=6, max_length=6)
     """两步验证代码"""
+
+    redirect_uri: SafeHttpUrl | None = None
+    """OAuth 回调地址"""
 
     captcha: Str255 | None = None
     """验证码"""
@@ -146,10 +152,10 @@ class UserResponse(ResponseBase):
     email: EmailStr
     """用户邮箱"""
 
-    nickname: str = Field(max_length=32)
+    nickname: str
     """用户昵称"""
 
-    avatar: Literal["default", "gravatar", "file"] = "default"
+    avatar: AvatarType
     """头像类型"""
 
     created_at: datetime
@@ -161,7 +167,7 @@ class UserResponse(ResponseBase):
     group: GroupResponse
     """用户所属用户组"""
 
-    tags: list[str] = []
+    tags: list[str | None]
     """用户标签列表"""
 
 class UserStorageResponse(SQLModelBase):
@@ -232,8 +238,8 @@ class UserSettingResponse(SQLModelBase):
     timezone: int
     """时区"""
 
-    authn: "list[AuthnDetailResponse] | None" = None
-    """认证信息"""
+    phone: PhoneNumber | None = None
+    """手机号（E.164 格式，如 +8613800138000）"""
 
     group_expires: datetime | None = None
     """用户组过期时间"""
@@ -294,7 +300,7 @@ class UserTwoFactorResponse(SQLModelBase):
 class MagicLinkRequest(SQLModelBase):
     """Magic Link 请求 DTO"""
 
-    email: EmailStr
+    email: EmailStr = Field(max_length=64)
     """接收 Magic Link 的邮箱"""
 
     captcha: Str255 | None = None
@@ -347,8 +353,8 @@ class UserAdminUpdateRequest(SQLModelBase):
     nickname: str = Field(max_length=32)
     """昵称"""
 
-    phone: Str32 | None = None
-    """手机号"""
+    phone: PhoneNumber | None = None
+    """手机号（E.164 格式，如 +8613800138000）"""
 
     group_id: UUID | None = None
     """用户组UUID"""
@@ -400,12 +406,10 @@ class UserAdminDetailResponse(UserPublic):
 
 # 前向引用导入
 from .group import GroupClaims, GroupResponse  # noqa: E402
-from .user_authn import AuthnDetailResponse  # noqa: E402
 
 # 更新前向引用
 JWTPayload.model_rebuild()
 UserResponse.model_rebuild()
-UserSettingResponse.model_rebuild()
 
 
 # ==================== 数据库模型 ====================
@@ -430,6 +434,22 @@ class User(UserBase, UUIDTableBaseMixin):
 
     score: NonNegativeBigInt = 0
     """用户积分"""
+
+    # 认证字段
+    password_hash: Text1024 | None = None
+    """密码哈希（Argon2）"""
+
+    two_factor_secret: Str255 | None = None
+    """两步验证 TOTP 密钥"""
+
+    phone: PhoneNumber | None = Field(default=None, unique=True, index=True, max_length=20)
+    """手机号（E.164 格式）"""
+
+    github_id: Str255 | None = Field(default=None, unique=True, index=True)
+    """GitHub OAuth openid"""
+
+    qq_id: Str255 | None = Field(default=None, unique=True, index=True)
+    """QQ OAuth openid"""
 
     group_expires: datetime | None = None
     """当前用户组过期时间"""
@@ -495,9 +515,6 @@ class User(UserBase, UUIDTableBaseMixin):
         }
     )
 
-    auth_identities: list["AuthIdentity"] = Relationship(back_populates="user", cascade_delete=True)
-    """用户的认证身份列表"""
-
     downloads: list["Download"] = Relationship(back_populates="user", cascade_delete=True)
 
     objects: list["Object"] = Relationship(
@@ -526,7 +543,8 @@ class User(UserBase, UUIDTableBaseMixin):
 
     webdavs: list["WebDAV"] = Relationship(back_populates="user", cascade_delete=True)
 
-    authns: list["UserAuthn"] = Relationship(back_populates="user", cascade_delete=True)
+    passkeys: list["UserAuthn"] = Relationship(back_populates="user", cascade_delete=True)
+    """用户的 Passkey 凭证列表"""
 
     async def issue_tokens(self, session: AsyncSession) -> "TokenResponse":
         """

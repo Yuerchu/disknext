@@ -10,8 +10,7 @@ from middleware.dependencies import SessionDep, ServerConfigDep
 from sqlmodels import (
     BUILTIN_DEFAULT_COLORS, ThemePreset, UserThemeUpdateRequest,
     SettingOption, UserSettingUpdateRequest,
-    AuthIdentity, AuthIdentityResponse, AuthProviderType, BindIdentityRequest,
-    ChangePasswordRequest,
+    AuthProviderType, ChangePasswordRequest,
     AuthnDetailResponse, AuthnRenameRequest,
     PolicySummary,
 )
@@ -134,18 +133,6 @@ async def router_user_settings(
         else:
             theme_colors = BUILTIN_DEFAULT_COLORS
 
-    # 检查是否启用了两步验证（从 email_password AuthIdentity 的 extra_data 中读取）
-    has_two_factor = False
-    email_identity: AuthIdentity | None = await AuthIdentity.get(
-        session,
-        (AuthIdentity.user_id == user.id)
-        & (AuthIdentity.provider == AuthProviderType.EMAIL_PASSWORD),
-    )
-    if email_identity and email_identity.extra_data:
-        import orjson
-        extra: dict = orjson.loads(email_identity.extra_data)
-        has_two_factor = bool(extra.get("two_factor"))
-
     return sqlmodels.UserSettingResponse(
         id=user.id,
         email=user.email,
@@ -156,7 +143,7 @@ async def router_user_settings(
         language=user.language,
         timezone=user.timezone,
         group_expires=user.group_expires,
-        two_factor=has_two_factor,
+        two_factor=user.two_factor_secret is not None,
         theme_preset_id=user.theme_preset_id,
         theme_colors=theme_colors,
     )
@@ -345,20 +332,15 @@ async def router_user_settings_change_password(
     - 400: 用户没有邮箱密码认证身份
     - 403: 当前密码错误
     """
-    email_identity: AuthIdentity | None = await AuthIdentity.get(
-        session,
-        (AuthIdentity.user_id == user.id)
-        & (AuthIdentity.provider == AuthProviderType.EMAIL_PASSWORD),
-    )
-    if not email_identity or not email_identity.credential:
-        http_exceptions.raise_bad_request("未找到邮箱密码认证身份")
+    if not user.password_hash:
+        http_exceptions.raise_bad_request("未设置密码")
 
-    verify_result = Password.verify(email_identity.credential, request.old_password)
+    verify_result = Password.verify(user.password_hash, request.old_password)
     if verify_result == PasswordStatus.INVALID:
         http_exceptions.raise_forbidden("当前密码错误")
 
-    email_identity.credential = Password.hash(request.new_password)
-    email_identity = await email_identity.save(session)
+    user.password_hash = Password.hash(request.new_password)
+    user = await user.save(session)
 
 
 @user_settings_router.patch(
@@ -441,144 +423,8 @@ async def router_user_settings_2fa_enable(
     if Password.verify_totp(secret, request.code) != PasswordStatus.VALID:
         raise HTTPException(status_code=400, detail="Invalid OTP code")
 
-    # 将 secret 存储到 AuthIdentity.extra_data 中
-    email_identity: AuthIdentity | None = await AuthIdentity.get(
-        session,
-        (AuthIdentity.user_id == user.id)
-        & (AuthIdentity.provider == AuthProviderType.EMAIL_PASSWORD),
-    )
-    if not email_identity:
-        raise HTTPException(status_code=400, detail="未找到邮箱密码认证身份")
-
-    import orjson
-    extra: dict = orjson.loads(email_identity.extra_data) if email_identity.extra_data else {}
-    extra["two_factor"] = secret
-    email_identity.extra_data = orjson.dumps(extra).decode('utf-8')
-    email_identity = await email_identity.save(session)
-
-
-# ==================== 认证身份管理 ====================
-
-@user_settings_router.get(
-    path='/identities',
-    summary='列出已绑定的认证身份',
-)
-async def router_user_settings_identities(
-    session: SessionDep,
-    user: Annotated[sqlmodels.user.User, Depends(auth_required)],
-) -> list[AuthIdentityResponse]:
-    """
-    列出当前用户已绑定的所有认证身份
-
-    返回：
-    - 认证身份列表，包含 provider、identifier、display_name 等
-    """
-    identities: list[AuthIdentity] = await AuthIdentity.get(
-        session,
-        AuthIdentity.user_id == user.id,
-        fetch_mode="all",
-    )
-    return [identity.to_response() for identity in identities]
-
-
-@user_settings_router.post(
-    path='/identity',
-    summary='绑定新的认证身份',
-    status_code=status.HTTP_201_CREATED,
-)
-async def router_user_settings_bind_identity(
-    session: SessionDep,
-    user: Annotated[sqlmodels.user.User, Depends(auth_required)],
-    request: BindIdentityRequest,
-) -> AuthIdentityResponse:
-    """
-    绑定新的登录方式
-
-    请求体：
-    - provider: 提供者类型
-    - identifier: 标识符（邮箱 / 手机号 / OAuth code）
-    - credential: 凭证（密码、验证码等）
-    - redirect_uri: OAuth 回调地址（可选）
-
-    错误处理：
-    - 400: provider 未启用
-    - 409: 该身份已被其他用户绑定
-    """
-    # 检查是否已被绑定
-    existing = await AuthIdentity.get(
-        session,
-        (AuthIdentity.provider == request.provider)
-        & (AuthIdentity.identifier == request.identifier),
-    )
-    if existing:
-        raise HTTPException(status_code=409, detail="该身份已被绑定")
-
-    # 处理密码类型的凭证
-    credential: str | None = None
-    if request.provider == AuthProviderType.EMAIL_PASSWORD and request.credential:
-        credential = Password.hash(request.credential)
-
-    identity = AuthIdentity(
-        provider=request.provider,
-        identifier=request.identifier,
-        credential=credential,
-        is_primary=False,
-        is_verified=False,
-        user_id=user.id,
-    )
-    identity = await identity.save(session)
-    return identity.to_response()
-
-
-@user_settings_router.delete(
-    path='/identity/{identity_id}',
-    summary='解绑认证身份',
-    status_code=status.HTTP_204_NO_CONTENT,
-)
-async def router_user_settings_unbind_identity(
-    session: SessionDep,
-    config: ServerConfigDep,
-    user: Annotated[sqlmodels.user.User, Depends(auth_required)],
-    identity_id: UUID,
-) -> None:
-    """
-    解绑一个认证身份
-
-    约束：
-    - 不能解绑最后一个身份
-    - 站长配置强制绑定邮箱/手机号时，不能解绑对应身份
-
-    错误处理：
-    - 404: 身份不存在或不属于当前用户
-    - 400: 不能解绑最后一个身份 / 不能解绑强制绑定的身份
-    """
-    # 查找目标身份
-    identity: AuthIdentity | None = await AuthIdentity.get(
-        session,
-        (AuthIdentity.id == identity_id) & (AuthIdentity.user_id == user.id),
-    )
-    if not identity:
-        http_exceptions.raise_not_found("认证身份不存在")
-
-    # 检查是否为最后一个身份
-    all_identities: list[AuthIdentity] = await AuthIdentity.get(
-        session,
-        AuthIdentity.user_id == user.id,
-        fetch_mode="all",
-    )
-    if len(all_identities) <= 1:
-        http_exceptions.raise_bad_request("不能解绑最后一个认证身份")
-
-    # 检查强制绑定约束
-    if identity.provider == AuthProviderType.EMAIL_PASSWORD:
-        if config.is_auth_email_binding_required:
-            http_exceptions.raise_bad_request("站长要求必须绑定邮箱，不能解绑")
-
-    if identity.provider == AuthProviderType.PHONE_SMS:
-        if config.is_auth_phone_binding_required:
-            http_exceptions.raise_bad_request("站长要求必须绑定手机号，不能解绑")
-
-    await AuthIdentity.delete(session, identity)
+    user.two_factor_secret = secret
+    user = await user.save(session)
 
 
 # ==================== WebAuthn 凭证管理 ====================
@@ -660,24 +506,5 @@ async def router_user_settings_delete_authn(
     if not authn:
         http_exceptions.raise_not_found("WebAuthn 凭证不存在")
 
-    # 检查是否为最后一个认证身份
-    all_identities: list[AuthIdentity] = await AuthIdentity.get(
-        session,
-        AuthIdentity.user_id == user.id,
-        fetch_mode="all",
-    )
-    if len(all_identities) <= 1:
-        http_exceptions.raise_bad_request("不能删除最后一个认证身份")
-
-    # 删除对应的 AuthIdentity
-    passkey_identity: AuthIdentity | None = await AuthIdentity.get(
-        session,
-        (AuthIdentity.provider == AuthProviderType.PASSKEY)
-        & (AuthIdentity.identifier == authn.credential_id)
-        & (AuthIdentity.user_id == user.id),
-    )
-    if passkey_identity:
-        await AuthIdentity.delete(session, passkey_identity, commit=False)
-
-    # 删除 UserAuthn
+    # PG 触发器 userauthn_last_auth_trg 会阻止删除最后一个认证方式
     await UserAuthn.delete(session, authn)

@@ -22,7 +22,7 @@ from webauthn.helpers.structs import PublicKeyCredentialDescriptor
 import sqlmodels
 from middleware.auth import auth_required
 from middleware.dependencies import SessionDep, ServerConfigDep, require_captcha
-from sqlmodels.auth_identity import AuthIdentity, AuthProviderType
+from sqlmodels.auth_identity import AuthProviderType
 from sqlmodels.server_config import ServerConfig
 from sqlmodels.user import User, UserStatus
 from sqlmodels.user_authn import UserAuthn
@@ -67,44 +67,26 @@ async def _login_email_password(
     if not request.credential:
         http_exceptions.raise_bad_request("密码不能为空")
 
-    # 查找 AuthIdentity
-    identity: AuthIdentity | None = await AuthIdentity.get(
-        session,
-        (AuthIdentity.provider == AuthProviderType.EMAIL_PASSWORD)
-        & (AuthIdentity.identifier == request.identifier),
-    )
-    if not identity:
+    user: User | None = await User.get(session, User.email == request.identifier, load=User.group)
+    if not user or not user.password_hash:
         logger.debug(f"未找到邮箱密码身份: {request.identifier}")
         http_exceptions.raise_unauthorized("邮箱或密码错误")
 
-    # 验证密码
-    if not identity.credential:
-        http_exceptions.raise_unauthorized("邮箱或密码错误")
-
-    if Password.verify(identity.credential, request.credential) != PasswordStatus.VALID:
+    if Password.verify(user.password_hash, request.credential) != PasswordStatus.VALID:
         logger.debug(f"密码验证失败: {request.identifier}")
         http_exceptions.raise_unauthorized("邮箱或密码错误")
 
-    # 加载用户
-    user: User = await User.get(session, User.id == identity.user_id, load=User.group)
-    if not user:
-        http_exceptions.raise_unauthorized("用户不存在")
-
-    # 验证用户状态
     if user.status != UserStatus.ACTIVE:
         http_exceptions.raise_forbidden("账户已被禁用")
 
     # 检查两步验证
-    if identity.extra_data:
-        extra: dict = orjson.loads(identity.extra_data)
-        two_factor_secret: str | None = extra.get("two_factor")
-        if two_factor_secret:
-            if not request.two_fa_code:
-                logger.debug(f"需要两步验证: {request.identifier}")
-                http_exceptions.raise_precondition_required("需要两步验证")
-            if Password.verify_totp(two_factor_secret, request.two_fa_code) != PasswordStatus.VALID:
-                logger.debug(f"两步验证失败: {request.identifier}")
-                http_exceptions.raise_unauthorized("两步验证码错误")
+    if user.two_factor_secret:
+        if not request.two_fa_code:
+            logger.debug(f"需要两步验证: {request.identifier}")
+            http_exceptions.raise_precondition_required("需要两步验证")
+        if Password.verify_totp(user.two_factor_secret, request.two_fa_code) != PasswordStatus.VALID:
+            logger.debug(f"两步验证失败: {request.identifier}")
+            http_exceptions.raise_unauthorized("两步验证码错误")
 
     return user
 
@@ -163,21 +145,15 @@ async def _login_oauth(
     else:
         http_exceptions.raise_bad_request(f"不支持的 OAuth 提供者: {provider.value}")
 
-    # 查找已有 AuthIdentity
-    identity: AuthIdentity | None = await AuthIdentity.get(
-        session,
-        (AuthIdentity.provider == provider) & (AuthIdentity.identifier == openid),
-    )
+    # 按 provider 查找已绑定的用户
+    if provider == AuthProviderType.GITHUB:
+        user: User | None = await User.get(session, User.github_id == openid, load=User.group)
+    elif provider == AuthProviderType.QQ:
+        user: User | None = await User.get(session, User.qq_id == openid, load=User.group)
+    else:
+        http_exceptions.raise_bad_request(f"不支持的 OAuth 提供者: {provider.value}")
 
-    if identity:
-        # 已绑定 → 更新 OAuth 信息并返回关联用户
-        identity.display_name = nickname
-        identity.avatar_url = avatar_url
-        identity = await identity.save(session)
-
-        user: User = await User.get(session, User.id == identity.user_id, load=User.group)
-        if not user:
-            http_exceptions.raise_unauthorized("用户不存在")
+    if user:
         if user.status != UserStatus.ACTIVE:
             http_exceptions.raise_forbidden("账户已被禁用")
         return user
@@ -213,27 +189,22 @@ async def _auto_register_oauth_user(
 
     default_group_id = config.default_group_id
 
-    # 创建用户
+    # 构建 OAuth 字段
+    oauth_fields: dict = {}
+    if provider == AuthProviderType.GITHUB:
+        oauth_fields["github_id"] = openid
+    elif provider == AuthProviderType.QQ:
+        oauth_fields["qq_id"] = openid
+
     new_user = User(
         email=email,
         nickname=nickname,
         avatar=avatar_url or "default",
         group_id=default_group_id,
+        **oauth_fields,
     )
     new_user_id = new_user.id
     new_user = await new_user.save(session)
-
-    # 创建 AuthIdentity
-    identity = AuthIdentity(
-        provider=provider,
-        identifier=openid,
-        display_name=nickname,
-        avatar_url=avatar_url,
-        is_primary=True,
-        is_verified=True,
-        user_id=new_user_id,
-    )
-    identity = await identity.save(session)
 
     # 创建用户根目录
     default_policy = await sqlmodels.Policy.get(session, sqlmodels.Policy.name == "本地存储")
@@ -342,28 +313,11 @@ async def _login_magic_link(
     if not is_first_use:
         http_exceptions.raise_unauthorized("Magic Link 已被使用")
 
-    # 查找绑定了该邮箱的 AuthIdentity（email_password 或 magic_link）
-    identity: AuthIdentity | None = await AuthIdentity.get(
-        session,
-        (AuthIdentity.identifier == email)
-        & (
-            (AuthIdentity.provider == AuthProviderType.EMAIL_PASSWORD)
-            | (AuthIdentity.provider == AuthProviderType.MAGIC_LINK)
-        ),
-    )
-    if not identity:
-        http_exceptions.raise_unauthorized("该邮箱未注册")
-
-    user: User = await User.get(session, User.id == identity.user_id, load=User.group)
+    user: User | None = await User.get(session, User.email == email, load=User.group)
     if not user:
-        http_exceptions.raise_unauthorized("用户不存在")
+        http_exceptions.raise_unauthorized("该邮箱未注册")
     if user.status != UserStatus.ACTIVE:
         http_exceptions.raise_forbidden("账户已被禁用")
-
-    # 标记邮箱已验证
-    if not identity.is_verified:
-        identity.is_verified = True
-        identity = await identity.save(session)
 
     return user
 
@@ -507,16 +461,7 @@ async def router_user_register(
     if config.is_auth_password_required and not request.credential:
         http_exceptions.raise_bad_request("密码不能为空")
 
-    # 4. 验证 identifier 唯一性（AuthIdentity 表）
-    existing_identity = await AuthIdentity.get(
-        session,
-        (AuthIdentity.provider == request.provider)
-        & (AuthIdentity.identifier == request.identifier),
-    )
-    if existing_identity:
-        raise HTTPException(status_code=409, detail="该邮箱已被注册")
-
-    # 同时检查 User.email 唯一性（防止旧数据冲突）
+    # 4. 验证邮箱唯一性
     existing_user = await sqlmodels.User.get(
         session,
         sqlmodels.User.email == request.identifier,
@@ -535,26 +480,16 @@ async def router_user_register(
         logger.error("默认用户组不存在")
         http_exceptions.raise_internal_error()
 
-    # 6. 创建用户
+    # 6. 创建用户（密码哈希直接存 User 表）
+    hashed_password = Password.hash(request.credential) if request.credential else None
     new_user = sqlmodels.User(
         email=request.identifier,
         nickname=request.identifier,
         group_id=default_group.id,
+        password_hash=hashed_password,
     )
     new_user_id = new_user.id
     new_user = await new_user.save(session)
-
-    # 7. 创建 AuthIdentity
-    hashed_password = Password.hash(request.credential) if request.credential else None
-    identity = AuthIdentity(
-        provider=AuthProviderType.EMAIL_PASSWORD,
-        identifier=request.identifier,
-        credential=hashed_password,
-        is_primary=True,
-        is_verified=False,
-        user_id=new_user_id,
-    )
-    identity = await identity.save(session)
 
     # 8. 创建用户根目录（使用用户组关联的第一个存储策略）
     await session.refresh(default_group, ['policies'])
@@ -600,15 +535,8 @@ async def router_user_magic_link(
         http_exceptions.raise_bad_request("Magic Link 登录未启用")
 
     # 验证邮箱存在
-    identity = await AuthIdentity.get(
-        session,
-        (AuthIdentity.identifier == request.email)
-        & (
-            (AuthIdentity.provider == AuthProviderType.EMAIL_PASSWORD)
-            | (AuthIdentity.provider == AuthProviderType.MAGIC_LINK)
-        ),
-    )
-    if not identity:
+    user = await User.get(session, User.email == request.email)
+    if not user:
         http_exceptions.raise_not_found("该邮箱未注册")
 
     # 生成签名 token
@@ -940,16 +868,6 @@ async def router_user_authn_finish(
         user_id=user.id,
     )
     authn = await authn.save(session)
-
-    # 创建 AuthIdentity（provider=passkey，identifier=credential_id_b64）
-    identity = AuthIdentity(
-        provider=AuthProviderType.PASSKEY,
-        identifier=credential_id_b64,
-        is_primary=False,
-        is_verified=True,
-        user_id=user.id,
-    )
-    identity = await identity.save(session)
 
     return authn.to_detail_response()
 
