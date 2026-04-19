@@ -349,6 +349,86 @@ class Object(ObjectBase, UUIDTableBaseMixin):
         """是否为目录"""
         return self.type == ObjectType.FOLDER
 
+    # ==================== 验证方法 ====================
+
+    @staticmethod
+    def validate_name(name: str) -> str:
+        """
+        验证文件/目录名：非空 + 无斜杠。返回 strip 后的名称。
+
+        :param name: 原始名称
+        :return: strip 后的合法名称
+        :raises HTTPException: 400 名称无效
+        """
+        from fastapi import HTTPException
+
+        stripped = name.strip() if name else ""
+        if not stripped:
+            raise HTTPException(status_code=400, detail="名称不能为空")
+        if '/' in stripped or '\\' in stripped:
+            raise HTTPException(status_code=400, detail="名称不能包含斜杠")
+        return stripped
+
+    @classmethod
+    async def validate_parent(
+        cls,
+        session: AsyncSession,
+        parent_id: UUID,
+        owner_id: UUID,
+    ) -> "Object":
+        """
+        验证父目录：存在 + 属于用户 + 是目录 + 未封禁 + 未删除
+
+        :param session: 数据库会话
+        :param parent_id: 父目录UUID
+        :param owner_id: 当前用户UUID
+        :return: 验证通过的父目录对象
+        :raises HTTPException: 404/400/403
+        """
+        from fastapi import HTTPException
+        from utils import http_exceptions
+
+        parent = await cls.get(
+            session,
+            (cls.id == parent_id) & (cls.deleted_at == None)
+        )
+        if not parent or parent.owner_id != owner_id:
+            raise HTTPException(status_code=404, detail="父目录不存在")
+        if not parent.is_folder:
+            raise HTTPException(status_code=400, detail="父对象不是目录")
+        if parent.is_banned:
+            http_exceptions.raise_banned("目标目录已被封禁，无法执行此操作")
+        return parent
+
+    @classmethod
+    async def check_name_conflict(
+        cls,
+        session: AsyncSession,
+        owner_id: UUID,
+        parent_id: UUID,
+        name: str,
+    ) -> None:
+        """
+        检查同目录下是否存在同名对象（仅未删除的）
+
+        :param session: 数据库会话
+        :param owner_id: 用户UUID
+        :param parent_id: 父目录UUID
+        :param name: 对象名称
+        :raises HTTPException: 409 同名对象已存在
+        """
+        from fastapi import HTTPException
+
+        existing = await cls.get(
+            session,
+            (cls.owner_id == owner_id) &
+            (cls.parent_id == parent_id) &
+            (cls.name == name) &
+            (cls.deleted_at == None)
+        )
+        if existing:
+            raise HTTPException(status_code=409, detail="同名文件或目录已存在")
+
     # ==================== 业务方法 ====================
 
     @classmethod

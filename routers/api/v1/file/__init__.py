@@ -44,9 +44,7 @@ from sqlmodels import (
     User,
     WopiSessionResponse,
 )
-import orjson
-
-from utils.storage import LocalStorageService, S3StorageService
+from utils.storage import LocalStorageService, S3StorageService, create_storage_service
 from utils.JWT import create_download_token, DOWNLOAD_TOKEN_TTL
 from utils.JWT.wopi_token import create_wopi_token
 from utils import http_exceptions
@@ -153,23 +151,8 @@ async def create_upload_session(
     4. 创建上传会话并生成存储路径
     5. 返回会话信息
     """
-    # 验证文件名
-    if not request.file_name or '/' in request.file_name or '\\' in request.file_name:
-        raise HTTPException(status_code=400, detail="无效的文件名")
-
-    # 验证父目录（排除已删除的）
-    parent = await Object.get(
-        session,
-        (Object.id == request.parent_id) & (Object.deleted_at == None)
-    )
-    if not parent or parent.owner_id != user.id:
-        raise HTTPException(status_code=404, detail="父目录不存在")
-
-    if not parent.is_folder:
-        raise HTTPException(status_code=400, detail="父对象不是目录")
-
-    if parent.is_banned:
-        http_exceptions.raise_banned("目标目录已被封禁，无法执行此操作")
+    Object.validate_name(request.file_name)
+    parent = await Object.validate_parent(session, request.parent_id, user.id)
 
     # 确定存储策略
     policy_id = request.policy_id or parent.policy_id
@@ -190,16 +173,7 @@ async def create_upload_session(
     if max_storage > 0 and user.storage + request.file_size > max_storage:
         http_exceptions.raise_insufficient_quota("存储空间不足")
 
-    # 检查是否已存在同名文件（仅检查未删除的）
-    existing = await Object.get(
-        session,
-        (Object.owner_id == user.id) &
-        (Object.parent_id == parent.id) &
-        (Object.name == request.file_name) &
-        (Object.deleted_at == None)
-    )
-    if existing:
-        raise HTTPException(status_code=409, detail="同名文件已存在")
+    await Object.check_name_conflict(session, user.id, parent.id, request.file_name)
 
     # 计算分片信息
     chunk_size = policy.chunk_size
@@ -216,11 +190,7 @@ async def create_upload_session(
         )
         storage_path = full_path
     elif policy.type == PolicyType.S3:
-        s3_service = S3StorageService(
-            policy,
-            region=options.s3_region if options else 'us-east-1',
-            is_path_style=options.s3_path_style if options else False,
-        )
+        s3_service = S3StorageService.from_policy(policy)
         dir_path, storage_name, storage_path = await s3_service.generate_file_path(
             user_id=user.id,
             original_filename=request.file_name,
@@ -668,34 +638,9 @@ async def create_empty_file(
     # 存储 user.id，避免后续 save() 导致 user 过期后无法访问
     user_id = user.id
 
-    # 验证文件名
-    if not request.name or '/' in request.name or '\\' in request.name:
-        raise HTTPException(status_code=400, detail="无效的文件名")
-
-    # 验证父目录（排除已删除的）
-    parent = await Object.get(
-        session,
-        (Object.id == request.parent_id) & (Object.deleted_at == None)
-    )
-    if not parent or parent.owner_id != user_id:
-        raise HTTPException(status_code=404, detail="父目录不存在")
-
-    if not parent.is_folder:
-        raise HTTPException(status_code=400, detail="父对象不是目录")
-
-    if parent.is_banned:
-        http_exceptions.raise_banned("目标目录已被封禁，无法执行此操作")
-
-    # 检查是否已存在同名文件（仅检查未删除的）
-    existing = await Object.get(
-        session,
-        (Object.owner_id == user_id) &
-        (Object.parent_id == parent.id) &
-        (Object.name == request.name) &
-        (Object.deleted_at == None)
-    )
-    if existing:
-        raise HTTPException(status_code=409, detail="同名文件已存在")
+    name = Object.validate_name(request.name)
+    parent = await Object.validate_parent(session, request.parent_id, user_id)
+    await Object.check_name_conflict(session, user_id, parent.id, name)
 
     # 确定存储策略
     policy_id = request.policy_id or parent.policy_id

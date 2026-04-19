@@ -159,39 +159,9 @@ async def router_directory_create(
     :param request: 创建请求（包含 parent_id UUID 和 name）
     :return: 创建结果
     """
-    # 验证目录名称
-    name = request.name.strip()
-    if not name:
-        raise HTTPException(status_code=400, detail="目录名称不能为空")
-
-    # [TODO] 进一步验证名称合法性
-    if "/" in name or "\\" in name:
-        raise HTTPException(status_code=400, detail="目录名称不能包含斜杠")
-
-    # 通过 UUID 获取父目录（排除已删除的）
-    parent = await Object.get(
-        session,
-        (Object.id == request.parent_id) & (Object.deleted_at == None)
-    )
-    if not parent or parent.owner_id != user.id:
-        raise HTTPException(status_code=404, detail="父目录不存在")
-
-    if not parent.is_folder:
-        raise HTTPException(status_code=400, detail="父路径不是目录")
-
-    if parent.is_banned:
-        http_exceptions.raise_banned("目标目录已被封禁，无法执行此操作")
-
-    # 检查是否已存在同名对象（仅检查未删除的）
-    existing = await Object.get(
-        session,
-        (Object.owner_id == user.id) &
-        (Object.parent_id == parent.id) &
-        (Object.name == name) &
-        (Object.deleted_at == None)
-    )
-    if existing:
-        raise HTTPException(status_code=409, detail="同名文件或目录已存在")
+    name = Object.validate_name(request.name)
+    parent = await Object.validate_parent(session, request.parent_id, user.id)
+    await Object.check_name_conflict(session, user.id, parent.id, name)
 
     policy_id = request.policy_id if request.policy_id else parent.policy_id
 

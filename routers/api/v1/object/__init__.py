@@ -75,34 +75,9 @@ async def router_object_create(
     """
     user_id = user.id
 
-    # 验证文件名
-    if not request.name or '/' in request.name or '\\' in request.name:
-        raise HTTPException(status_code=400, detail="无效的文件名")
-
-    # 验证父目录（排除已删除的）
-    parent = await Object.get(
-        session,
-        (Object.id == request.parent_id) & (Object.deleted_at == None)
-    )
-    if not parent or parent.owner_id != user_id:
-        raise HTTPException(status_code=404, detail="父目录不存在")
-
-    if not parent.is_folder:
-        raise HTTPException(status_code=400, detail="父对象不是目录")
-
-    if parent.is_banned:
-        http_exceptions.raise_banned("目标目录已被封禁，无法执行此操作")
-
-    # 检查是否已存在同名文件（仅检查未删除的）
-    existing = await Object.get(
-        session,
-        (Object.owner_id == user_id) &
-        (Object.parent_id == parent.id) &
-        (Object.name == request.name) &
-        (Object.deleted_at == None)
-    )
-    if existing:
-        raise HTTPException(status_code=409, detail="同名文件已存在")
+    name = Object.validate_name(request.name)
+    parent = await Object.validate_parent(session, request.parent_id, user_id)
+    await Object.check_name_conflict(session, user_id, parent.id, name)
 
     # 确定存储策略
     policy_id = request.policy_id or parent.policy_id
@@ -217,19 +192,7 @@ async def router_object_move(
     # 存储 user.id，避免后续 save() 导致 user 过期后无法访问
     user_id = user.id
 
-    # 验证目标目录（排除已删除的）
-    dst = await Object.get(
-        session,
-        (Object.id == request.dst_id) & (Object.deleted_at == None)
-    )
-    if not dst or dst.owner_id != user_id:
-        raise HTTPException(status_code=404, detail="目标目录不存在")
-
-    if not dst.is_folder:
-        raise HTTPException(status_code=400, detail="目标不是有效文件夹")
-
-    if dst.is_banned:
-        http_exceptions.raise_banned("目标目录已被封禁，无法执行此操作")
+    dst = await Object.validate_parent(session, request.dst_id, user_id)
 
     # 存储 dst 的属性，避免后续数据库操作导致 dst 过期后无法访问
     dst_id = dst.id
@@ -319,19 +282,7 @@ async def router_object_copy(
     # 存储 user.id，避免后续 save() 导致 user 过期后无法访问
     user_id = user.id
 
-    # 验证目标目录（排除已删除的）
-    dst = await Object.get(
-        session,
-        (Object.id == request.dst_id) & (Object.deleted_at == None)
-    )
-    if not dst or dst.owner_id != user_id:
-        raise HTTPException(status_code=404, detail="目标目录不存在")
-
-    if not dst.is_folder:
-        raise HTTPException(status_code=400, detail="目标不是有效文件夹")
-
-    if dst.is_banned:
-        http_exceptions.raise_banned("目标目录已被封禁，无法执行此操作")
+    dst = await Object.validate_parent(session, request.dst_id, user_id)
 
     copied_count = 0
     new_ids: list[UUID] = []

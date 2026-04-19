@@ -421,3 +421,13 @@ class LocalStorageService:
 
         resolved = Path(full_path).resolve()
         return str(resolved.relative_to(self._base_path))
+
+    # ==================== StorageHandler 协议别名 ====================
+
+    write = write_file
+    read = read_file
+    delete = delete_file
+    exists = file_exists
+    create_empty = create_empty_file
+    generate_path = generate_file_path
+    write_chunk = write_file_chunk

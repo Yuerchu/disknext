@@ -84,7 +84,6 @@ class S3StorageService:
     # ==================== 工厂方法 ====================
 
     @classmethod
-    @classmethod
     def from_policy(cls, policy: Policy) -> 'S3StorageService':
         """
         根据 Policy 创建 S3StorageService
@@ -705,3 +704,23 @@ class S3StorageService:
             storage_path = storage_name
 
         return dir_path, storage_name, storage_path
+
+    # ==================== StorageHandler 协议别名 ====================
+
+    write = upload_file
+    read = download_file
+    delete = delete_file
+    exists = file_exists
+    generate_path = generate_file_path
+
+    async def write_chunk(self, path: str, content: bytes, offset: int) -> int:
+        """S3 不支持随机写入，分片上传请使用 multipart API"""
+        raise NotImplementedError("S3 不支持 write_chunk，请使用 create_multipart_upload + upload_part")
+
+    async def create_empty(self, path: str) -> None:
+        """通过上传空内容创建空文件"""
+        await self.upload_file(path, b'')
+
+    def get_relative_path(self, full_path: str) -> str:
+        """S3 路径本身就是相对路径"""
+        return full_path

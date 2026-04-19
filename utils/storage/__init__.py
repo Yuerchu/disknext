@@ -23,4 +23,5 @@ from .exceptions import (
 from .factory import create_storage_service
 from .local_storage import LocalStorageService
 from .naming_rule import NamingContext, NamingRuleParser
+from .protocol import StorageHandler
 from .s3_storage import S3StorageService
