@@ -14,7 +14,7 @@ from faker import Faker
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from sqlmodels.auth_identity import AuthProviderType
-from sqlmodels.group import Group, GroupOptions
+from sqlmodels.group import Group
 from sqlmodels.user import (
     TokenResponse,
     User,
@@ -47,7 +47,7 @@ async def _make_user_with_password(
 
 
 async def _make_group_with_options(session: AsyncSession, name: str) -> Group:
-    """创建带 GroupOptions 的用户组（issue_tokens 需要）"""
+    """创建带选项字段的用户组（issue_tokens 需要）"""
     group = Group(
         name=name,
         max_storage=10 * 1024 * 1024 * 1024,
@@ -55,16 +55,11 @@ async def _make_group_with_options(session: AsyncSession, name: str) -> Group:
         web_dav_enabled=True,
         admin=False,
         speed_limit=0,
-    )
-    group = await group.save(session)
-
-    opts = GroupOptions(
-        group_id=group.id,
         share_download=True,
         share_free=False,
         relocate=False,
     )
-    await opts.save(session)
+    group = await group.save(session)
     return group
 
 
@@ -104,7 +99,7 @@ class TestIssueTokens:
         self, db_session: AsyncSession, faker: Faker
     ):
         import jwt as pyjwt
-        from utils import JWT as JWTModule
+        import utils.conf.appmeta as appmeta
 
         group = await _make_group_with_options(db_session, faker.unique.company())
         email = faker.unique.email()
@@ -122,7 +117,7 @@ class TestIssueTokens:
         # 解码 access_token 看 payload 是否合法
         payload = pyjwt.decode(
             result.access_token,
-            JWTModule.SECRET_KEY,
+            appmeta.secret_key,
             algorithms=["HS256"],
         )
         assert payload["sub"] == str(user.id)
@@ -135,7 +130,7 @@ class TestIssueTokens:
         self, db_session: AsyncSession, faker: Faker
     ):
         import jwt as pyjwt
-        from utils import JWT as JWTModule
+        import utils.conf.appmeta as appmeta
 
         group = await _make_group_with_options(db_session, faker.unique.company())
         user = User(
@@ -150,9 +145,9 @@ class TestIssueTokens:
         result = await user.issue_tokens(db_session)
 
         access_payload = pyjwt.decode(
-            result.access_token, JWTModule.SECRET_KEY, algorithms=["HS256"]
+            result.access_token, appmeta.secret_key, algorithms=["HS256"]
         )
         refresh_payload = pyjwt.decode(
-            result.refresh_token, JWTModule.SECRET_KEY, algorithms=["HS256"]
+            result.refresh_token, appmeta.secret_key, algorithms=["HS256"]
         )
         assert access_payload["jti"] != refresh_payload["jti"]

@@ -29,54 +29,6 @@ class DownloadType(StrEnum):
     pass
 
 
-# ==================== Aria2 信息模型 ====================
-
-class DownloadAria2InfoBase(SQLModelBase):
-    """Aria2下载信息基础模型"""
-
-    info_hash: Annotated[str | None, Field(max_length=40)] = None
-    """InfoHash（BT种子）"""
-
-    piece_length: int = 0
-    """分片大小"""
-
-    num_pieces: int = 0
-    """分片数量"""
-
-    num_seeders: int = 0
-    """做种人数"""
-
-    connections: int = 0
-    """连接数"""
-
-    upload_speed: int = 0
-    """上传速度（bytes/s）"""
-
-    upload_length: int = 0
-    """已上传大小（字节）"""
-
-    error_code: Str64 | None = None
-    """错误代码"""
-
-    error_message: Str255 | None = None
-    """错误信息"""
-
-
-class DownloadAria2Info(DownloadAria2InfoBase, SQLModelBase, table=True):
-    """Aria2下载信息模型（与Download一对一关联）"""
-
-    download_id: UUID = Field(
-        foreign_key="download.id",
-        primary_key=True,
-        ondelete="CASCADE"
-    )
-    """关联的下载任务UUID"""
-
-    # 反向关系
-    download: "Download" = Relationship(back_populates="aria2_info")
-    """关联的下载任务"""
-
-
 class DownloadAria2File(SQLModelBase, TableBaseMixin):
     """Aria2下载文件列表（与Download一对多关联）"""
 
@@ -150,6 +102,34 @@ class Download(DownloadBase, UUIDTableBaseMixin):
     dst: str
     """目标存储路径"""
 
+    # Aria2 信息字段（原 DownloadAria2Info 表）
+    info_hash: Annotated[str | None, Field(max_length=40)] = None
+    """InfoHash（BT种子）"""
+
+    piece_length: int = 0
+    """分片大小"""
+
+    num_pieces: int = 0
+    """分片数量"""
+
+    num_seeders: int = 0
+    """做种人数"""
+
+    connections: int = 0
+    """连接数"""
+
+    upload_speed: int = 0
+    """上传速度（bytes/s）"""
+
+    upload_length: int = 0
+    """已上传大小（字节）"""
+
+    error_code: Str64 | None = None
+    """Aria2 错误代码"""
+
+    error_message: Str255 | None = None
+    """Aria2 错误信息"""
+
     # 外键
     user_id: UUID = Field(
         foreign_key="user.id",
@@ -174,13 +154,6 @@ class Download(DownloadBase, UUIDTableBaseMixin):
     """执行下载的节点ID"""
 
     # 关系
-    aria2_info: DownloadAria2Info | None = Relationship(
-        back_populates="download",
-        sa_relationship_kwargs={"uselist": False},
-        cascade_delete=True,
-    )
-    """Aria2下载信息"""
-
     aria2_files: list[DownloadAria2File] = Relationship(back_populates="download", cascade_delete=True)
     """Aria2文件列表"""
 
@@ -192,4 +165,3 @@ class Download(DownloadBase, UUIDTableBaseMixin):
 
     node: "Node" = Relationship(back_populates="downloads")
     """执行下载的节点"""
-    

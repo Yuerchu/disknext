@@ -7,7 +7,7 @@ from middleware.auth import admin_required
 from middleware.dependencies import SessionDep, ServerConfigDep
 from sqlmodels import (
     User, ResponseBase,
-    Object, ObjectType, Share, AdminSummaryResponse, MetricsSummary, LicenseInfo, VersionInfo,
+    File, FileType, Share, AdminSummaryResponse, MetricsSummary, LicenseInfo, VersionInfo,
 )
 from sqlmodel_ext import SQLModelBase
 from sqlmodels.server_config import ServerConfig, ServerConfigUpdateRequest
@@ -115,9 +115,9 @@ async def router_admin_get_summary(
         dates.append(day_start)
 
         # 统计每日新增
-        file_count = await Object.count(
+        file_count = await File.count(
             session,
-            Object.type == ObjectType.FILE,
+            File.type == FileType.FILE,
             created_after_datetime=day_start,
             created_before_datetime=day_end,
         )
@@ -137,10 +137,10 @@ async def router_admin_get_summary(
         shares.append(share_count)
 
     # 统计总数
-    file_total = await Object.count(session, Object.type == ObjectType.FILE)
+    file_total = await File.count(session, File.type == FileType.FILE)
     user_total = await User.count(session)
     share_total = await Share.count(session)
-    entities_total = await Object.count(session)
+    entities_total = await File.count(session)
 
     metrics_summary = MetricsSummary(
         dates=dates,

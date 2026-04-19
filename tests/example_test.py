@@ -10,8 +10,8 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from sqlmodels.user import User
 from sqlmodels.group import Group
-from sqlmodels.object import Object, ObjectType
-from tests.fixtures import UserFactory, GroupFactory, ObjectFactory
+from sqlmodels.file import File, FileType
+from tests.fixtures import UserFactory, GroupFactory, FileFactory
 
 
 @pytest.mark.unit
@@ -65,10 +65,10 @@ async def test_object_factory(db_session: AsyncSession):
     policy = await policy.save(db_session)
 
     # 创建根目录
-    root = await ObjectFactory.create_user_root(db_session, user, policy.id)
+    root = await FileFactory.create_user_root(db_session, user, policy.id)
 
     # 创建子目录
-    folder = await ObjectFactory.create_folder(
+    folder = await FileFactory.create_folder(
         db_session,
         owner_id=user.id,
         policy_id=policy.id,
@@ -77,7 +77,7 @@ async def test_object_factory(db_session: AsyncSession):
     )
 
     # 创建文件
-    file = await ObjectFactory.create_file(
+    file = await FileFactory.create_file(
         db_session,
         owner_id=user.id,
         policy_id=policy.id,
@@ -90,7 +90,7 @@ async def test_object_factory(db_session: AsyncSession):
     assert root.parent_id is None
     assert folder.parent_id == root.id
     assert file.parent_id == folder.id
-    assert file.type == ObjectType.FILE
+    assert file.type == FileType.FILE
     assert file.size == 1024
 
 
@@ -132,13 +132,13 @@ async def test_test_directory_fixture(
     assert "videos" in test_directory
 
     # 验证目录存在于数据库中
-    documents = await Object.get(db_session, Object.id == test_directory["documents"])
+    documents = await File.get(db_session, File.id == test_directory["documents"])
     assert documents is not None
     assert documents.name == "documents"
-    assert documents.type == ObjectType.FOLDER
+    assert documents.type == FileType.FOLDER
 
     # 验证层级关系
-    work = await Object.get(db_session, Object.id == test_directory["work"])
+    work = await File.get(db_session, File.id == test_directory["work"])
     assert work is not None
     assert work.parent_id == documents.id
 
@@ -159,10 +159,10 @@ async def test_nested_structure_factory(db_session: AsyncSession):
     )
     policy = await policy.save(db_session)
 
-    root = await ObjectFactory.create_user_root(db_session, user, policy.id)
+    root = await FileFactory.create_user_root(db_session, user, policy.id)
 
     # 创建嵌套结构
-    structure = await ObjectFactory.create_nested_structure(
+    structure = await FileFactory.create_nested_structure(
         db_session,
         owner_id=user.id,
         policy_id=policy.id,
@@ -179,10 +179,10 @@ async def test_nested_structure_factory(db_session: AsyncSession):
     assert "videos" in structure
 
     # 验证文件存在
-    report = await Object.get(db_session, Object.id == structure["report"])
+    report = await File.get(db_session, File.id == structure["report"])
     assert report is not None
     assert report.name == "report.pdf"
-    assert report.type == ObjectType.FILE
+    assert report.type == FileType.FILE
     assert report.size == 1024 * 100
 
 

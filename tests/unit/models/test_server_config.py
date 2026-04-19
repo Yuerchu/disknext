@@ -127,11 +127,7 @@ class TestGetRpConfig:
 # ==================== PostgreSQL 触发器：captcha/oauth 一致性 ====================
 
 async def _insert_config(session: AsyncSession, **kwargs) -> ServerConfig:
-    """构造并持久化一个 ServerConfig（绕过 pydantic 的跨字段校验，直达 DB）
-
-    自动填充 secret_key（min_length=32, 无默认值），测试只需关心与 trigger 相关的字段。
-    """
-    kwargs.setdefault("secret_key", "x" * 64)
+    """构造并持久化一个 ServerConfig（绕过 pydantic 的跨字段校验，直达 DB）"""
     config = ServerConfig(**kwargs)
     return await config.save(session)
 

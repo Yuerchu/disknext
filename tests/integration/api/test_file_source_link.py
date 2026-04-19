@@ -20,7 +20,7 @@ import pytest_asyncio
 from httpx import AsyncClient
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from sqlmodels import Object, ObjectType, PhysicalFile, Policy, PolicyType, SourceLink, User
+from sqlmodels import File, FileType, PhysicalFile, Policy, PolicyType, SourceLink, User
 
 
 # ==================== Fixtures ====================
@@ -54,7 +54,7 @@ async def source_file(
 ) -> dict[str, str | int]:
     """创建一个文本测试文件，关联到启用外链的存储策略"""
     user = await User.get(initialized_db, User.email == "testuser@test.local")
-    root = await Object.get_root(initialized_db, user.id)
+    root = await File.get_root(initialized_db, user.id)
 
     content = "A" * 50
     content_bytes = content.encode('utf-8')
@@ -72,10 +72,10 @@ async def source_file(
     )
     initialized_db.add(physical_file)
 
-    file_obj = Object(
+    file_obj = File(
         id=uuid4(),
         name="source_test.txt",
-        type=ObjectType.FILE,
+        type=FileType.FILE,
         size=len(content_bytes),
         physical_file_id=physical_file.id,
         parent_id=root.id,
@@ -103,7 +103,7 @@ async def source_file_with_link(
     """创建已有 SourceLink 的测试文件"""
     link = SourceLink(
         name=source_file["name"],
-        object_id=UUID(source_file["id"]),
+        file_id=UUID(source_file["id"]),
         downloads=5,
     )
     initialized_db.add(link)
@@ -233,7 +233,7 @@ class TestFileGetDirect:
         """下载后递增计数"""
         link_before = await SourceLink.get(
             initialized_db,
-            SourceLink.object_id == UUID(source_file_with_link["id"]),
+            SourceLink.file_id == UUID(source_file_with_link["id"]),
         )
         downloads_before = link_before.downloads
 
@@ -364,7 +364,7 @@ class TestFileSourceRedirect:
         """访问外链递增下载计数"""
         link_before = await SourceLink.get(
             initialized_db,
-            SourceLink.object_id == UUID(source_file_with_link["id"]),
+            SourceLink.file_id == UUID(source_file_with_link["id"]),
         )
         downloads_before = link_before.downloads
 
@@ -441,7 +441,7 @@ class TestPatchMaxSizePolicy:
     ) -> dict[str, str | int]:
         """创建一个 50 字节的文本文件（策略限制 100 字节）"""
         user = await User.get(initialized_db, User.email == "testuser@test.local")
-        root = await Object.get_root(initialized_db, user.id)
+        root = await File.get_root(initialized_db, user.id)
 
         content = "A" * 50
         content_bytes = content.encode('utf-8')
@@ -459,10 +459,10 @@ class TestPatchMaxSizePolicy:
         )
         initialized_db.add(physical_file)
 
-        file_obj = Object(
+        file_obj = File(
             id=uuid4(),
             name="small.txt",
-            type=ObjectType.FILE,
+            type=FileType.FILE,
             size=len(content_bytes),
             physical_file_id=physical_file.id,
             parent_id=root.id,

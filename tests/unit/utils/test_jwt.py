@@ -26,10 +26,10 @@ def _make_group_claims(admin: bool = False) -> GroupClaims:
 
 # 设置测试用的密钥
 @pytest.fixture(autouse=True)
-def setup_secret_key():
+def setup_secret_key(monkeypatch):
     """为测试设置密钥"""
-    import utils.JWT as jwt_module
-    jwt_module.SECRET_KEY = "410b5fb3ffb54abc222df0e1964fbe85c84ecae17652edc2edc275578ade886a"
+    import utils.conf.appmeta as appmeta
+    monkeypatch.setattr(appmeta, "secret_key", "410b5fb3ffb54abc222df0e1964fbe85c84ecae17652edc2edc275578ade886a")
     yield
 
 

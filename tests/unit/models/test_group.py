@@ -1,10 +1,10 @@
 """
-Group 和 GroupOptions 模型的单元测试
+Group 模型的单元测试
 """
 import pytest
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from sqlmodels.group import Group, GroupOptions, GroupResponse
+from sqlmodels.group import Group, GroupResponse
 
 
 @pytest.mark.asyncio
@@ -30,15 +30,10 @@ async def test_group_create(db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_group_options_relationship(db_session: AsyncSession):
-    """测试用户组与选项一对一关系"""
-    # 创建用户组
-    group = Group(name="有选项的组")
-    group = await group.save(db_session)
-
-    # 创建选项
-    options = GroupOptions(
-        group_id=group.id,
+async def test_group_options_fields(db_session: AsyncSession):
+    """测试用户组直接包含选项字段"""
+    group = Group(
+        name="有选项的组",
         share_download=True,
         share_free=True,
         relocate=False,
@@ -47,37 +42,28 @@ async def test_group_options_relationship(db_session: AsyncSession):
         advance_delete=True,
         archive_download=True,
         webdav_proxy=False,
-        aria2=True
+        aria2=True,
     )
-    options = await options.save(db_session)
+    group = await group.save(db_session)
 
-    # 加载关系
-    loaded_group = await Group.get(
-        db_session,
-        Group.id == group.id,
-        load=Group.options
-    )
+    loaded_group = await Group.get(db_session, Group.id == group.id)
 
-    assert loaded_group.options is not None
-    assert loaded_group.options.share_download is True
-    assert loaded_group.options.aria2 is True
-    assert loaded_group.options.source_batch == 10
+    assert loaded_group.share_download is True
+    assert loaded_group.share_free is True
+    assert loaded_group.relocate is False
+    assert loaded_group.aria2 is True
+    assert loaded_group.source_batch == 10
+    assert loaded_group.archive_download is True
+    assert loaded_group.webdav_proxy is False
 
 
 @pytest.mark.asyncio
 async def test_group_to_response(db_session: AsyncSession):
     """测试 to_response() DTO 转换"""
-    # 创建用户组
     group = Group(
         name="响应测试组",
         share_enabled=True,
-        web_dav_enabled=True
-    )
-    group = await group.save(db_session)
-
-    # 创建选项
-    options = GroupOptions(
-        group_id=group.id,
+        web_dav_enabled=True,
         share_download=True,
         share_free=False,
         relocate=True,
@@ -86,16 +72,9 @@ async def test_group_to_response(db_session: AsyncSession):
         advance_delete=True,
         archive_download=True,
         webdav_proxy=True,
-        aria2=False
+        aria2=False,
     )
-    await options.save(db_session)
-
-    # 重新加载以获取关系
-    group = await Group.get(
-        db_session,
-        Group.id == group.id,
-        load=Group.options
-    )
+    group = await group.save(db_session)
 
     # 转换为响应 DTO
     response = group.to_response()
@@ -117,18 +96,10 @@ async def test_group_to_response(db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_group_to_response_without_options(db_session: AsyncSession):
-    """测试没有选项时 to_response() 返回默认值"""
-    # 创建没有选项的用户组
-    group = Group(name="无选项组")
+async def test_group_to_response_with_defaults(db_session: AsyncSession):
+    """测试默认选项值时 to_response() 返回默认值"""
+    group = Group(name="默认选项组")
     group = await group.save(db_session)
-
-    # 加载关系（options 为 None）
-    group = await Group.get(
-        db_session,
-        Group.id == group.id,
-        load=Group.options
-    )
 
     # 转换为响应 DTO
     response = group.to_response()

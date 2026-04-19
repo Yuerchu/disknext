@@ -1,11 +1,11 @@
 """
-Object 模型的单元测试
+File 模型的单元测试
 """
 import pytest
 from sqlalchemy.exc import IntegrityError
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from sqlmodels.object import Object, ObjectType
+from sqlmodels.file import File, FileType
 from sqlmodels.user import User
 from sqlmodels.group import Group
 
@@ -30,9 +30,9 @@ async def test_object_create_folder(db_session: AsyncSession):
     policy = await policy.save(db_session)
 
     # 创建目录
-    folder = Object(
+    folder = File(
         name="测试目录",
-        type=ObjectType.FOLDER,
+        type=FileType.FOLDER,
         owner_id=user.id,
         policy_id=policy.id,
         size=0
@@ -41,7 +41,7 @@ async def test_object_create_folder(db_session: AsyncSession):
 
     assert folder.id is not None
     assert folder.name == "测试目录"
-    assert folder.type == ObjectType.FOLDER
+    assert folder.type == FileType.FOLDER
     assert folder.size == 0
 
 
@@ -64,9 +64,9 @@ async def test_object_create_file(db_session: AsyncSession):
     policy = await policy.save(db_session)
 
     # 创建根目录
-    root = Object(
+    root = File(
         name="/",
-        type=ObjectType.FOLDER,
+        type=FileType.FOLDER,
         parent_id=None,
         owner_id=user.id,
         policy_id=policy.id
@@ -74,9 +74,9 @@ async def test_object_create_file(db_session: AsyncSession):
     root = await root.save(db_session)
 
     # 创建文件
-    file = Object(
+    file = File(
         name="test.txt",
-        type=ObjectType.FILE,
+        type=FileType.FILE,
         parent_id=root.id,
         owner_id=user.id,
         policy_id=policy.id,
@@ -86,7 +86,7 @@ async def test_object_create_file(db_session: AsyncSession):
 
     assert file.id is not None
     assert file.name == "test.txt"
-    assert file.type == ObjectType.FILE
+    assert file.type == FileType.FILE
     assert file.size == 1024
 
 
@@ -104,9 +104,9 @@ async def test_object_is_file_property(db_session: AsyncSession):
     policy = Policy(name="本地策略", type=PolicyType.LOCAL, server="/tmp/test")
     policy = await policy.save(db_session)
 
-    file = Object(
+    file = File(
         name="file.txt",
-        type=ObjectType.FILE,
+        type=FileType.FILE,
         owner_id=user.id,
         policy_id=policy.id,
         size=100
@@ -131,9 +131,9 @@ async def test_object_is_folder_property(db_session: AsyncSession):
     policy = Policy(name="本地策略", type=PolicyType.LOCAL, server="/tmp/test")
     policy = await policy.save(db_session)
 
-    folder = Object(
+    folder = File(
         name="folder",
-        type=ObjectType.FOLDER,
+        type=FileType.FOLDER,
         owner_id=user.id,
         policy_id=policy.id
     )
@@ -158,9 +158,9 @@ async def test_object_get_root(db_session: AsyncSession):
     policy = await policy.save(db_session)
 
     # 创建根目录
-    root = Object(
+    root = File(
         name="/",
-        type=ObjectType.FOLDER,
+        type=FileType.FOLDER,
         parent_id=None,
         owner_id=user.id,
         policy_id=policy.id
@@ -168,7 +168,7 @@ async def test_object_get_root(db_session: AsyncSession):
     root = await root.save(db_session)
 
     # 获取根目录
-    fetched_root = await Object.get_root(db_session, user.id)
+    fetched_root = await File.get_root(db_session, user.id)
 
     assert fetched_root is not None
     assert fetched_root.id == root.id
@@ -190,9 +190,9 @@ async def test_object_get_by_path_root(db_session: AsyncSession):
     policy = await policy.save(db_session)
 
     # 创建根目录
-    root = Object(
+    root = File(
         name="/",
-        type=ObjectType.FOLDER,
+        type=FileType.FOLDER,
         parent_id=None,
         owner_id=user.id,
         policy_id=policy.id
@@ -200,7 +200,7 @@ async def test_object_get_by_path_root(db_session: AsyncSession):
     root = await root.save(db_session)
 
     # 通过路径获取根目录
-    result = await Object.get_by_path(db_session, user.id, "/")
+    result = await File.get_by_path(db_session, user.id, "/")
 
     assert result is not None
     assert result.id == root.id
@@ -221,36 +221,36 @@ async def test_object_get_by_path_nested(db_session: AsyncSession):
     policy = await policy.save(db_session)
 
     # 创建目录结构: root -> docs -> work -> project
-    root = Object(
+    root = File(
         name="/",
-        type=ObjectType.FOLDER,
+        type=FileType.FOLDER,
         parent_id=None,
         owner_id=user.id,
         policy_id=policy.id
     )
     root = await root.save(db_session)
 
-    docs = Object(
+    docs = File(
         name="docs",
-        type=ObjectType.FOLDER,
+        type=FileType.FOLDER,
         parent_id=root.id,
         owner_id=user.id,
         policy_id=policy.id
     )
     docs = await docs.save(db_session)
 
-    work = Object(
+    work = File(
         name="work",
-        type=ObjectType.FOLDER,
+        type=FileType.FOLDER,
         parent_id=docs.id,
         owner_id=user.id,
         policy_id=policy.id
     )
     work = await work.save(db_session)
 
-    project = Object(
+    project = File(
         name="project",
-        type=ObjectType.FOLDER,
+        type=FileType.FOLDER,
         parent_id=work.id,
         owner_id=user.id,
         policy_id=policy.id
@@ -258,7 +258,7 @@ async def test_object_get_by_path_nested(db_session: AsyncSession):
     project = await project.save(db_session)
 
     # 获取嵌套路径
-    result = await Object.get_by_path(
+    result = await File.get_by_path(
         db_session,
         user.id,
         "/docs/work/project",
@@ -284,9 +284,9 @@ async def test_object_get_by_path_not_found(db_session: AsyncSession):
     policy = await policy.save(db_session)
 
     # 创建根目录
-    root = Object(
+    root = File(
         name="/",
-        type=ObjectType.FOLDER,
+        type=FileType.FOLDER,
         parent_id=None,
         owner_id=user.id,
         policy_id=policy.id
@@ -294,7 +294,7 @@ async def test_object_get_by_path_not_found(db_session: AsyncSession):
     await root.save(db_session)
 
     # 获取不存在的路径
-    result = await Object.get_by_path(
+    result = await File.get_by_path(
         db_session,
         user.id,
         "/nonexistent",
@@ -318,9 +318,9 @@ async def test_object_get_children(db_session: AsyncSession):
     policy = await policy.save(db_session)
 
     # 创建父目录
-    parent = Object(
+    parent = File(
         name="parent",
-        type=ObjectType.FOLDER,
+        type=FileType.FOLDER,
         parent_id=None,
         owner_id=user.id,
         policy_id=policy.id
@@ -328,9 +328,9 @@ async def test_object_get_children(db_session: AsyncSession):
     parent = await parent.save(db_session)
 
     # 创建子对象
-    child1 = Object(
+    child1 = File(
         name="child1.txt",
-        type=ObjectType.FILE,
+        type=FileType.FILE,
         parent_id=parent.id,
         owner_id=user.id,
         policy_id=policy.id,
@@ -338,9 +338,9 @@ async def test_object_get_children(db_session: AsyncSession):
     )
     await child1.save(db_session)
 
-    child2 = Object(
+    child2 = File(
         name="child2",
-        type=ObjectType.FOLDER,
+        type=FileType.FOLDER,
         parent_id=parent.id,
         owner_id=user.id,
         policy_id=policy.id
@@ -348,7 +348,7 @@ async def test_object_get_children(db_session: AsyncSession):
     await child2.save(db_session)
 
     # 获取子对象
-    children = await Object.get_children(db_session, user.id, parent.id)
+    children = await File.get_children(db_session, user.id, parent.id)
 
     assert len(children) == 2
     child_names = {c.name for c in children}
@@ -370,18 +370,18 @@ async def test_object_parent_child_relationship(db_session: AsyncSession):
     policy = await policy.save(db_session)
 
     # 创建父目录
-    parent = Object(
+    parent = File(
         name="parent",
-        type=ObjectType.FOLDER,
+        type=FileType.FOLDER,
         owner_id=user.id,
         policy_id=policy.id
     )
     parent = await parent.save(db_session)
 
     # 创建子文件
-    child = Object(
+    child = File(
         name="child.txt",
-        type=ObjectType.FILE,
+        type=FileType.FILE,
         parent_id=parent.id,
         owner_id=user.id,
         policy_id=policy.id,
@@ -390,10 +390,10 @@ async def test_object_parent_child_relationship(db_session: AsyncSession):
     child = await child.save(db_session)
 
     # 加载关系
-    loaded_child = await Object.get(
+    loaded_child = await File.get(
         db_session,
-        Object.id == child.id,
-        load=Object.parent
+        File.id == child.id,
+        load=File.parent
     )
 
     assert loaded_child.parent is not None
@@ -415,18 +415,18 @@ async def test_object_unique_constraint(db_session: AsyncSession):
     policy = await policy.save(db_session)
 
     # 创建父目录
-    parent = Object(
+    parent = File(
         name="parent",
-        type=ObjectType.FOLDER,
+        type=FileType.FOLDER,
         owner_id=user.id,
         policy_id=policy.id
     )
     parent = await parent.save(db_session)
 
     # 创建第一个文件
-    file1 = Object(
+    file1 = File(
         name="duplicate.txt",
-        type=ObjectType.FILE,
+        type=FileType.FILE,
         parent_id=parent.id,
         owner_id=user.id,
         policy_id=policy.id,
@@ -435,9 +435,9 @@ async def test_object_unique_constraint(db_session: AsyncSession):
     await file1.save(db_session)
 
     # 尝试在同一目录创建同名文件
-    file2 = Object(
+    file2 = File(
         name="duplicate.txt",
-        type=ObjectType.FILE,
+        type=FileType.FILE,
         parent_id=parent.id,
         owner_id=user.id,
         policy_id=policy.id,
@@ -463,36 +463,36 @@ async def test_object_get_full_path(db_session: AsyncSession):
     policy = await policy.save(db_session)
 
     # 创建目录结构: root -> docs -> images -> photo.jpg
-    root = Object(
+    root = File(
         name="/",
-        type=ObjectType.FOLDER,
+        type=FileType.FOLDER,
         parent_id=None,
         owner_id=user.id,
         policy_id=policy.id
     )
     root = await root.save(db_session)
 
-    docs = Object(
+    docs = File(
         name="docs",
-        type=ObjectType.FOLDER,
+        type=FileType.FOLDER,
         parent_id=root.id,
         owner_id=user.id,
         policy_id=policy.id
     )
     docs = await docs.save(db_session)
 
-    images = Object(
+    images = File(
         name="images",
-        type=ObjectType.FOLDER,
+        type=FileType.FOLDER,
         parent_id=docs.id,
         owner_id=user.id,
         policy_id=policy.id
     )
     images = await images.save(db_session)
 
-    photo = Object(
+    photo = File(
         name="photo.jpg",
-        type=ObjectType.FILE,
+        type=FileType.FILE,
         parent_id=images.id,
         owner_id=user.id,
         policy_id=policy.id,

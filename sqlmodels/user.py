@@ -25,7 +25,7 @@ T = TypeVar("T", bound="User")
 if TYPE_CHECKING:
     from .group import Group
     from .download import Download
-    from .object import Object
+    from .file import File
     from .order import Order
     from .redeem import Redeem
     from .share import Share
@@ -517,10 +517,10 @@ class User(UserBase, UUIDTableBaseMixin):
 
     downloads: list["Download"] = Relationship(back_populates="user", cascade_delete=True)
 
-    objects: list["Object"] = Relationship(
+    files: list["File"] = Relationship(
         back_populates="owner",
         cascade_delete=True,
-        sa_relationship_kwargs={"foreign_keys": "[Object.owner_id]"},
+        sa_relationship_kwargs={"foreign_keys": "[File.owner_id]"},
     )
     """用户的所有对象（文件和目录）"""
 
@@ -554,16 +554,8 @@ class User(UserBase, UUIDTableBaseMixin):
         :return: TokenResponse
         """
         from utils import JWT
-        from .group import GroupOptions
 
-        # 加载 GroupOptions
-        group_options: GroupOptions | None = await GroupOptions.get(
-            session,
-            GroupOptions.group_id == self.group_id,
-        )
-
-        # 构建权限快照
-        self.group.options = group_options
+        # 构建权限快照（选项字段已合并到 Group 表）
         group_claims = GroupClaims.from_group(self.group)
 
         # 创建令牌

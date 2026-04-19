@@ -43,3 +43,16 @@ if not _redis_url:
     )
 redis_url: str = _redis_url
 """Redis 连接 URL（必需，完整格式：redis://[:password@]host:port/db）"""
+
+_secret_key = os.getenv("SECRET_KEY")
+if not _secret_key:
+    raise RuntimeError(
+        "必须设置 SECRET_KEY 环境变量，用于 JWT 签名。"
+        "建议使用 64 位以上的随机十六进制字符串。"
+    )
+if len(_secret_key) < 32:
+    raise RuntimeError(
+        f"SECRET_KEY 长度不足（当前 {len(_secret_key)} 字符），最少 32 字符。"
+    )
+secret_key: str = _secret_key
+"""JWT 签名密钥（必需，最少 32 字符）"""

@@ -11,7 +11,6 @@ from utils.redis import RedisManager
 from utils.storage import S3StorageService
 from sqlmodels.database_connection import DatabaseManager
 from sqlmodels.migration import migration
-from utils import JWT
 from utils.conf import appmeta
 from utils.http.http_exceptions import raise_internal_error
 from utils.lifespan import lifespan
@@ -52,7 +51,6 @@ lifespan.add_startup(EventLoopRef.capture)
 lifespan.add_startup(_init_db)
 lifespan.add_startup(migration)
 lifespan.add_startup(RedisManager.connect)
-lifespan.add_startup(JWT.load_secret_key)
 lifespan.add_startup(S3StorageService.initialize_session)
 
 # 添加关闭项

@@ -7,7 +7,7 @@
 架构：
     ObjectMetadata (KV 表，与 Object 一对多关系)
     └── 每个 Object 可以有多条元数据记录
-    └── (object_id, name) 组合唯一索引
+    └── (file_id, name) 组合唯一索引
 
 命名空间：
     - exif:    图片 EXIF 信息（尺寸、相机参数、拍摄时间等）
@@ -28,7 +28,7 @@ from sqlmodel import Field, UniqueConstraint, Index, Relationship
 from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str255, Text2K
 
 if TYPE_CHECKING:
-    from .object import Object
+    from .file import File
 
 
 # ==================== 枚举 ====================
@@ -62,7 +62,7 @@ USER_WRITABLE_NAMESPACES: set[str] = {MetadataNamespace.CUSTOM}
 
 # ==================== Base 模型 ====================
 
-class ObjectMetadataBase(SQLModelBase):
+class FileMetadataBase(SQLModelBase):
     """对象元数据 KV 基础模型"""
 
     name: Str255
@@ -74,7 +74,7 @@ class ObjectMetadataBase(SQLModelBase):
 
 # ==================== 数据库模型 ====================
 
-class ObjectMetadata(ObjectMetadataBase, UUIDTableBaseMixin):
+class FileMetadata(FileMetadataBase, UUIDTableBaseMixin):
     """
     对象元数据 KV 模型
 
@@ -83,12 +83,12 @@ class ObjectMetadata(ObjectMetadataBase, UUIDTableBaseMixin):
     """
 
     __table_args__ = (
-        UniqueConstraint("object_id", "name", name="uq_object_metadata_object_name"),
-        Index("ix_object_metadata_object_id", "object_id"),
+        UniqueConstraint("file_id", "name", name="uq_file_metadata_object_name"),
+        Index("ix_file_metadata_file_id", "file_id"),
     )
 
-    object_id: UUID = Field(
-        foreign_key="object.id",
+    file_id: UUID = Field(
+        foreign_key="file.id",
         ondelete="CASCADE",
     )
     """关联的对象UUID"""
@@ -97,7 +97,7 @@ class ObjectMetadata(ObjectMetadataBase, UUIDTableBaseMixin):
     """是否对分享页面公开"""
 
     # 关系
-    object: "Object" = Relationship(back_populates="metadata_entries")
+    file: "File" = Relationship(back_populates="metadata_entries")
     """关联的对象"""
 
 

@@ -25,41 +25,6 @@ class NodeType(StrEnum):
     """从节点"""
 
 
-class Aria2ConfigurationBase(SQLModelBase):
-    """Aria2配置基础模型"""
-
-    rpc_url: Str255 | None = None
-    """RPC地址"""
-
-    rpc_secret: Str255 | None = None
-    """RPC密钥"""
-
-    temp_path: Str255 | None = None
-    """临时下载路径"""
-
-    max_concurrent: int = Field(default=5, ge=1, le=50)
-    """最大并发数"""
-
-    timeout: int = Field(default=300, ge=1)
-    """请求超时时间（秒）"""
-
-
-class Aria2Configuration(Aria2ConfigurationBase, TableBaseMixin):
-    """Aria2配置模型（与Node一对一关联）"""
-
-    node_id: int = Field(
-        foreign_key="node.id",
-        unique=True,
-        index=True,
-        ondelete="CASCADE"
-    )
-    """关联的节点ID"""
-
-    # 反向关系
-    node: "Node" = Relationship(back_populates="aria2_config")
-    """关联的节点"""
-
-
 class Node(SQLModelBase, TableBaseMixin):
     """节点模型"""
 
@@ -91,13 +56,22 @@ class Node(SQLModelBase, TableBaseMixin):
     rank: int = 0
     """节点排序权重"""
 
-    # 关系
-    aria2_config: Aria2Configuration | None = Relationship(
-        back_populates="node",
-        sa_relationship_kwargs={"uselist": False},
-        cascade_delete=True,
-    )
-    """Aria2配置"""
+    # Aria2 配置字段（原 Aria2Configuration 表）
+    aria2_rpc_url: Str255 | None = None
+    """Aria2 RPC 地址"""
 
+    aria2_rpc_secret: Str255 | None = None
+    """Aria2 RPC 密钥"""
+
+    aria2_temp_path: Str255 | None = None
+    """Aria2 临时下载路径"""
+
+    aria2_max_concurrent: int = Field(default=5, ge=1, le=50)
+    """Aria2 最大并发数"""
+
+    aria2_timeout: int = Field(default=300, ge=1)
+    """Aria2 请求超时时间（秒）"""
+
+    # 关系
     downloads: list["Download"] = Relationship(back_populates="node")
     """该节点的下载任务"""

@@ -12,7 +12,7 @@ import pytest_asyncio
 from httpx import AsyncClient
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from sqlmodels import Object, ObjectType, PhysicalFile, Policy, User
+from sqlmodels import File, FileType, PhysicalFile, Policy, User
 
 
 # ==================== Fixtures ====================
@@ -45,7 +45,7 @@ async def text_file(
 ) -> dict[str, str | int]:
     """创建包含 UTF-8 文本内容的测试文件"""
     user = await User.get(initialized_db, User.email == "testuser@test.local")
-    root = await Object.get_root(initialized_db, user.id)
+    root = await File.get_root(initialized_db, user.id)
 
     content = "line1\nline2\nline3\n"
     content_bytes = content.encode('utf-8')
@@ -63,10 +63,10 @@ async def text_file(
     )
     initialized_db.add(physical_file)
 
-    file_obj = Object(
+    file_obj = File(
         id=uuid4(),
         name="test.txt",
-        type=ObjectType.FILE,
+        type=FileType.FILE,
         size=len(content_bytes),
         physical_file_id=physical_file.id,
         parent_id=root.id,
@@ -93,7 +93,7 @@ async def binary_file(
 ) -> dict[str, str | int]:
     """创建非 UTF-8 的二进制测试文件"""
     user = await User.get(initialized_db, User.email == "testuser@test.local")
-    root = await Object.get_root(initialized_db, user.id)
+    root = await File.get_root(initialized_db, user.id)
 
     # 包含无效 UTF-8 字节序列
     content_bytes = b'\x80\x81\x82\xff\xfe\xfd'
@@ -110,10 +110,10 @@ async def binary_file(
     )
     initialized_db.add(physical_file)
 
-    file_obj = Object(
+    file_obj = File(
         id=uuid4(),
         name="binary.dat",
-        type=ObjectType.FILE,
+        type=FileType.FILE,
         size=len(content_bytes),
         physical_file_id=physical_file.id,
         parent_id=root.id,
@@ -208,7 +208,7 @@ class TestGetFileContent:
     ) -> None:
         """CRLF 换行符被规范化为 LF"""
         user = await User.get(initialized_db, User.email == "testuser@test.local")
-        root = await Object.get_root(initialized_db, user.id)
+        root = await File.get_root(initialized_db, user.id)
 
         crlf_content = b"line1\r\nline2\r\n"
         file_path = tmp_path / "crlf.txt"
@@ -223,10 +223,10 @@ class TestGetFileContent:
         )
         initialized_db.add(physical_file)
 
-        file_obj = Object(
+        file_obj = File(
             id=uuid4(),
             name="crlf.txt",
-            type=ObjectType.FILE,
+            type=FileType.FILE,
             size=len(crlf_content),
             physical_file_id=physical_file.id,
             parent_id=root.id,

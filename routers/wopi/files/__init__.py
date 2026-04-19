@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse
 from loguru import logger as l
 
 from middleware.dependencies import SessionDep
-from sqlmodels import Object, PhysicalFile, Policy, PolicyType, User, WopiFileInfo
+from sqlmodels import File, PhysicalFile, Policy, PolicyType, User, WopiFileInfo
 from utils.storage import LocalStorageService
 from utils import http_exceptions
 from utils.JWT.wopi_token import verify_wopi_token
@@ -44,9 +44,9 @@ async def check_file_info(
         http_exceptions.raise_unauthorized("WOPI token 无效或文件不匹配")
 
     # 获取文件
-    file_obj: Object | None = await Object.get(
+    file_obj: File | None = await File.get(
         session,
-        Object.id == file_id,
+        File.id == file_id,
     )
     if not file_obj or not file_obj.is_file:
         http_exceptions.raise_not_found("文件不存在")
@@ -94,7 +94,7 @@ async def get_file(
         http_exceptions.raise_unauthorized("WOPI token 无效或文件不匹配")
 
     # 获取文件
-    file_obj: Object | None = await Object.get(session, Object.id == file_id)
+    file_obj: File | None = await File.get(session, File.id == file_id)
     if not file_obj or not file_obj.is_file:
         http_exceptions.raise_not_found("文件不存在")
 
@@ -153,7 +153,7 @@ async def put_file(
         http_exceptions.raise_forbidden("没有写入权限")
 
     # 获取文件
-    file_obj: Object | None = await Object.get(session, Object.id == file_id)
+    file_obj: File | None = await File.get(session, File.id == file_id)
     if not file_obj or not file_obj.is_file:
         http_exceptions.raise_not_found("文件不存在")
 

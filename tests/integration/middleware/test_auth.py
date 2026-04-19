@@ -9,7 +9,7 @@ from httpx import AsyncClient
 
 from sqlmodels.group import GroupClaims
 from utils.JWT import create_access_token, create_refresh_token
-import utils.JWT as JWT
+import utils.conf.appmeta as appmeta
 
 
 # ==================== AuthRequired 测试 ====================
@@ -77,7 +77,7 @@ async def test_auth_required_token_without_sub(async_client: AsyncClient):
         "other_field": "value",
         "exp": int((__import__('datetime').datetime.now(__import__('datetime').timezone.utc) + timedelta(hours=1)).timestamp()),
     }
-    token = pyjwt.encode(payload, JWT.SECRET_KEY, algorithm="HS256")
+    token = pyjwt.encode(payload, appmeta.secret_key, algorithm="HS256")
 
     response = await async_client.get(
         "/api/v1/user/me",

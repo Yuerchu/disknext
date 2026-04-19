@@ -12,8 +12,8 @@ from loguru import logger as l
 
 from middleware.auth import auth_required
 from middleware.dependencies import SessionDep
-from sqlmodels import Object, User
-from sqlmodels.object import TrashDeleteRequest, TrashItemResponse, TrashRestoreRequest
+from sqlmodels import File, User
+from sqlmodels.file import TrashDeleteRequest, TrashItemResponse, TrashRestoreRequest
 
 trash_router = APIRouter(
     prefix="/trash",
@@ -38,7 +38,7 @@ async def router_trash_list(
     返回回收站中被直接删除的顶层对象列表，
     不包含其子对象（子对象在恢复/永久删除时会随顶层对象一起处理）。
     """
-    items = await Object.get_trash_items(session, user.id)
+    items = await File.get_trash_items(session, user.id)
 
     return [
         TrashItemResponse(
@@ -77,18 +77,18 @@ async def router_trash_restore(
     5. 清除 deleted_at 和 deleted_original_parent_id
     """
     user_id = user.id
-    objects_to_restore: list[Object] = []
+    objects_to_restore: list[File] = []
 
     for obj_id in request.ids:
-        obj = await Object.get(
+        obj = await File.get(
             session,
-            (Object.id == obj_id) & (Object.owner_id == user_id) & (Object.deleted_at != None)
+            (File.id == obj_id) & (File.owner_id == user_id) & (File.deleted_at != None)
         )
         if obj:
             objects_to_restore.append(obj)
 
     if objects_to_restore:
-        restored_count = await Object.restore_batch(session, objects_to_restore, user_id)
+        restored_count = await File.restore_batch(session, objects_to_restore, user_id)
         l.info(f"用户 {user_id} 从回收站恢复了 {restored_count} 个对象")
 
 
@@ -116,18 +116,18 @@ async def router_trash_delete(
     5. 更新用户存储配额
     """
     user_id = user.id
-    objects_to_delete: list[Object] = []
+    objects_to_delete: list[File] = []
 
     for obj_id in request.ids:
-        obj = await Object.get(
+        obj = await File.get(
             session,
-            (Object.id == obj_id) & (Object.owner_id == user_id) & (Object.deleted_at != None)
+            (File.id == obj_id) & (File.owner_id == user_id) & (File.deleted_at != None)
         )
         if obj:
             objects_to_delete.append(obj)
 
     if objects_to_delete:
-        deleted_count = await Object.delete(session, objects_to_delete, cleanup_storage=True)
+        deleted_count = await File.delete(session, objects_to_delete, cleanup_storage=True)
         l.info(f"用户 {user_id} 永久删除了 {deleted_count} 个对象")
 
 
@@ -149,8 +149,8 @@ async def router_trash_empty(
     获取回收站中所有顶层对象，逐个执行永久删除。
     """
     user_id = user.id
-    trash_items = await Object.get_trash_items(session, user_id)
+    trash_items = await File.get_trash_items(session, user_id)
 
     if trash_items:
-        deleted_count = await Object.delete(session, trash_items, cleanup_storage=True)
+        deleted_count = await File.delete(session, trash_items, cleanup_storage=True)
         l.info(f"用户 {user_id} 清空回收站，共删除 {deleted_count} 个对象")

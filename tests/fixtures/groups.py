@@ -5,7 +5,7 @@
 """
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from sqlmodels.group import Group, GroupOptions
+from sqlmodels.group import Group
 
 
 class GroupFactory:
@@ -40,24 +40,14 @@ class GroupFactory:
             web_dav_enabled=kwargs.get("web_dav_enabled", True),
             admin=kwargs.get("admin", False),
             speed_limit=kwargs.get("speed_limit", 0),
+            share_download=kwargs.get("share_download", True),
+            share_free=kwargs.get("share_free", False),
+            relocate=kwargs.get("relocate", True),
+            source_batch=kwargs.get("source_batch", 10),
+            select_node=kwargs.get("select_node", False),
+            advance_delete=kwargs.get("advance_delete", False),
         )
-
-        # 如果提供了选项参数，创建 GroupOptions
-        if kwargs.get("create_options", False):
-            group = await group.save(session, commit=False)
-            options = GroupOptions(
-                group_id=group.id,
-                share_download=kwargs.get("share_download", True),
-                share_free=kwargs.get("share_free", False),
-                relocate=kwargs.get("relocate", True),
-                source_batch=kwargs.get("source_batch", 10),
-                select_node=kwargs.get("select_node", False),
-                advance_delete=kwargs.get("advance_delete", False),
-            )
-            await options.save(session, commit=False)
-            await session.commit()
-        else:
-            group = await group.save(session)
+        group = await group.save(session)
 
         return group
 
@@ -88,13 +78,6 @@ class GroupFactory:
             web_dav_enabled=True,
             admin=True,
             speed_limit=0,
-        )
-
-        admin_group = await admin_group.save(session, commit=False)
-
-        # 创建管理员组选项
-        admin_options = GroupOptions(
-            group_id=admin_group.id,
             share_download=True,
             share_free=True,
             relocate=True,
@@ -107,8 +90,7 @@ class GroupFactory:
             aria2=True,
             redirected_source=True,
         )
-        await admin_options.save(session, commit=False)
-        await session.commit()
+        admin_group = await admin_group.save(session)
 
         return admin_group
 
@@ -141,13 +123,6 @@ class GroupFactory:
             web_dav_enabled=False,
             admin=False,
             speed_limit=1024,  # 1MB/s
-        )
-
-        limited_group = await limited_group.save(session, commit=False)
-
-        # 创建限制组选项
-        limited_options = GroupOptions(
-            group_id=limited_group.id,
             share_download=False,
             share_free=False,
             relocate=False,
@@ -155,8 +130,7 @@ class GroupFactory:
             select_node=False,
             advance_delete=False,
         )
-        await limited_options.save(session, commit=False)
-        await session.commit()
+        limited_group = await limited_group.save(session)
 
         return limited_group
 
@@ -187,13 +161,6 @@ class GroupFactory:
             web_dav_enabled=False,
             admin=False,
             speed_limit=512,  # 512KB/s
-        )
-
-        free_group = await free_group.save(session, commit=False)
-
-        # 创建免费组选项
-        free_options = GroupOptions(
-            group_id=free_group.id,
             share_download=False,
             share_free=False,
             relocate=False,
@@ -201,7 +168,6 @@ class GroupFactory:
             select_node=False,
             advance_delete=False,
         )
-        await free_options.save(session, commit=False)
-        await session.commit()
+        free_group = await free_group.save(session)
 
         return free_group

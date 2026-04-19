@@ -17,6 +17,7 @@ from sqlmodels import (
 from sqlmodels.color import ThemeColorsBase
 from sqlmodels.user_authn import UserAuthn
 from utils import JWT, Password, http_exceptions
+from utils.conf import appmeta
 from utils.password.pwd import PasswordStatus, TwoFactorResponse, TwoFactorVerifyRequest
 from .file_viewers import file_viewers_router
 
@@ -411,7 +412,7 @@ async def router_user_settings_2fa_enable(
 
     将 2FA secret 存储到 email_password AuthIdentity 的 extra_data 中。
     """
-    serializer = URLSafeTimedSerializer(JWT.SECRET_KEY)
+    serializer = URLSafeTimedSerializer(appmeta.secret_key)
 
     try:
         secret = serializer.loads(request.setup_token, salt="2fa-setup-salt", max_age=600)

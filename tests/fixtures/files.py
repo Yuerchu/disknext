@@ -7,11 +7,11 @@ from uuid import UUID
 
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from sqlmodels.object import Object, ObjectType
+from sqlmodels.file import File, FileType
 from sqlmodels.user import User
 
 
-class ObjectFactory:
+class FileFactory:
     """对象工厂类，用于创建测试文件和目录"""
 
     @staticmethod
@@ -22,7 +22,7 @@ class ObjectFactory:
         parent_id: UUID | None = None,
         name: str | None = None,
         **kwargs
-    ) -> Object:
+    ) -> File:
         """
         创建目录
 
@@ -35,16 +35,16 @@ class ObjectFactory:
             **kwargs: 其他对象字段
 
         返回:
-            Object: 创建的目录实例
+            File: 创建的目录实例
         """
         import uuid
 
         if name is None:
             name = f"folder_{uuid.uuid4().hex[:8]}"
 
-        folder = Object(
+        folder = File(
             name=name,
-            type=ObjectType.FOLDER,
+            type=FileType.FOLDER,
             parent_id=parent_id,
             owner_id=owner_id,
             policy_id=policy_id,
@@ -64,7 +64,7 @@ class ObjectFactory:
         name: str | None = None,
         size: int = 1024,
         **kwargs
-    ) -> Object:
+    ) -> File:
         """
         创建文件
 
@@ -78,16 +78,16 @@ class ObjectFactory:
             **kwargs: 其他对象字段
 
         返回:
-            Object: 创建的文件实例
+            File: 创建的文件实例
         """
         import uuid
 
         if name is None:
             name = f"file_{uuid.uuid4().hex[:8]}.txt"
 
-        file = Object(
+        file = File(
             name=name,
-            type=ObjectType.FILE,
+            type=FileType.FILE,
             parent_id=parent_id,
             owner_id=owner_id,
             policy_id=policy_id,
@@ -106,7 +106,7 @@ class ObjectFactory:
         session: AsyncSession,
         user: User,
         policy_id: UUID
-    ) -> Object:
+    ) -> File:
         """
         为用户创建根目录
 
@@ -116,11 +116,11 @@ class ObjectFactory:
             policy_id: 存储策略UUID
 
         返回:
-            Object: 创建的根目录实例
+            File: 创建的根目录实例
         """
-        root = Object(
+        root = File(
             name="/",
-            type=ObjectType.FOLDER,
+            type=FileType.FOLDER,
             parent_id=None,
             owner_id=user.id,
             policy_id=policy_id,
@@ -138,7 +138,7 @@ class ObjectFactory:
         root_id: UUID,
         depth: int = 2,
         folders_per_level: int = 2
-    ) -> list[Object]:
+    ) -> list[File]:
         """
         创建目录树结构（递归）
 
@@ -151,7 +151,7 @@ class ObjectFactory:
             folders_per_level: 每层的目录数量（默认: 2）
 
         返回:
-            list[Object]: 创建的所有目录列表
+            list[File]: 创建的所有目录列表
         """
         folders = []
 
@@ -160,7 +160,7 @@ class ObjectFactory:
                 return
 
             for i in range(folders_per_level):
-                folder = await ObjectFactory.create_folder(
+                folder = await FileFactory.create_folder(
                     session=session,
                     owner_id=owner_id,
                     policy_id=policy_id,
@@ -183,7 +183,7 @@ class ObjectFactory:
         parent_id: UUID,
         count: int = 5,
         size_range: tuple[int, int] = (1024, 1024 * 1024)
-    ) -> list[Object]:
+    ) -> list[File]:
         """
         在指定目录中创建多个文件
 
@@ -196,7 +196,7 @@ class ObjectFactory:
             size_range: 文件大小范围（字节，默认: 1KB - 1MB）
 
         返回:
-            list[Object]: 创建的所有文件列表
+            list[File]: 创建的所有文件列表
         """
         import random
 
@@ -207,7 +207,7 @@ class ObjectFactory:
             ext = random.choice(extensions)
             size = random.randint(size_range[0], size_range[1])
 
-            file = await ObjectFactory.create_file(
+            file = await FileFactory.create_file(
                 session=session,
                 owner_id=owner_id,
                 policy_id=policy_id,
@@ -227,7 +227,7 @@ class ObjectFactory:
         parent_id: UUID,
         size_mb: int = 100,
         name: str | None = None
-    ) -> Object:
+    ) -> File:
         """
         创建大文件（用于测试存储限制）
 
@@ -240,14 +240,14 @@ class ObjectFactory:
             name: 文件名称（默认: large_file_{size_mb}MB.bin）
 
         返回:
-            Object: 创建的大文件实例
+            File: 创建的大文件实例
         """
         if name is None:
             name = f"large_file_{size_mb}MB.bin"
 
         size_bytes = size_mb * 1024 * 1024
 
-        file = await ObjectFactory.create_file(
+        file = await FileFactory.create_file(
             session=session,
             owner_id=owner_id,
             policy_id=policy_id,
@@ -295,68 +295,68 @@ class ObjectFactory:
         result = {"root": root_id}
 
         # 创建 documents 目录
-        documents = await ObjectFactory.create_folder(
+        documents = await FileFactory.create_folder(
             session, owner_id, policy_id, root_id, "documents"
         )
         result["documents"] = documents.id
 
         # 创建 documents/work 目录
-        work = await ObjectFactory.create_folder(
+        work = await FileFactory.create_folder(
             session, owner_id, policy_id, documents.id, "work"
         )
         result["work"] = work.id
 
         # 创建 documents/work 下的文件
-        report = await ObjectFactory.create_file(
+        report = await FileFactory.create_file(
             session, owner_id, policy_id, work.id, "report.pdf", 1024 * 100
         )
         result["report"] = report.id
 
-        presentation = await ObjectFactory.create_file(
+        presentation = await FileFactory.create_file(
             session, owner_id, policy_id, work.id, "presentation.pptx", 1024 * 500
         )
         result["presentation"] = presentation.id
 
         # 创建 documents/personal 目录
-        personal = await ObjectFactory.create_folder(
+        personal = await FileFactory.create_folder(
             session, owner_id, policy_id, documents.id, "personal"
         )
         result["personal"] = personal.id
 
-        notes = await ObjectFactory.create_file(
+        notes = await FileFactory.create_file(
             session, owner_id, policy_id, personal.id, "notes.txt", 1024
         )
         result["notes"] = notes.id
 
         # 创建 media 目录
-        media = await ObjectFactory.create_folder(
+        media = await FileFactory.create_folder(
             session, owner_id, policy_id, root_id, "media"
         )
         result["media"] = media.id
 
         # 创建 media/images 目录
-        images = await ObjectFactory.create_folder(
+        images = await FileFactory.create_folder(
             session, owner_id, policy_id, media.id, "images"
         )
         result["images"] = images.id
 
-        photo1 = await ObjectFactory.create_file(
+        photo1 = await FileFactory.create_file(
             session, owner_id, policy_id, images.id, "photo1.jpg", 1024 * 200
         )
         result["photo1"] = photo1.id
 
-        photo2 = await ObjectFactory.create_file(
+        photo2 = await FileFactory.create_file(
             session, owner_id, policy_id, images.id, "photo2.png", 1024 * 300
         )
         result["photo2"] = photo2.id
 
         # 创建 media/videos 目录
-        videos = await ObjectFactory.create_folder(
+        videos = await FileFactory.create_folder(
             session, owner_id, policy_id, media.id, "videos"
         )
         result["videos"] = videos.id
 
-        clip = await ObjectFactory.create_file(
+        clip = await FileFactory.create_file(
             session, owner_id, policy_id, videos.id, "clip.mp4", 1024 * 1024 * 10
         )
         result["clip"] = clip.id

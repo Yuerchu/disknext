@@ -7,7 +7,7 @@ from loguru import logger as l
 from middleware.auth import auth_required
 from middleware.dependencies import SessionDep
 from sqlmodels import (
-    Object,
+    File,
     User,
     WebDAV,
     WebDAVAccountResponse,
@@ -99,7 +99,7 @@ async def create_account(
         http_exceptions.raise_conflict("账户名已存在")
 
     # 验证 root 路径存在且为目录
-    root_obj = await Object.get_by_path(session, user_id, request.root)
+    root_obj = await File.get_by_path(session, user_id, request.root)
     if not root_obj or not root_obj.is_folder:
         http_exceptions.raise_bad_request("根目录路径不存在或不是目录")
 
@@ -150,7 +150,7 @@ async def update_account(
 
     # 验证 root 路径
     if request.root is not None:
-        root_obj = await Object.get_by_path(session, user_id, request.root)
+        root_obj = await File.get_by_path(session, user_id, request.root)
         if not root_obj or not root_obj.is_folder:
             http_exceptions.raise_bad_request("根目录路径不存在或不是目录")
 

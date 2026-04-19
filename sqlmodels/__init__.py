@@ -41,41 +41,37 @@ from .theme_preset import (
 from .download import (
     Download,
     DownloadAria2File,
-    DownloadAria2Info,
-    DownloadAria2InfoBase,
     DownloadStatus,
     DownloadType,
 )
 from .node import (
-    Aria2Configuration,
-    Aria2ConfigurationBase,
     Node,
     NodeStatus,
     NodeType,
 )
 from .group import (
-    Group, GroupBase, GroupClaims, GroupOptions, GroupOptionsBase, GroupAllOptionsBase, GroupResponse,
+    Group, GroupBase, GroupClaims, GroupOptionsBase, GroupAllOptionsBase, GroupResponse,
     # 管理员DTO
     GroupCreateRequest, GroupUpdateRequest, GroupDetailResponse, GroupListResponse,
 )
-from .object import (
+from .file import (
     CreateFileRequest,
     CreateUploadSessionRequest,
     DirectoryCreateRequest,
     DirectoryResponse,
-    Object,
-    ObjectBase,
-    ObjectCopyRequest,
-    ObjectDeleteRequest,
-    ObjectFileFinalize,
-    ObjectMoveRequest,
-    ObjectMoveUpdate,
-    ObjectPropertyDetailResponse,
-    ObjectPropertyResponse,
-    ObjectRenameRequest,
-    ObjectResponse,
-    ObjectSwitchPolicyRequest,
-    ObjectType,
+    File,
+    FileBase,
+    FileCopyRequest,
+    FileDeleteRequest,
+    FileFinalize,
+    FileMoveRequest,
+    FileMoveUpdate,
+    FilePropertyDetailResponse,
+    FilePropertyResponse,
+    FileRenameRequest,
+    FileResponse,
+    FileSwitchPolicyRequest,
+    FileType,
     FileCategory,
     PolicyResponse,
     UploadChunkResponse,
@@ -91,9 +87,9 @@ from .object import (
     TrashRestoreRequest,
     TrashDeleteRequest,
 )
-from .object_metadata import (
-    ObjectMetadata,
-    ObjectMetadataBase,
+from .file_metadata import (
+    FileMetadata,
+    FileMetadataBase,
     MetadataNamespace,
     MetadataResponse,
     MetadataPatchItem,

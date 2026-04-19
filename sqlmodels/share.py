@@ -8,12 +8,12 @@ from sqlmodel import Field, Relationship, UniqueConstraint, Index
 from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str64, Str128, Str255
 
 from .model_base import ResponseBase
-from .object import ObjectType
+from .file import FileType
 
 if TYPE_CHECKING:
     from .user import User
     from .report import Report
-    from .object import Object
+    from .file import File
 
 
 # ==================== Base 模型 ====================
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 class ShareBase(SQLModelBase):
     """分享基础字段，供 DTO 和数据库模型共享"""
 
-    object_id: UUID
+    file_id: UUID
     """关联的对象UUID"""
 
     password: Str128 | None = None
@@ -49,7 +49,7 @@ class Share(SQLModelBase, UUIDTableBaseMixin):
         UniqueConstraint("code", name="uq_share_code"),
         Index("ix_share_source_name", "source_name"),
         Index("ix_share_user_created", "user_id", "created_at"),
-        Index("ix_share_object", "object_id"),
+        Index("ix_share_file", "file_id"),
     )
 
     code: Str64 = Field(nullable=False, index=True)
@@ -58,8 +58,8 @@ class Share(SQLModelBase, UUIDTableBaseMixin):
     password: Str255 | None = None
     """分享密码（加密后）"""
 
-    object_id: UUID = Field(
-        foreign_key="object.id",
+    file_id: UUID = Field(
+        foreign_key="file.id",
         index=True,
         ondelete="CASCADE"
     )
@@ -98,7 +98,7 @@ class Share(SQLModelBase, UUIDTableBaseMixin):
     user: "User" = Relationship(back_populates="shares")
     """分享创建者"""
 
-    object: "Object" = Relationship(back_populates="shares")
+    file: "File" = Relationship(back_populates="shares")
     """关联的对象"""
 
     reports: list["Report"] = Relationship(back_populates="share", cascade_delete=True)
@@ -107,8 +107,8 @@ class Share(SQLModelBase, UUIDTableBaseMixin):
     @property
     def is_dir(self) -> bool:
         """是否为目录分享（向后兼容属性）"""
-        from .object import ObjectType
-        return self.object.type == ObjectType.FOLDER if self.object else False
+        from .file import FileType
+        return self.object.type == FileType.FOLDER if self.object else False
 
 
 # ==================== DTO 模型 ====================
@@ -134,7 +134,7 @@ class ShareResponse(SQLModelBase):
     code: Str64
     """分享码"""
 
-    object_id: UUID
+    file_id: UUID
     """关联对象UUID"""
 
     source_name: Str255 | None
@@ -187,7 +187,7 @@ class ShareObjectItem(SQLModelBase):
     name: Str255
     """名称"""
 
-    type: ObjectType
+    type: FileType
     """类型：file 或 folder"""
 
     size: int

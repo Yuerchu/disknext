@@ -9,7 +9,6 @@ import pyotp
 from itsdangerous import URLSafeTimedSerializer
 from pydantic import BaseModel, Field
 
-from utils import JWT
 from utils.conf import appmeta
 
 # FIRST RECOMMENDED option per RFC 9106.
@@ -141,7 +140,7 @@ class Password:
         :return: 包含 TOTP 密钥和 URI 的元组
         """
 
-        serializer = URLSafeTimedSerializer(JWT.SECRET_KEY)
+        serializer = URLSafeTimedSerializer(appmeta.secret_key)
 
         secret = pyotp.random_base32()
 

@@ -193,9 +193,6 @@ class ServerConfigBase(SQLModelBase):
     """注册后是否需要邮箱激活"""
 
     # ==================== AUTH ====================
-    secret_key: str = Field(min_length=32, max_length=512)
-    """JWT 签名密钥（不可为空，初始化时随机生成）"""
-
     is_auth_email_password_enabled: bool = True
     """邮箱密码登录"""
 

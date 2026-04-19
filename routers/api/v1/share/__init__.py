@@ -13,7 +13,7 @@ from sqlmodels.share import (
     Share, ShareCreateRequest, CreateShareResponse, ShareResponse,
     ShareDetailResponse, ShareOwnerInfo, ShareObjectItem,
 )
-from sqlmodels.object import Object, ObjectType
+from sqlmodels.file import File, FileType
 from sqlmodel_ext import ListResponse, TableViewRequest
 from utils import http_exceptions
 from utils.password.pwd import Password, PasswordStatus
@@ -71,8 +71,8 @@ async def router_share_get(
 
     # 6. 加载子对象（目录分享）
     children_items: list[ShareObjectItem] = []
-    if obj and obj.type == ObjectType.FOLDER:
-        children = await Object.get_children(session, obj.owner_id, obj.id)
+    if obj and obj.type == FileType.FOLDER:
+        children = await File.get_children(session, obj.owner_id, obj.id)
         children_items = [
             ShareObjectItem(
                 id=child.id,
@@ -314,9 +314,9 @@ async def router_share_create(
     5. 返回分享 ID
     """
     # 验证对象存在且属于当前用户（排除已删除的）
-    obj = await Object.get(
+    obj = await File.get(
         session,
-        (Object.id == request.object_id) & (Object.deleted_at == None)
+        (File.id == request.file_id) & (File.deleted_at == None)
     )
     if not obj or obj.owner_id != user.id:
         raise HTTPException(status_code=404, detail="对象不存在或无权限")
@@ -337,7 +337,7 @@ async def router_share_create(
     share = Share(
         code=code,
         password=hashed_password,
-        object_id=request.object_id,
+        file_id=request.file_id,
         user_id=user_id,
         expires=request.expires,
         remain_downloads=request.remain_downloads,
@@ -412,7 +412,7 @@ async def router_share_list(
         ShareResponse(
             id=share.id,
             code=share.code,
-            object_id=share.object_id,
+            file_id=share.file_id,
             source_name=share.source_name,
             views=share.views,
             downloads=share.downloads,

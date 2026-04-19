@@ -112,16 +112,16 @@ from sqlalchemy.orm import sessionmaker
 from main import app
 from utils.redis import RedisManager
 from sqlmodels.database_connection import DatabaseManager
-from sqlmodels.group import Group, GroupClaims, GroupOptions
-from sqlmodels.object import Object, ObjectType
+from sqlmodels.group import Group, GroupClaims
+from sqlmodels.file import File, FileType
 from sqlmodels.policy import Policy, PolicyType
 from sqlmodels.user import User, UserStatus
-import utils.JWT as JWT
+import utils.conf.appmeta as appmeta
 from utils.JWT import create_access_token
 from utils.password.pwd import Password
 
 # 设置测试用 JWT 密钥
-JWT.SECRET_KEY = "55dd5c582b21b96b81b0421d6e25507877839e64434d704c89db8ef90e4077d8"
+appmeta.secret_key = "55dd5c582b21b96b81b0421d6e25507877839e64434d704c89db8ef90e4077d8"
 
 
 # ==================== Faker ====================
@@ -269,16 +269,11 @@ async def test_user(db_session: AsyncSession) -> dict[str, str | UUID]:
         web_dav_enabled=True,
         admin=False,
         speed_limit=0,
-    )
-    group = await group.save(db_session)
-
-    group_options = GroupOptions(
-        group_id=group.id,
         share_download=True,
         share_free=False,
         relocate=True,
     )
-    await group_options.save(db_session)
+    group = await group.save(db_session)
 
     policy = Policy(
         name="测试本地策略",
@@ -301,9 +296,9 @@ async def test_user(db_session: AsyncSession) -> dict[str, str | UUID]:
     )
     user = await user.save(db_session)
 
-    root_folder = Object(
+    root_folder = File(
         name="/",
-        type=ObjectType.FOLDER,
+        type=FileType.FOLDER,
         parent_id=None,
         owner_id=user.id,
         policy_id=policy.id,
@@ -311,7 +306,6 @@ async def test_user(db_session: AsyncSession) -> dict[str, str | UUID]:
     )
     await root_folder.save(db_session)
 
-    group.options = group_options
     group_claims = GroupClaims.from_group(group)
 
     access_token_obj = create_access_token(
@@ -341,11 +335,6 @@ async def admin_user(db_session: AsyncSession) -> dict[str, str | UUID]:
         web_dav_enabled=True,
         admin=True,
         speed_limit=0,
-    )
-    admin_group = await admin_group.save(db_session)
-
-    admin_group_options = GroupOptions(
-        group_id=admin_group.id,
         share_download=True,
         share_free=True,
         relocate=True,
@@ -353,7 +342,7 @@ async def admin_user(db_session: AsyncSession) -> dict[str, str | UUID]:
         select_node=True,
         advance_delete=True,
     )
-    await admin_group_options.save(db_session)
+    admin_group = await admin_group.save(db_session)
 
     policy = Policy(
         name="管理员本地策略",
@@ -376,9 +365,9 @@ async def admin_user(db_session: AsyncSession) -> dict[str, str | UUID]:
     )
     admin = await admin.save(db_session)
 
-    root_folder = Object(
+    root_folder = File(
         name="/",
-        type=ObjectType.FOLDER,
+        type=FileType.FOLDER,
         parent_id=None,
         owner_id=admin.id,
         policy_id=policy.id,
@@ -386,7 +375,6 @@ async def admin_user(db_session: AsyncSession) -> dict[str, str | UUID]:
     )
     await root_folder.save(db_session)
 
-    admin_group.options = admin_group_options
     admin_group_claims = GroupClaims.from_group(admin_group)
 
     access_token_obj = create_access_token(
@@ -441,13 +429,13 @@ async def test_directory(
     user_id: UUID = test_user["id"]
     policy_id: UUID = test_user["policy_id"]
 
-    root = await Object.get_root(db_session, user_id)
+    root = await File.get_root(db_session, user_id)
     if not root:
         raise ValueError("测试用户的根目录不存在")
 
-    documents = Object(
+    documents = File(
         name="documents",
-        type=ObjectType.FOLDER,
+        type=FileType.FOLDER,
         parent_id=root.id,
         owner_id=user_id,
         policy_id=policy_id,
@@ -455,9 +443,9 @@ async def test_directory(
     )
     documents = await documents.save(db_session)
 
-    images = Object(
+    images = File(
         name="images",
-        type=ObjectType.FOLDER,
+        type=FileType.FOLDER,
         parent_id=root.id,
         owner_id=user_id,
         policy_id=policy_id,
@@ -465,9 +453,9 @@ async def test_directory(
     )
     images = await images.save(db_session)
 
-    videos = Object(
+    videos = File(
         name="videos",
-        type=ObjectType.FOLDER,
+        type=FileType.FOLDER,
         parent_id=root.id,
         owner_id=user_id,
         policy_id=policy_id,
@@ -475,9 +463,9 @@ async def test_directory(
     )
     videos = await videos.save(db_session)
 
-    work = Object(
+    work = File(
         name="work",
-        type=ObjectType.FOLDER,
+        type=FileType.FOLDER,
         parent_id=documents.id,
         owner_id=user_id,
         policy_id=policy_id,
@@ -485,9 +473,9 @@ async def test_directory(
     )
     work = await work.save(db_session)
 
-    personal = Object(
+    personal = File(
         name="personal",
-        type=ObjectType.FOLDER,
+        type=FileType.FOLDER,
         parent_id=documents.id,
         owner_id=user_id,
         policy_id=policy_id,
@@ -544,9 +532,9 @@ async def minimal_setup(db_session: AsyncSession, faker: Faker) -> dict[str, obj
     )
     user = await user.save(db_session)
 
-    root = Object(
+    root = File(
         name="/",
-        type=ObjectType.FOLDER,
+        type=FileType.FOLDER,
         parent_id=None,
         owner_id=user.id,
         policy_id=policy.id,

@@ -22,7 +22,7 @@ from .policy import Policy
 from utils.storage.factory import create_storage_service
 
 if TYPE_CHECKING:
-    from .object import Object
+    from .file import File
 
 
 class PhysicalFileBase(SQLModelBase):
@@ -68,7 +68,7 @@ class PhysicalFile(PhysicalFileBase, UUIDTableBaseMixin):
     policy: "Policy" = Relationship()
     """存储策略"""
 
-    objects: list["Object"] = Relationship(back_populates="physical_file")
+    files: list["File"] = Relationship(back_populates="physical_file")
     """引用此物理文件的所有逻辑对象"""
 
     def increment_reference(self) -> int:

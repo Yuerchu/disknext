@@ -8,7 +8,7 @@ import pytest_asyncio
 from httpx import AsyncClient
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from sqlmodels import Group, GroupClaims, GroupOptions, Object, ObjectType, User
+from sqlmodels import Group, GroupClaims, File, FileType, User
 from sqlmodels.user import UserStatus
 from utils import Password
 from utils.JWT import create_access_token
@@ -29,13 +29,6 @@ async def no_webdav_headers(initialized_db: AsyncSession) -> dict[str, str]:
         web_dav_enabled=False,
         admin=False,
         speed_limit=0,
-    )
-    initialized_db.add(group)
-    await initialized_db.commit()
-    await initialized_db.refresh(group)
-
-    group_options = GroupOptions(
-        group_id=group.id,
         share_download=True,
         share_free=False,
         relocate=False,
@@ -43,9 +36,9 @@ async def no_webdav_headers(initialized_db: AsyncSession) -> dict[str, str]:
         select_node=False,
         advance_delete=False,
     )
-    initialized_db.add(group_options)
+    initialized_db.add(group)
     await initialized_db.commit()
-    await initialized_db.refresh(group_options)
+    await initialized_db.refresh(group)
 
     user = User(
         id=uuid4(),
@@ -65,10 +58,10 @@ async def no_webdav_headers(initialized_db: AsyncSession) -> dict[str, str]:
     from sqlmodels import Policy
     policy = await Policy.get(initialized_db, Policy.name == "本地存储")
 
-    root = Object(
+    root = File(
         id=uuid4(),
         name="/",
-        type=ObjectType.FOLDER,
+        type=FileType.FOLDER,
         owner_id=user.id,
         parent_id=None,
         policy_id=policy.id,
@@ -77,7 +70,6 @@ async def no_webdav_headers(initialized_db: AsyncSession) -> dict[str, str]:
     initialized_db.add(root)
     await initialized_db.commit()
 
-    group.options = group_options
     group_claims = GroupClaims.from_group(group)
     result = create_access_token(
         sub=user.id,

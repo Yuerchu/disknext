@@ -10,6 +10,7 @@ from uuid import UUID, uuid4
 import jwt
 
 from sqlmodels.wopi import WopiAccessTokenPayload
+from utils.conf import appmeta
 
 WOPI_TOKEN_TTL = timedelta(hours=10)
 """WOPI 令牌有效期"""
@@ -28,8 +29,6 @@ def create_wopi_token(
     :param can_write: 是否可写
     :return: (token_string, access_token_ttl_ms)
     """
-    from utils.JWT import SECRET_KEY
-
     expire = datetime.now(timezone.utc) + WOPI_TOKEN_TTL
     payload = {
         "jti": str(uuid4()),
@@ -39,7 +38,7 @@ def create_wopi_token(
         "exp": expire,
         "type": "wopi",
     }
-    token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+    token = jwt.encode(payload, appmeta.secret_key, algorithm="HS256")
     # WOPI 规范要求 access_token_ttl 是毫秒级的 UNIX 时间戳
     access_token_ttl = int(expire.timestamp() * 1000)
     return token, access_token_ttl
@@ -52,10 +51,8 @@ def verify_wopi_token(token: str) -> WopiAccessTokenPayload | None:
     :param token: JWT 令牌字符串
     :return: WopiAccessTokenPayload 或 None（验证失败）
     """
-    from utils.JWT import SECRET_KEY
-
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        payload = jwt.decode(token, appmeta.secret_key, algorithms=["HS256"])
         if payload.get("type") != "wopi":
             return None
         return WopiAccessTokenPayload(

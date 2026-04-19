@@ -16,15 +16,15 @@ from middleware.dependencies import SessionDep
 from sqlmodels import (
     CreateFileRequest,
     Group,
-    Object,
-    ObjectCopyRequest,
-    ObjectDeleteRequest,
-    ObjectMoveRequest,
-    ObjectPropertyDetailResponse,
-    ObjectPropertyResponse,
-    ObjectRenameRequest,
-    ObjectSwitchPolicyRequest,
-    ObjectType,
+    File,
+    FileCopyRequest,
+    FileDeleteRequest,
+    FileMoveRequest,
+    FilePropertyDetailResponse,
+    FilePropertyResponse,
+    FileRenameRequest,
+    FileSwitchPolicyRequest,
+    FileType,
     PhysicalFile,
     Policy,
     PolicyType,
@@ -35,7 +35,7 @@ from sqlmodels import (
     TaskType,
     User,
     # 元数据相关
-    ObjectMetadata,
+    FileMetadata,
     MetadataResponse,
     MetadataPatchRequest,
     INTERNAL_NAMESPACES,
@@ -75,9 +75,9 @@ async def router_object_create(
     """
     user_id = user.id
 
-    name = Object.validate_name(request.name)
-    parent = await Object.validate_parent(session, request.parent_id, user_id)
-    await Object.check_name_conflict(session, user_id, parent.id, name)
+    name = File.validate_name(request.name)
+    parent = await File.validate_parent(session, request.parent_id, user_id)
+    await File.check_name_conflict(session, user_id, parent.id, name)
 
     # 确定存储策略
     policy_id = request.policy_id or parent.policy_id
@@ -106,10 +106,10 @@ async def router_object_create(
     )
     physical_file = await physical_file.save(session)
 
-    # 创建 Object 记录
-    file_object = Object(
+    # 创建 File 记录
+    file_object = File(
         name=request.name,
-        type=ObjectType.FILE,
+        type=FileType.FILE,
         size=0,
         physical_file_id=physical_file.id,
         parent_id=parent_id,
@@ -130,7 +130,7 @@ async def router_object_create(
 async def router_object_delete(
     session: SessionDep,
     user: Annotated[User, Depends(auth_required)],
-    request: ObjectDeleteRequest,
+    request: FileDeleteRequest,
 ) -> None:
     """
     删除对象端点（软删除到回收站）
@@ -148,12 +148,12 @@ async def router_object_delete(
     :return: 删除结果
     """
     user_id = user.id
-    objects_to_delete: list[Object] = []
+    objects_to_delete: list[File] = []
 
     for obj_id in request.ids:
-        obj = await Object.get(
+        obj = await File.get(
             session,
-            (Object.id == obj_id) & (Object.deleted_at == None)
+            (File.id == obj_id) & (File.deleted_at == None)
         )
         if not obj or obj.owner_id != user_id:
             continue
@@ -166,7 +166,7 @@ async def router_object_delete(
         objects_to_delete.append(obj)
 
     if objects_to_delete:
-        deleted_count = await Object.soft_delete_batch(session, objects_to_delete)
+        deleted_count = await File.soft_delete_batch(session, objects_to_delete)
         l.info(f"用户 {user_id} 软删除了 {deleted_count} 个对象到回收站")
 
 
@@ -179,7 +179,7 @@ async def router_object_delete(
 async def router_object_move(
     session: SessionDep,
     user: Annotated[User, Depends(auth_required)],
-    request: ObjectMoveRequest,
+    request: FileMoveRequest,
 ) -> None:
     """
     移动对象端点
@@ -192,7 +192,7 @@ async def router_object_move(
     # 存储 user.id，避免后续 save() 导致 user 过期后无法访问
     user_id = user.id
 
-    dst = await Object.validate_parent(session, request.dst_id, user_id)
+    dst = await File.validate_parent(session, request.dst_id, user_id)
 
     # 存储 dst 的属性，避免后续数据库操作导致 dst 过期后无法访问
     dst_id = dst.id
@@ -201,9 +201,9 @@ async def router_object_move(
     moved_count = 0
 
     for src_id in request.src_ids:
-        src = await Object.get(
+        src = await File.get(
             session,
-            (Object.id == src_id) & (Object.deleted_at == None)
+            (File.id == src_id) & (File.deleted_at == None)
         )
         if not src or src.owner_id != user_id:
             continue
@@ -227,18 +227,18 @@ async def router_object_move(
                 if current_parent_id == src.id:
                     is_cycle = True
                     break
-                current = await Object.get(session, Object.id == current_parent_id)
+                current = await File.get(session, File.id == current_parent_id)
                 current_parent_id = current.parent_id if current else None
             if is_cycle:
                 continue
 
         # 检查目标目录下是否存在同名对象（仅检查未删除的）
-        existing = await Object.get(
+        existing = await File.get(
             session,
-            (Object.owner_id == user_id) &
-            (Object.parent_id == dst_id) &
-            (Object.name == src.name) &
-            (Object.deleted_at == None)
+            (File.owner_id == user_id) &
+            (File.parent_id == dst_id) &
+            (File.name == src.name) &
+            (File.deleted_at == None)
         )
         if existing:
             continue  # 跳过重名对象
@@ -260,7 +260,7 @@ async def router_object_move(
 async def router_object_copy(
     session: SessionDep,
     user: Annotated[User, Depends(auth_required)],
-    request: ObjectCopyRequest,
+    request: FileCopyRequest,
 ) -> None:
     """
     复制对象端点
@@ -270,7 +270,7 @@ async def router_object_copy(
     2. 对于每个源对象：
        - 验证源对象存在且属于当前用户
        - 检查目标目录下是否存在同名对象
-       - 如果是文件：增加 PhysicalFile 引用计数，创建新 Object
+       - 如果是文件：增加 PhysicalFile 引用计数，创建新 File
        - 如果是目录：递归复制所有子对象
     3. 返回复制结果
 
@@ -282,16 +282,16 @@ async def router_object_copy(
     # 存储 user.id，避免后续 save() 导致 user 过期后无法访问
     user_id = user.id
 
-    dst = await Object.validate_parent(session, request.dst_id, user_id)
+    dst = await File.validate_parent(session, request.dst_id, user_id)
 
     copied_count = 0
     new_ids: list[UUID] = []
     total_copied_size = 0
 
     for src_id in request.src_ids:
-        src = await Object.get(
+        src = await File.get(
             session,
-            (Object.id == src_id) & (Object.deleted_at == None)
+            (File.id == src_id) & (File.deleted_at == None)
         )
         if not src or src.owner_id != user_id:
             continue
@@ -316,17 +316,17 @@ async def router_object_copy(
                 if current.parent_id == src.id:
                     is_cycle = True
                     break
-                current = await Object.get(session, Object.id == current.parent_id)
+                current = await File.get(session, File.id == current.parent_id)
             if is_cycle:
                 continue
 
         # 检查目标目录下是否存在同名对象（仅检查未删除的）
-        existing = await Object.get(
+        existing = await File.get(
             session,
-            (Object.owner_id == user_id) &
-            (Object.parent_id == dst.id) &
-            (Object.name == src.name) &
-            (Object.deleted_at == None)
+            (File.owner_id == user_id) &
+            (File.parent_id == dst.id) &
+            (File.name == src.name) &
+            (File.deleted_at == None)
         )
         if existing:
             # [TODO] 应当询问用户是否覆盖、跳过或创建副本
@@ -354,7 +354,7 @@ async def router_object_copy(
 async def router_object_rename(
     session: SessionDep,
     user: Annotated[User, Depends(auth_required)],
-    request: ObjectRenameRequest,
+    request: FileRenameRequest,
 ) -> None:
     """
     重命名对象端点
@@ -375,9 +375,9 @@ async def router_object_rename(
     user_id = user.id
 
     # 验证对象存在（排除已删除的）
-    obj = await Object.get(
+    obj = await File.get(
         session,
-        (Object.id == request.id) & (Object.deleted_at == None)
+        (File.id == request.id) & (File.deleted_at == None)
     )
     if not obj:
         raise HTTPException(status_code=404, detail="对象不存在")
@@ -405,12 +405,12 @@ async def router_object_rename(
         return  # noqa: already 204
 
     # 检查同目录下是否存在同名对象（仅检查未删除的）
-    existing = await Object.get(
+    existing = await File.get(
         session,
-        (Object.owner_id == user_id) &
-        (Object.parent_id == obj.parent_id) &
-        (Object.name == new_name) &
-        (Object.deleted_at == None)
+        (File.owner_id == user_id) &
+        (File.parent_id == obj.parent_id) &
+        (File.name == new_name) &
+        (File.deleted_at == None)
     )
     if existing:
         raise HTTPException(status_code=409, detail="同名对象已存在")
@@ -431,7 +431,7 @@ async def router_object_property(
     session: SessionDep,
     user: Annotated[User, Depends(auth_required)],
     id: UUID,
-) -> ObjectPropertyResponse:
+) -> FilePropertyResponse:
     """
     获取对象基本属性端点
 
@@ -440,9 +440,9 @@ async def router_object_property(
     :param id: 对象UUID
     :return: 对象基本属性
     """
-    obj = await Object.get(
+    obj = await File.get(
         session,
-        (Object.id == id) & (Object.deleted_at == None)
+        (File.id == id) & (File.deleted_at == None)
     )
     if not obj:
         raise HTTPException(status_code=404, detail="对象不存在")
@@ -450,7 +450,7 @@ async def router_object_property(
     if obj.owner_id != user.id:
         raise HTTPException(status_code=403, detail="无权查看此对象")
 
-    return ObjectPropertyResponse(
+    return FilePropertyResponse(
         id=obj.id,
         name=obj.name,
         type=obj.type,
@@ -471,7 +471,7 @@ async def router_object_property_detail(
     session: SessionDep,
     user: Annotated[User, Depends(auth_required)],
     id: UUID,
-) -> ObjectPropertyDetailResponse:
+) -> FilePropertyDetailResponse:
     """
     获取对象详细属性端点
 
@@ -480,10 +480,10 @@ async def router_object_property_detail(
     :param id: 对象UUID
     :return: 对象详细属性
     """
-    obj = await Object.get(
+    obj = await File.get(
         session,
-        (Object.id == id) & (Object.deleted_at == None),
-        load=Object.metadata_entries,
+        (File.id == id) & (File.deleted_at == None),
+        load=File.metadata_entries,
     )
     if not obj:
         raise HTTPException(status_code=404, detail="对象不存在")
@@ -499,7 +499,7 @@ async def router_object_property_detail(
     from sqlmodels import Share
     shares = await Share.get(
         session,
-        Share.object_id == obj.id,
+        Share.file_id == obj.id,
         fetch_mode="all"
     )
     share_count = len(shares)
@@ -524,7 +524,7 @@ async def router_object_property_detail(
         if ns not in INTERNAL_NAMESPACES:
             metadata[entry.name] = entry.value
 
-    return ObjectPropertyDetailResponse(
+    return FilePropertyDetailResponse(
         id=obj.id,
         name=obj.name,
         type=obj.type,
@@ -545,15 +545,15 @@ async def router_object_property_detail(
 
 
 @object_router.patch(
-    path='/{object_id}/policy',
+    path='/{file_id}/policy',
     summary='切换对象存储策略',
 )
 async def router_object_switch_policy(
     session: SessionDep,
     background_tasks: BackgroundTasks,
     user: Annotated[User, Depends(auth_required)],
-    object_id: UUID,
-    request: ObjectSwitchPolicyRequest,
+    file_id: UUID,
+    request: FileSwitchPolicyRequest,
 ) -> TaskSummaryBase:
     """
     切换对象的存储策略
@@ -572,9 +572,9 @@ async def router_object_switch_policy(
     user_id = user.id
 
     # 查找对象
-    obj = await Object.get(
+    obj = await File.get(
         session,
-        (Object.id == object_id) & (Object.deleted_at == None)
+        (File.id == file_id) & (File.deleted_at == None)
     )
     if not obj:
         http_exceptions.raise_not_found("对象不存在")
@@ -606,7 +606,7 @@ async def router_object_switch_policy(
     # 保存必要的属性，避免 save 后对象过期
     src_policy_id = obj.policy_id
     obj_id = obj.id
-    obj_is_file = obj.type == ObjectType.FILE
+    obj_is_file = obj.type == FileType.FILE
     dest_policy_id = request.policy_id
     dest_policy_name = dest_policy.name
 
@@ -623,7 +623,7 @@ async def router_object_switch_policy(
         task_id=task_id,
         source_policy_id=src_policy_id,
         dest_policy_id=dest_policy_id,
-        object_id=obj_id,
+        file_id=obj_id,
     )
     task_props = await task_props.save(session)
 
@@ -631,7 +631,7 @@ async def router_object_switch_policy(
         # 文件：后台迁移
         async def _run_file_migration() -> None:
             async with DatabaseManager.session() as bg_session:
-                bg_obj = await Object.get(bg_session, Object.id == obj_id)
+                bg_obj = await File.get(bg_session, File.id == obj_id)
                 bg_policy = await Policy.get(bg_session, Policy.id == dest_policy_id)
                 bg_task = await Task.get(bg_session, Task.id == task_id)
                 await migrate_file_with_task(bg_session, bg_obj, bg_policy, bg_task)
@@ -639,7 +639,7 @@ async def router_object_switch_policy(
         background_tasks.add_task(_run_file_migration)
     else:
         # 目录：先更新目录自身的 policy_id
-        obj = await Object.get(session, Object.id == obj_id)
+        obj = await File.get(session, File.id == obj_id)
         obj.policy_id = dest_policy_id
         obj = await obj.save(session)
 
@@ -647,7 +647,7 @@ async def router_object_switch_policy(
             # 后台迁移所有已有文件
             async def _run_dir_migration() -> None:
                 async with DatabaseManager.session() as bg_session:
-                    bg_folder = await Object.get(bg_session, Object.id == obj_id)
+                    bg_folder = await File.get(bg_session, File.id == obj_id)
                     bg_policy = await Policy.get(bg_session, Policy.id == dest_policy_id)
                     bg_task = await Task.get(bg_session, Task.id == task_id)
                     await migrate_directory_files(bg_session, bg_folder, bg_policy, bg_task)
@@ -680,14 +680,14 @@ async def router_object_switch_policy(
 # ==================== 元数据端点 ====================
 
 @object_router.get(
-    path='/{object_id}/metadata',
+    path='/{file_id}/metadata',
     summary='获取对象元数据',
     description='获取对象的元数据键值对，可按命名空间过滤。',
 )
 async def router_get_object_metadata(
     session: SessionDep,
     user: Annotated[User, Depends(auth_required)],
-    object_id: UUID,
+    file_id: UUID,
     ns: str | None = None,
 ) -> MetadataResponse:
     """
@@ -702,10 +702,10 @@ async def router_get_object_metadata(
     - 404: 对象不存在
     - 403: 无权查看此对象
     """
-    obj = await Object.get(
+    obj = await File.get(
         session,
-        (Object.id == object_id) & (Object.deleted_at == None),
-        load=Object.metadata_entries,
+        (File.id == file_id) & (File.deleted_at == None),
+        load=File.metadata_entries,
     )
     if not obj:
         raise HTTPException(status_code=404, detail="对象不存在")
@@ -734,7 +734,7 @@ async def router_get_object_metadata(
 
 
 @object_router.patch(
-    path='/{object_id}/metadata',
+    path='/{file_id}/metadata',
     summary='批量更新对象元数据',
     description='批量设置或删除对象的元数据条目。仅允许修改 custom: 命名空间。',
     status_code=204,
@@ -742,7 +742,7 @@ async def router_get_object_metadata(
 async def router_patch_object_metadata(
     session: SessionDep,
     user: Annotated[User, Depends(auth_required)],
-    object_id: UUID,
+    file_id: UUID,
     request: MetadataPatchRequest,
 ) -> None:
     """
@@ -758,9 +758,9 @@ async def router_patch_object_metadata(
     - 404: 对象不存在
     - 403: 无权操作此对象
     """
-    obj = await Object.get(
+    obj = await File.get(
         session,
-        (Object.id == object_id) & (Object.deleted_at == None),
+        (File.id == file_id) & (File.deleted_at == None),
     )
     if not obj:
         raise HTTPException(status_code=404, detail="对象不存在")
@@ -779,28 +779,28 @@ async def router_patch_object_metadata(
 
         if patch.value is None:
             # 删除元数据条目
-            existing = await ObjectMetadata.get(
+            existing = await FileMetadata.get(
                 session,
-                (ObjectMetadata.object_id == object_id) & (ObjectMetadata.name == patch.key),
+                (FileMetadata.file_id == file_id) & (FileMetadata.name == patch.key),
             )
             if existing:
-                await ObjectMetadata.delete(session, instances=existing)
+                await FileMetadata.delete(session, instances=existing)
         else:
             # 设置/更新元数据条目
-            existing = await ObjectMetadata.get(
+            existing = await FileMetadata.get(
                 session,
-                (ObjectMetadata.object_id == object_id) & (ObjectMetadata.name == patch.key),
+                (FileMetadata.file_id == file_id) & (FileMetadata.name == patch.key),
             )
             if existing:
                 existing.value = patch.value
                 existing = await existing.save(session)
             else:
-                entry = ObjectMetadata(
-                    object_id=object_id,
+                entry = FileMetadata(
+                    file_id=file_id,
                     name=patch.key,
                     value=patch.value,
                     is_public=True,
                 )
                 entry = await entry.save(session)
 
-    l.info(f"用户 {user.id} 更新了对象 {object_id} 的 {len(request.patches)} 条元数据")
+    l.info(f"用户 {user.id} 更新了对象 {file_id} 的 {len(request.patches)} 条元数据")

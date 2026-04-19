@@ -27,6 +27,7 @@ from sqlmodels.server_config import ServerConfig
 from sqlmodels.user import User, UserStatus
 from sqlmodels.user_authn import UserAuthn
 from utils import JWT, Password, http_exceptions
+from utils.conf import appmeta
 from utils.captcha import CaptchaScene
 from utils.password.pwd import PasswordStatus
 from utils.redis.challenge_store import ChallengeStore
@@ -209,9 +210,9 @@ async def _auto_register_oauth_user(
     # 创建用户根目录
     default_policy = await sqlmodels.Policy.get(session, sqlmodels.Policy.name == "本地存储")
     if default_policy:
-        await sqlmodels.Object(
+        await sqlmodels.File(
             name="/",
-            type=sqlmodels.ObjectType.FOLDER,
+            type=sqlmodels.FileType.FOLDER,
             owner_id=new_user_id,
             parent_id=None,
             policy_id=default_policy.id,
@@ -298,7 +299,7 @@ async def _login_magic_link(
 
     identifier 为签名 token，由 itsdangerous 生成。
     """
-    serializer = URLSafeTimedSerializer(JWT.SECRET_KEY)
+    serializer = URLSafeTimedSerializer(appmeta.secret_key)
 
     try:
         email = serializer.loads(request.identifier, salt="magic-link-salt", max_age=600)
@@ -395,7 +396,7 @@ async def router_user_session_refresh(
     4. 签发新的 access_token + refresh_token
     """
     try:
-        payload = jwt.decode(token, JWT.SECRET_KEY, algorithms=["HS256"])
+        payload = jwt.decode(token, appmeta.secret_key, algorithms=["HS256"])
     except jwt.InvalidTokenError:
         http_exceptions.raise_unauthorized("刷新令牌无效或已过期")
 
@@ -498,9 +499,9 @@ async def router_user_register(
         http_exceptions.raise_internal_error()
     default_policy = default_group.policies[0]
 
-    await sqlmodels.Object(
+    await sqlmodels.File(
         name="/",
-        type=sqlmodels.ObjectType.FOLDER,
+        type=sqlmodels.FileType.FOLDER,
         owner_id=new_user_id,
         parent_id=None,
         policy_id=default_policy.id,
@@ -540,7 +541,7 @@ async def router_user_magic_link(
         http_exceptions.raise_not_found("该邮箱未注册")
 
     # 生成签名 token
-    serializer = URLSafeTimedSerializer(JWT.SECRET_KEY)
+    serializer = URLSafeTimedSerializer(appmeta.secret_key)
     token = serializer.dumps(request.email, salt="magic-link-salt")
 
     # 获取站点 URL
@@ -683,11 +684,10 @@ async def router_user_me(
         load=sqlmodels.User.tags,
     )
 
-    # 加载 group 及其 options 关系
+    # 加载 group
     group = await sqlmodels.Group.get(
         session,
         sqlmodels.Group.id == user.group_id,
-        load=sqlmodels.Group.options
     )
 
     # 构建 GroupResponse

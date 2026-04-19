@@ -1,7 +1,7 @@
 from typing import AsyncGenerator, ClassVar
 
 from loguru import logger
-from sqlalchemy import NullPool, AsyncAdaptedQueuePool
+from sqlalchemy import NullPool, AsyncAdaptedQueuePool, text
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine
 from sqlalchemy.orm import sessionmaker
 from sqlmodel import SQLModel

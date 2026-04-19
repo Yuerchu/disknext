@@ -7,7 +7,7 @@ from middleware.auth import admin_required
 from middleware.dependencies import SessionDep, TableViewRequestDep
 from sqlmodels import (
     User, ResponseBase, UserPublic, ListResponse,
-    Group, GroupOptions, )
+    Group )
 from sqlmodels.group import (
     GroupCreateRequest, GroupUpdateRequest, GroupDetailResponse, )
 from sqlmodels.policy import GroupPolicyLink
@@ -34,7 +34,7 @@ async def router_admin_get_groups(
     :param table_view: 分页排序参数依赖
     :return: 分页用户组列表
     """
-    result = await Group.get_with_count(session, table_view=table_view, load=Group.options)
+    result = await Group.get_with_count(session, table_view=table_view)
 
     # 构建响应
     items: list[GroupDetailResponse] = []
@@ -63,9 +63,8 @@ async def router_admin_get_group(
     :param group_id: 用户组UUID
     :return: 用户组详情
     """
-    group = await Group.get_exist_one(session, group_id, load=[Group.options, Group.policies])
+    group = await Group.get_exist_one(session, group_id, load=Group.policies)
 
-    # 直接访问已加载的关系，无需额外查询
     policies = group.policies
     user_count = await User.count(session, User.group_id == group_id)
     return GroupDetailResponse.from_group(group, user_count, policies)
@@ -124,20 +123,13 @@ async def router_admin_create_group(
     if existing:
         raise HTTPException(status_code=409, detail="用户组名称已存在")
 
-    # 创建用户组
+    # 创建用户组（选项字段已合并到 Group 表）
     group = Group(
         name=request.name,
         max_storage=request.max_storage,
         share_enabled=request.share_enabled,
         web_dav_enabled=request.web_dav_enabled,
         speed_limit=request.speed_limit,
-    )
-    group = await group.save(session)
-    group_id_val: UUID = group.id
-
-    # 创建选项
-    options = GroupOptions(
-        group_id=group_id_val,
         share_download=request.share_download,
         share_free=request.share_free,
         relocate=request.relocate,
@@ -150,7 +142,8 @@ async def router_admin_create_group(
         aria2=request.aria2,
         redirected_source=request.redirected_source,
     )
-    options = await options.save(session)
+    group = await group.save(session)
+    group_id_val: UUID = group.id
 
     # 关联存储策略
     for policy_id in request.policy_ids:
@@ -181,7 +174,7 @@ async def router_admin_update_group(
     :param request: 更新请求
     :return: 更新结果
     """
-    group = await Group.get_exist_one(session, group_id, load=Group.options)
+    group = await Group.get_exist_one(session, group_id)
 
     # 检查名称唯一性（如果要更新名称）
     if request.name and request.name != group.name:
@@ -189,38 +182,20 @@ async def router_admin_update_group(
         if existing:
             raise HTTPException(status_code=409, detail="用户组名称已存在")
 
-    # 更新组基础字段
-    update_data = request.model_dump(
-        exclude_unset=True,
-        exclude={'policy_ids', 'share_download', 'share_free', 'relocate',
-                 'source_batch', 'select_node', 'advance_delete', 'archive_download',
-                 'archive_task', 'webdav_proxy', 'aria2', 'redirected_source'}
-    )
+    # 更新字段（选项字段已合并到 Group 表，统一处理）
+    update_data = request.model_dump(exclude_unset=True, exclude={'policy_ids'})
     if update_data:
         for key, value in update_data.items():
-            setattr(group, key, value)
+            if value is not None:
+                setattr(group, key, value)
         group = await group.save(session)
-
-    # 更新选项
-    if group.options:
-        options_fields = {'share_download', 'share_free', 'relocate', 'source_batch',
-                         'select_node', 'advance_delete', 'archive_download',
-                         'archive_task', 'webdav_proxy', 'aria2', 'redirected_source'}
-        options_data = {k: v for k, v in request.model_dump(exclude_unset=True).items()
-                       if k in options_fields and v is not None}
-        if options_data:
-            for key, value in options_data.items():
-                setattr(group.options, key, value)
-            group.options = await group.options.save(session)
 
     # 更新策略关联
     if request.policy_ids is not None:
-        # 删除旧关联
         from sqlmodel import delete
         await session.execute(
             delete(GroupPolicyLink).where(GroupPolicyLink.group_id == group_id)
         )
-        # 添加新关联
         for policy_id in request.policy_ids:
             link = GroupPolicyLink(group_id=group_id, policy_id=policy_id)
             session.add(link)

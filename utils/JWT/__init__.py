@@ -5,7 +5,8 @@ from uuid import UUID, uuid4
 import jwt
 from fastapi.security import OAuth2PasswordBearer
 
-from sqlmodels import AccessTokenBase, RefreshTokenBase, TokenResponse
+from sqlmodels import AccessTokenBase, RefreshTokenBase
+from utils.conf import appmeta
 
 if TYPE_CHECKING:
     from sqlmodels.group import GroupClaims
@@ -16,25 +17,6 @@ oauth2_scheme = OAuth2PasswordBearer(
     tokenUrl="/api/v1/user/session",
     refreshUrl="/api/v1/user/session/refresh",
 )
-
-SECRET_KEY: str = ''
-
-
-async def load_secret_key() -> None:
-    """
-    从数据库读取 JWT 的密钥。
-    """
-    # 延迟导入以避免循环依赖
-    from sqlmodels.database_connection import DatabaseManager
-    from sqlmodels.server_config import ServerConfig
-
-    global SECRET_KEY
-    async for session in DatabaseManager.get_session():
-        config = await ServerConfig.get_instance(session)
-        SECRET_KEY = config.secret_key
-
-    if not SECRET_KEY:
-        raise RuntimeError("JWT SECRET_KEY 未配置，拒绝启动。请确保 ServerConfig 已初始化。")
 
 
 def build_token_payload(
@@ -67,7 +49,7 @@ def build_token_payload(
         "iat": int(datetime.now(timezone.utc).timestamp()),
         "exp": int(expire.timestamp())
     })
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=algorithm), expire
+    return jwt.encode(to_encode, appmeta.secret_key, algorithm=algorithm), expire
 
 
 # 访问令牌
@@ -130,17 +112,17 @@ def create_refresh_token(
 
     :return: 包含密钥本身和过期时间的 `RefreshTokenBase`
     """
-    
+
     data = {"sub": str(sub), "jti": str(jti)}
-    
+
     # 将额外的字段添加到 Payload 中
     for key, value in kwargs.items():
         data[key] = value
 
     refresh_token, expire_at = build_token_payload(
-        data, 
-        True, 
-        algorithm, 
+        data,
+        True,
+        algorithm,
         expires_delta
     )
     return RefreshTokenBase(
@@ -170,4 +152,4 @@ def create_download_token(file_id: UUID, owner_id: UUID) -> str:
         "exp": datetime.now(timezone.utc) + DOWNLOAD_TOKEN_TTL,
         "type": "download",
     }
-    return jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+    return jwt.encode(payload, appmeta.secret_key, algorithm="HS256")

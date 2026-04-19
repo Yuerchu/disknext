@@ -4,7 +4,7 @@ from uuid import UUID
 
 from sqlmodel import Field, Relationship
 
-from sqlmodel_ext import SQLModelBase, TableBaseMixin, UUIDTableBaseMixin, Str255, NonNegativeBigInt
+from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str255, NonNegativeBigInt
 
 if TYPE_CHECKING:
     from .user import User
@@ -165,13 +165,9 @@ class GroupDetailResponse(GroupCoreBase, GroupAllOptionsBase):
         policies: list["Policy"],
     ) -> "GroupDetailResponse":
         """从 Group ORM 对象构建"""
-        opts = group.options
         return cls(
-            # GroupCoreBase 字段（从 Group 模型提取）
             **GroupCoreBase.model_validate(group, from_attributes=True).model_dump(),
-            # GroupAllOptionsBase 字段（从 GroupOptions 提取）
-            **(GroupAllOptionsBase.model_validate(opts, from_attributes=True).model_dump() if opts else {}),
-            # 计算字段
+            **GroupAllOptionsBase.model_validate(group, from_attributes=True).model_dump(),
             user_count=user_count,
             policy_ids=[p.id for p in policies],
         )
@@ -198,14 +194,13 @@ class GroupClaims(GroupCoreBase, GroupAllOptionsBase):
     @classmethod
     def from_group(cls, group: "Group") -> "GroupClaims":
         """
-        从 Group ORM 对象（需预加载 options 关系）构建权限快照。
+        从 Group ORM 对象构建权限快照。
 
-        :param group: 已加载 options 的 Group 对象
+        :param group: Group 对象
         """
-        opts = group.options
         return cls(
             **GroupCoreBase.model_validate(group, from_attributes=True).model_dump(),
-            **(GroupAllOptionsBase.model_validate(opts, from_attributes=True).model_dump() if opts else {}),
+            **GroupAllOptionsBase.model_validate(group, from_attributes=True).model_dump(),
         )
 
 
@@ -240,21 +235,7 @@ class GroupResponse(GroupBase, GroupOptionsBase):
 from .policy import GroupPolicyLink
 
 
-class GroupOptions(GroupAllOptionsBase, TableBaseMixin):
-    """用户组选项模型"""
-
-    group_id: UUID = Field(
-        foreign_key="group.id",
-        unique=True,
-        ondelete="CASCADE"
-    )
-    """关联的用户组UUID"""
-
-    # 反向关系
-    group: "Group" = Relationship(back_populates="options")
-
-
-class Group(GroupBase, UUIDTableBaseMixin):
+class Group(GroupBase, GroupAllOptionsBase, UUIDTableBaseMixin):
     """用户组模型"""
 
     name: Str255 = Field(unique=True)
@@ -274,13 +255,6 @@ class Group(GroupBase, UUIDTableBaseMixin):
 
     speed_limit: int = 0
     """速度限制 (KB/s), 0为不限制"""
-
-    # 一对一关系：用户组选项
-    options: GroupOptions | None = Relationship(
-        back_populates="group",
-        sa_relationship_kwargs={"uselist": False},
-        cascade_delete=True,
-    )
 
     # 多对多关系：用户组可以关联多个存储策略
     policies: list["Policy"] = Relationship(
@@ -303,19 +277,18 @@ class Group(GroupBase, UUIDTableBaseMixin):
 
     def to_response(self) -> "GroupResponse":
         """转换为响应 DTO"""
-        opts = self.options
         return GroupResponse(
             id=self.id,
             name=self.name,
             allow_share=self.share_enabled,
             webdav=self.web_dav_enabled,
-            share_download=opts.share_download if opts else False,
-            share_free=opts.share_free if opts else False,
-            relocate=opts.relocate if opts else False,
-            source_batch=opts.source_batch if opts else 0,
-            select_node=opts.select_node if opts else False,
-            advance_delete=opts.advance_delete if opts else False,
-            allow_remote_download=opts.aria2 if opts else False,
-            allow_archive_download=opts.archive_download if opts else False,
-            allow_webdav_proxy=opts.webdav_proxy if opts else False,
+            share_download=self.share_download,
+            share_free=self.share_free,
+            relocate=self.relocate,
+            source_batch=self.source_batch,
+            select_node=self.select_node,
+            advance_delete=self.advance_delete,
+            allow_remote_download=self.aria2,
+            allow_archive_download=self.archive_download,
+            allow_webdav_proxy=self.webdav_proxy,
         )

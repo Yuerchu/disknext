@@ -5,19 +5,19 @@
 - 单文件迁移（带任务状态更新）
 - 目录批量迁移（带进度更新）
 
-底层迁移逻辑由 Object.migrate_to_policy() 实现。
+底层迁移逻辑由 File.migrate_to_policy() 实现。
 """
 from loguru import logger as l
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from sqlmodels.object import Object, ObjectType
+from sqlmodels.file import File, FileType
 from sqlmodels.policy import Policy
 from sqlmodels.task import Task, TaskStatus
 
 
 async def migrate_file_with_task(
         session: AsyncSession,
-        obj: Object,
+        obj: File,
         dest_policy: Policy,
         task: Task,
 ) -> None:
@@ -48,7 +48,7 @@ async def migrate_file_with_task(
 
 async def migrate_directory_files(
         session: AsyncSession,
-        folder: Object,
+        folder: File,
         dest_policy: Policy,
         task: Task,
 ) -> None:
@@ -70,8 +70,8 @@ async def migrate_directory_files(
         task = await task.save(session)
 
         # 收集所有需要迁移的文件
-        files_to_migrate: list[Object] = []
-        folders_to_update: list[Object] = []
+        files_to_migrate: list[File] = []
+        folders_to_update: list[File] = []
         await _collect_objects_recursive(session, folder, files_to_migrate, folders_to_update)
 
         total = len(files_to_migrate)
@@ -120,9 +120,9 @@ async def migrate_directory_files(
 
 async def _collect_objects_recursive(
         session: AsyncSession,
-        folder: Object,
-        files: list[Object],
-        folders: list[Object],
+        folder: File,
+        files: list[File],
+        folders: list[File],
 ) -> None:
     """
     递归收集目录下所有文件和子目录
@@ -132,11 +132,11 @@ async def _collect_objects_recursive(
     :param files: 文件列表（输出）
     :param folders: 子目录列表（输出）
     """
-    children: list[Object] = await Object.get_children(session, folder.owner_id, folder.id)
+    children: list[File] = await File.get_children(session, folder.owner_id, folder.id)
 
     for child in children:
-        if child.type == ObjectType.FILE:
+        if child.type == FileType.FILE:
             files.append(child)
-        elif child.type == ObjectType.FOLDER:
+        elif child.type == FileType.FOLDER:
             folders.append(child)
             await _collect_objects_recursive(session, child, files, folders)

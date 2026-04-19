@@ -7,11 +7,11 @@ from uuid import uuid4
 
 import pytest
 
-import utils.JWT as JWT
+import utils.conf.appmeta as appmeta
 from utils.JWT.wopi_token import create_wopi_token, verify_wopi_token
 
 # 确保测试 secret key
-JWT.SECRET_KEY = "55dd5c582b21b96b81b0421d6e25507877839e64434d704c89db8ef90e4077d8"
+appmeta.secret_key = "55dd5c582b21b96b81b0421d6e25507877839e64434d704c89db8ef90e4077d8"
 
 
 class TestWopiToken:
@@ -56,7 +56,7 @@ class TestWopiToken:
         # 创建一个不含 type=wopi 的令牌
         token = pyjwt.encode(
             {"file_id": str(uuid4()), "user_id": str(uuid4()), "type": "download"},
-            JWT.SECRET_KEY,
+            appmeta.secret_key,
             algorithm="HS256",
         )
         payload = verify_wopi_token(token)

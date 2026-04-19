@@ -5,10 +5,10 @@
 """
 from .users import UserFactory
 from .groups import GroupFactory
-from .objects import ObjectFactory
+from .files import FileFactory
 
 __all__ = [
     "UserFactory",
     "GroupFactory",
-    "ObjectFactory",
+    "FileFactory",
 ]

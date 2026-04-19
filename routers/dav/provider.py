@@ -1,7 +1,7 @@
 """
 DiskNext WebDAV 存储 Provider
 
-将 WsgiDAV 的文件操作映射到 DiskNext 的 Object 模型。
+将 WsgiDAV 的文件操作映射到 DiskNext 的 File 模型。
 所有异步数据库/文件操作通过 asyncio.run_coroutine_threadsafe() 桥接。
 """
 import asyncio
@@ -22,7 +22,7 @@ from wsgidav.dav_provider import DAVCollection, DAVNonCollection, DAVProvider
 
 from utils.storage import LocalStorageService
 from sqlmodels.database_connection import DatabaseManager
-from sqlmodels.object import Object, ObjectType
+from sqlmodels.file import File, FileType
 from sqlmodels.physical_file import PhysicalFile
 from sqlmodels.policy import Policy
 from sqlmodels.user import User
@@ -64,22 +64,22 @@ async def _get_webdav_account(webdav_id: int) -> WebDAV | None:
         return await WebDAV.get(session, WebDAV.id == webdav_id)
 
 
-async def _get_object_by_path(user_id: UUID, path: str) -> Object | None:
+async def _get_object_by_path(user_id: UUID, path: str) -> File | None:
     """根据路径获取对象"""
     async with _get_session() as session:
-        return await Object.get_by_path(session, user_id, path)
+        return await File.get_by_path(session, user_id, path)
 
 
-async def _get_children(user_id: UUID, parent_id: UUID) -> list[Object]:
+async def _get_children(user_id: UUID, parent_id: UUID) -> list[File]:
     """获取目录子对象"""
     async with _get_session() as session:
-        return await Object.get_children(session, user_id, parent_id)
+        return await File.get_children(session, user_id, parent_id)
 
 
-async def _get_object_by_id(object_id: UUID) -> Object | None:
+async def _get_object_by_id(file_id: UUID) -> File | None:
     """根据ID获取对象"""
     async with _get_session() as session:
-        return await Object.get(session, Object.id == object_id, load=Object.physical_file)
+        return await File.get(session, File.id == file_id, load=File.physical_file)
 
 
 async def _get_user(user_id: UUID) -> User | None:
@@ -99,12 +99,12 @@ async def _create_folder(
     parent_id: UUID,
     owner_id: UUID,
     policy_id: UUID,
-) -> Object:
+) -> File:
     """创建目录对象"""
     async with _get_session() as session:
-        obj = Object(
+        obj = File(
             name=name,
-            type=ObjectType.FOLDER,
+            type=FileType.FOLDER,
             size=0,
             parent_id=parent_id,
             owner_id=owner_id,
@@ -119,12 +119,12 @@ async def _create_file(
     parent_id: UUID,
     owner_id: UUID,
     policy_id: UUID,
-) -> Object:
+) -> File:
     """创建空文件对象"""
     async with _get_session() as session:
-        obj = Object(
+        obj = File(
             name=name,
-            type=ObjectType.FILE,
+            type=FileType.FILE,
             size=0,
             parent_id=parent_id,
             owner_id=owner_id,
@@ -134,16 +134,16 @@ async def _create_file(
         return obj
 
 
-async def _soft_delete_object(object_id: UUID) -> None:
+async def _soft_delete_object(file_id: UUID) -> None:
     """软删除对象（移入回收站）"""
     async with _get_session() as session:
-        obj = await Object.get(session, Object.id == object_id)
+        obj = await File.get(session, File.id == file_id)
         if obj:
-            await Object.soft_delete_batch(session, [obj])
+            await File.soft_delete_batch(session, [obj])
 
 
 async def _finalize_upload(
-    object_id: UUID,
+    file_id: UUID,
     physical_path: str,
     size: int,
     owner_id: UUID,
@@ -169,8 +169,8 @@ async def _finalize_upload(
         )
         pf = await pf.save(session)
 
-        # 更新 Object
-        obj = await Object.get(session, Object.id == object_id)
+        # 更新 File
+        obj = await File.get(session, File.id == file_id)
         if obj:
             obj.sqlmodel_update({'size': size, 'physical_file_id': pf.id})
             obj = await obj.save(session)
@@ -183,13 +183,13 @@ async def _finalize_upload(
 
 
 async def _move_object(
-    object_id: UUID,
+    file_id: UUID,
     new_parent_id: UUID,
     new_name: str,
 ) -> None:
     """移动/重命名对象"""
     async with _get_session() as session:
-        obj = await Object.get(session, Object.id == object_id)
+        obj = await File.get(session, File.id == file_id)
         if obj:
             obj.sqlmodel_update({'parent_id': new_parent_id, 'name': new_name})
             obj = await obj.save(session)
@@ -203,7 +203,7 @@ async def _copy_object_recursive(
 ) -> None:
     """递归复制对象"""
     async with _get_session() as session:
-        src = await Object.get(session, Object.id == src_id)
+        src = await File.get(session, File.id == src_id)
         if not src:
             return
         await src.copy_recursive(session, dst_parent_id, owner_id)
@@ -336,7 +336,7 @@ class DiskNextCollection(DAVCollection):
         self,
         path: str,
         environ: dict[str, object],
-        obj: Object,
+        obj: File,
         user_id: UUID,
         account: WebDAV,
     ) -> None:
@@ -455,7 +455,7 @@ class DiskNextFile(DAVNonCollection):
         self,
         path: str,
         environ: dict[str, object],
-        obj: Object,
+        obj: File,
         user_id: UUID,
         account: WebDAV,
     ) -> None:
@@ -585,7 +585,7 @@ class DiskNextFile(DAVNonCollection):
 
         # 更新数据库记录
         _run_async(_finalize_upload(
-            object_id=self._obj.id,
+            file_id=self._obj.id,
             physical_path=self._write_path,
             size=size,
             owner_id=self._user_id,

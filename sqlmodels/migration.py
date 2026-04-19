@@ -1,8 +1,6 @@
 from loguru import logger as log
 from sqlmodel import col
 
-from utils.password.pwd import Password
-
 
 async def migration() -> None:
     """
@@ -36,7 +34,7 @@ async def _ensure_server_config() -> None:
             log.info(f"服务器配置已存在: id={existing.id}")
             return
 
-        config = ServerConfig(id=1, secret_key=Password.generate(256))
+        config = ServerConfig(id=1)
         config = await config.save(session)
         log.info(f"默认服务器配置已创建: id={config.id}")
 
@@ -73,7 +71,7 @@ _DEFAULT_MAIL_ACTIVATION_TEMPLATE = '''<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 
 _DEFAULT_MAIL_RESET_PWD_TEMPLATE = '''<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html lang="zh-CN" xmlns="http://www.w3.org/1999/xhtml" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:v="urn:schemas-microsoft-com:vml"><head><title>重置密码</title><meta charset="UTF-8"><meta content="text/html; charset=UTF-8" http-equiv="Content-Type"><meta content="IE=edge" http-equiv="X-UA-Compatible"><meta content="telephone=no, date=no, address=no, email=no, url=no" name="format-detection"><meta content="width=device-width, initial-scale=1.0" name="viewport"><style>body { margin: 0; padding: 0; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; background-color: #ffffff; }table { border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; width: 100%; }table td { border-collapse: collapse; }img { border: 0; height: auto; line-height: 100%; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic; }body, table, td, p, a, li, blockquote { -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; }@media only screen and (max-width: 480px) {    .mobile-hide { display: none !important; }    .mobile-padding { padding: 20px !important; }    .content-width { width: 100% !important; max-width: 100% !important; }    h1 { font-size: 24px !important; line-height: 1.2 !important; }}</style></head><body style="margin: 0; padding: 0; background-color: #ffffff;"><table border="0" cellpadding="0" cellspacing="0" width="100%" role="presentation"><tr><td align="center" style="background-color: #ffffff; padding-top: 40px; padding-bottom: 40px;"><table align="center" border="0" cellpadding="0" cellspacing="0" class="content-width" style="max-width: 600px; width: 100%; background-color: #ffffff; border: 1px solid #ebebeb; border-radius: 12px; overflow: hidden;"><tr><td class="mobile-padding" style="padding: 40px 40px 30px 40px;"><table border="0" cellpadding="0" cellspacing="0" width="100%"><tr><td align="left"><a href="{{ site_url }}" target="_blank" style="text-decoration: none;">{% if logo_url %}<img src="{{ logo_url }}" alt="{{ site_name }}" width="120" style="display: block; width: 120px; max-width: 100%; border: 0;">{% else %}<span style="font-size: 24px; font-weight: bold; color: #333333;">{{ site_name }}</span>{% endif %}</a></td></tr><tr><td height="30" style="font-size: 1px; line-height: 30px;">&nbsp;</td></tr></table><h1 style="margin: 0; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 24px; font-weight: 700; color: #141414; line-height: 32px;">重置密码</h1><table border="0" cellpadding="0" cellspacing="0" width="100%"><tr><td height="15" style="font-size: 1px; line-height: 15px;">&nbsp;</td></tr><tr><td style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 15px; color: #141414; line-height: 24px;">您正在申请重置<strong>{{ site_name }}</strong> 的登录密码。若确认是您本人操作，请使用下方验证码：</td></tr><tr><td height="25" style="font-size: 1px; line-height: 25px;">&nbsp;</td></tr></table><table border="0" cellpadding="0" cellspacing="0" width="100%"><tr><td align="left"><table border="0" cellpadding="0" cellspacing="0" style="background-color: #f4f7fa; border-radius: 8px;"><tr><td align="center" style="padding: 15px 30px;"><span style="font-family: 'Courier New', Courier, monospace; font-size: 32px; font-weight: 700; color: #0666eb; letter-spacing: 4px; display: block;">{{ verify_code }}</span></td></tr></table></td></tr><tr><td height="25" style="font-size: 1px; line-height: 25px;">&nbsp;</td></tr></table><table border="0" cellpadding="0" cellspacing="0" width="100%"><tr><td style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 14px; color: #555555; line-height: 22px;"><p style="margin: 0 0 10px 0;">该验证码<strong>{{ valid_minutes }} 分钟内</strong>有效。</p><p style="margin: 0 0 10px 0; color: #666666;">如果您没有请求重置密码，请<strong>忽略此邮件</strong>，您的账户依然安全。</p></td></tr></table><table border="0" cellpadding="0" cellspacing="0" width="100%"><tr><td height="30" style="font-size: 1px; line-height: 30px; border-bottom: 1px solid #eeeeee;">&nbsp;</td></tr><tr><td height="20" style="font-size: 1px; line-height: 20px;">&nbsp;</td></tr></table><table border="0" cellpadding="0" cellspacing="0" width="100%"><tr><td style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 12px; color: #999999; line-height: 18px;"><p style="margin: 0;">此邮件由系统自动发送，请勿直接回复。</p><p style="margin: 5px 0 0 0;">&copy; {{ current_year }} {{ site_name }}. 保留所有权利。</p></td></tr></table></td></tr></table></td></tr></table></body></html>'''
 
 async def init_default_group() -> None:
-    from .group import Group, GroupOptions
+    from .group import Group
     from .policy import Policy, GroupPolicyLink
     from .server_config import ServerConfig
     from .database_connection import DatabaseManager
@@ -93,12 +91,6 @@ async def init_default_group() -> None:
                 share_enabled=True,
                 web_dav_enabled=True,
                 admin=True,
-            )
-            admin_group_id = admin_group.id  # 在 save 前保存 UUID
-            admin_group = await admin_group.save(session)
-
-            await GroupOptions(
-                group_id=admin_group_id,
                 archive_download=True,
                 archive_task=True,
                 share_download=True,
@@ -106,7 +98,9 @@ async def init_default_group() -> None:
                 aria2=True,
                 select_node=True,
                 advance_delete=True,
-            ).save(session)
+            )
+            admin_group_id = admin_group.id
+            admin_group = await admin_group.save(session)
 
             # 关联默认存储策略
             if default_policy_id:
@@ -123,14 +117,10 @@ async def init_default_group() -> None:
                 max_storage=1 * 1024 * 1024 * 1024,  # 1GB
                 share_enabled=True,
                 web_dav_enabled=True,
-            )
-            member_group_id = member_group.id  # 在 save 前保存 UUID
-            member_group = await member_group.save(session)
-
-            await GroupOptions(
-                group_id=member_group_id,
                 share_download=True,
-            ).save(session)
+            )
+            member_group_id = member_group.id
+            member_group = await member_group.save(session)
 
             # 关联默认存储策略
             if default_policy_id:
@@ -152,21 +142,17 @@ async def init_default_group() -> None:
                 name="游客",
                 share_enabled=False,
                 web_dav_enabled=False,
-            )
-            guest_group_id = guest_group.id  # 在 save 前保存 UUID
-            guest_group = await guest_group.save(session)
-
-            await GroupOptions(
-                group_id=guest_group_id,
                 share_download=True,
-            ).save(session)
+            )
+            guest_group_id = guest_group.id
+            guest_group = await guest_group.save(session)
 
             # 游客组不关联存储策略（无法上传）
 
 async def init_default_user() -> None:
     from .user import User
     from .group import Group
-    from .object import Object, ObjectType
+    from .file import File, FileType
     from .policy import Policy
     from .server_config import ServerConfig
     from .database_connection import DatabaseManager
@@ -211,9 +197,9 @@ async def init_default_user() -> None:
                 config = await config.save(session)
 
             # 为管理员创建根目录
-            await Object(
+            await File(
                 name="/",
-                type=ObjectType.FOLDER,
+                type=FileType.FOLDER,
                 owner_id=admin_user_id,
                 parent_id=None,
                 policy_id=default_policy_id,

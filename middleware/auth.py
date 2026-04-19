@@ -6,6 +6,7 @@ import jwt
 
 from sqlmodels.user import JWTPayload, User, UserStatus
 from utils import JWT
+from utils.conf import appmeta
 from .dependencies import SessionDep
 from utils import http_exceptions
 from utils.redis.user_ban_store import UserBanStore
@@ -24,7 +25,7 @@ async def jwt_required(
     3. DB 权威源复核（防止 JWT 签发后 DB 状态变更未同步到黑名单的边界情况）
     """
     try:
-        payload = jwt.decode(token, JWT.SECRET_KEY, algorithms=["HS256"])
+        payload = jwt.decode(token, appmeta.secret_key, algorithms=["HS256"])
         claims = JWTPayload(
             sub=payload["sub"],
             jti=payload["jti"],
@@ -83,7 +84,7 @@ def verify_download_token(token: str) -> tuple[str, UUID, UUID] | None:
     :return: (jti, file_id, owner_id) 或 None（验证失败）
     """
     try:
-        payload = jwt.decode(token, JWT.SECRET_KEY, algorithms=["HS256"])
+        payload = jwt.decode(token, appmeta.secret_key, algorithms=["HS256"])
         if payload.get("type") != "download":
             http_exceptions.raise_unauthorized("Download token required")
         jti = payload.get("jti")

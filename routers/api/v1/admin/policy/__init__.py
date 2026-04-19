@@ -8,7 +8,7 @@ from middleware.auth import admin_required
 from middleware.dependencies import SessionDep, TableViewRequestDep
 from sqlmodels import (
     Policy, PolicyCreateRequest, PolicyType, PolicySummary,
-    PolicyUpdateRequest, ResponseBase, ListResponse, Object,
+    PolicyUpdateRequest, ResponseBase, ListResponse, File,
 )
 from sqlmodel_ext import SQLModelBase
 from utils.storage import DirectoryCreationError, LocalStorageService, S3StorageService
@@ -393,7 +393,7 @@ async def router_policy_get_policy(
     groups = await policy.awaitable_attrs.groups
 
     # 统计使用此策略的对象数量
-    object_count = await Object.count(session, Object.policy_id == policy_id)
+    object_count = await File.count(session, File.policy_id == policy_id)
 
     return PolicyDetailResponse(
         **policy.model_dump(),
@@ -427,7 +427,7 @@ async def router_policy_delete_policy(
     policy = await Policy.get_exist_one(session, policy_id)
 
     # 检查是否有文件使用此策略
-    file_count = await Object.count(session, Object.policy_id == policy_id)
+    file_count = await File.count(session, File.policy_id == policy_id)
     if file_count > 0:
         raise HTTPException(
             status_code=400,

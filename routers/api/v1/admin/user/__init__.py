@@ -9,7 +9,7 @@ from middleware.dependencies import SessionDep, ServerConfigDep, TableViewReques
 from utils.redis.user_ban_store import UserBanStore
 from sqlmodels import (
     User, UserPublic, ListResponse,
-    Group, Object, ObjectType,
+    Group, File, FileType,
 )
 from sqlmodels.user import (
     UserAdminCreateRequest, UserAdminUpdateRequest, UserCalibrateResponse, UserStatus,
@@ -233,8 +233,8 @@ async def router_admin_calibrate_storage(
     # [TODO] 不应这么计算，看看 SQLModel_Ext 库怎么解决
     from sqlmodel import select
     result = await session.execute(
-        select(func.sum(Object.size), func.count(Object.id)).where(
-            (Object.owner_id == user_id) & (Object.type == ObjectType.FILE)
+        select(func.sum(File.size), func.count(File.id)).where(
+            (File.owner_id == user_id) & (File.type == FileType.FILE)
         )
     )
     row = result.one()

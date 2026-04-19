@@ -18,12 +18,12 @@ from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
 from main import app
-from sqlmodels import Group, GroupClaims, GroupOptions, Object, ObjectType, Policy, PolicyType, ServerConfig, User
+from sqlmodels import Group, GroupClaims, File, FileType, Policy, PolicyType, ServerConfig, User
 from sqlmodels.policy import GroupPolicyLink
 from sqlmodels.user import UserStatus
 from utils import Password
 from utils.JWT import create_access_token
-import utils.JWT as JWT
+import utils.conf.appmeta as appmeta
 
 # tests/conftest.py 在模块加载阶段已校验并设置 DATABASE_URL / REDIS_URL 环境变量，
 # 这里直接读取校验后的 URL 作为测试数据库连接
@@ -89,7 +89,6 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
         site_title="DiskNext",
         home_view_method="list",
         share_view_method="list",
-        secret_key="55dd5c582b21b96b81b0421d6e25507877839e64434d704c89db8ef90e4077d8",
     )
     test_session.add(server_config)
 
@@ -116,6 +115,12 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
         web_dav_enabled=True,
         admin=False,
         speed_limit=0,
+        share_download=True,
+        share_free=False,
+        relocate=False,
+        source_batch=0,
+        select_node=False,
+        advance_delete=False,
     )
     test_session.add(default_group)
 
@@ -127,6 +132,12 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
         web_dav_enabled=True,
         admin=True,
         speed_limit=0,
+        share_download=True,
+        share_free=True,
+        relocate=True,
+        source_batch=10,
+        select_node=True,
+        advance_delete=True,
     )
     test_session.add(admin_group)
 
@@ -140,29 +151,6 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
     # 4. 关联用户组与存储策略
     test_session.add(GroupPolicyLink(group_id=default_group.id, policy_id=default_policy.id))
     test_session.add(GroupPolicyLink(group_id=admin_group.id, policy_id=default_policy.id))
-
-    # 5. 创建用户组选项
-    default_group_options = GroupOptions(
-        group_id=default_group.id,
-        share_download=True,
-        share_free=False,
-        relocate=False,
-        source_batch=0,
-        select_node=False,
-        advance_delete=False,
-    )
-    test_session.add(default_group_options)
-
-    admin_group_options = GroupOptions(
-        group_id=admin_group.id,
-        share_download=True,
-        share_free=True,
-        relocate=True,
-        source_batch=10,
-        select_node=True,
-        advance_delete=True,
-    )
-    test_session.add(admin_group_options)
 
     # 5. 更新 ServerConfig 的 default_group_id
     server_config.default_group_id = default_group.id
@@ -217,10 +205,10 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
     await test_session.refresh(banned_user)
 
     # 8. 创建用户根目录
-    test_user_root = Object(
+    test_user_root = File(
         id=uuid4(),
         name="/",
-        type=ObjectType.FOLDER,
+        type=FileType.FOLDER,
         owner_id=test_user.id,
         parent_id=None,
         policy_id=default_policy.id,
@@ -228,10 +216,10 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
     )
     test_session.add(test_user_root)
 
-    admin_user_root = Object(
+    admin_user_root = File(
         id=uuid4(),
         name="/",
-        type=ObjectType.FOLDER,
+        type=FileType.FOLDER,
         owner_id=admin_user.id,
         parent_id=None,
         policy_id=default_policy.id,
@@ -242,11 +230,7 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
     await test_session.commit()
 
     # 9. 设置JWT密钥（从数据库加载）
-    JWT.SECRET_KEY = "55dd5c582b21b96b81b0421d6e25507877839e64434d704c89db8ef90e4077d8"
-
-    # 刷新 group options
-    await test_session.refresh(default_group_options)
-    await test_session.refresh(admin_group_options)
+    appmeta.secret_key = "55dd5c582b21b96b81b0421d6e25507877839e64434d704c89db8ef90e4077d8"
 
     return test_session
 
@@ -282,9 +266,8 @@ def banned_user_info() -> dict[str, str]:
 
 # ==================== JWT Token ====================
 
-def _build_group_claims(group: Group, group_options: GroupOptions | None) -> GroupClaims:
+def _build_group_claims(group: Group) -> GroupClaims:
     """从 Group 对象构建 GroupClaims"""
-    group.options = group_options
     return GroupClaims.from_group(group)
 
 
@@ -293,8 +276,7 @@ async def test_user_token(initialized_db: AsyncSession) -> str:
     """生成测试用户的JWT token"""
     user = await User.get(initialized_db, User.email == "testuser@test.local")
     group = await Group.get(initialized_db, Group.id == user.group_id)
-    group_options = await GroupOptions.get(initialized_db, GroupOptions.group_id == group.id)
-    group_claims = _build_group_claims(group, group_options)
+    group_claims = _build_group_claims(group)
 
     result = create_access_token(
         sub=user.id,
@@ -311,8 +293,7 @@ async def admin_user_token(initialized_db: AsyncSession) -> str:
     """生成管理员的JWT token"""
     user = await User.get(initialized_db, User.email == "admin@yxqi.cn")
     group = await Group.get(initialized_db, Group.id == user.group_id)
-    group_options = await GroupOptions.get(initialized_db, GroupOptions.group_id == group.id)
-    group_claims = _build_group_claims(group, group_options)
+    group_claims = _build_group_claims(group)
 
     result = create_access_token(
         sub=user.id,
@@ -390,15 +371,15 @@ async def test_directory_structure(initialized_db: AsyncSession) -> dict[str, UU
 
     # 获取测试用户和根目录
     test_user = await User.get(initialized_db, User.email == "testuser@test.local")
-    test_user_root = await Object.get_root(initialized_db, test_user.id)
+    test_user_root = await File.get_root(initialized_db, test_user.id)
 
     default_policy = await Policy.get(initialized_db, Policy.name == "本地存储")
 
     # 创建 docs 目录
-    docs_folder = Object(
+    docs_folder = File(
         id=uuid4(),
         name="docs",
-        type=ObjectType.FOLDER,
+        type=FileType.FOLDER,
         owner_id=test_user.id,
         parent_id=test_user_root.id,
         policy_id=default_policy.id,
@@ -407,10 +388,10 @@ async def test_directory_structure(initialized_db: AsyncSession) -> dict[str, UU
     initialized_db.add(docs_folder)
 
     # 创建 images 子目录
-    images_folder = Object(
+    images_folder = File(
         id=uuid4(),
         name="images",
-        type=ObjectType.FOLDER,
+        type=FileType.FOLDER,
         owner_id=test_user.id,
         parent_id=docs_folder.id,
         policy_id=default_policy.id,
@@ -419,10 +400,10 @@ async def test_directory_structure(initialized_db: AsyncSession) -> dict[str, UU
     initialized_db.add(images_folder)
 
     # 创建测试文件
-    test_file = Object(
+    test_file = File(
         id=uuid4(),
         name="readme.md",
-        type=ObjectType.FILE,
+        type=FileType.FILE,
         owner_id=test_user.id,
         parent_id=docs_folder.id,
         policy_id=default_policy.id,
