@@ -61,7 +61,7 @@ admin_share_router = APIRouter(
 )
 
 @admin_share_router.get(
-    path='/list',
+    path='/',
     summary='获取分享列表',
     description='Get share list',
     dependencies=[Depends(admin_required)]

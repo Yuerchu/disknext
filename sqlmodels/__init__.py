@@ -75,7 +75,7 @@ from .object import (
     ObjectMoveUpdate,
     ObjectPropertyDetailResponse,
     ObjectPropertyResponse,
-    ObjectRenameRequest,
+    ObjectUpdateRequest,
     ObjectResponse,
     ObjectSwitchPolicyRequest,
     ObjectType,

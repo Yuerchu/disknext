@@ -22,7 +22,7 @@ from sqlmodels import (
 from utils import http_exceptions
 
 file_viewers_router = APIRouter(
-    prefix='/file-viewers',
+    prefix='/file_viewers',
     tags=["user", "user_settings", "file_viewers"],
     dependencies=[Depends(auth_required)],
 )

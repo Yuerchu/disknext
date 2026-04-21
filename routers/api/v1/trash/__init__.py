@@ -95,7 +95,7 @@ async def router_trash_restore(
 @trash_router.delete(
     path='/',
     summary='永久删除对象',
-    description='永久删除回收站中的指定对象，包括物理文件和数据库记录。',
+    description='永久删除回收站中的指定对象（传入 ids），或清空整个回收站（is_empty_all=True）。',
     status_code=204,
 )
 async def router_trash_delete(
@@ -108,14 +108,25 @@ async def router_trash_delete(
 
     认证：需要 JWT token
 
-    流程：
+    流程（按 ids 删除）：
     1. 验证对象存在且在回收站中
     2. BFS 收集所有子文件的 PhysicalFile
     3. 处理引用计数，引用为 0 时物理删除文件
     4. 硬删除根 Object（CASCADE 清理子对象）
     5. 更新用户存储配额
+
+    清空回收站（is_empty_all=True）：
+    获取回收站中所有顶层对象，逐个执行永久删除。
     """
     user_id = user.id
+
+    if request.is_empty_all:
+        trash_items = await Object.get_trash_items(session, user_id)
+        if trash_items:
+            deleted_count = await Object.permanently_delete_batch(session, trash_items, user_id)
+            l.info(f"用户 {user_id} 清空回收站，共删除 {deleted_count} 个对象")
+        return
+
     objects_to_delete: list[Object] = []
 
     for obj_id in request.ids:
@@ -129,28 +140,3 @@ async def router_trash_delete(
     if objects_to_delete:
         deleted_count = await Object.permanently_delete_batch(session, objects_to_delete, user_id)
         l.info(f"用户 {user_id} 永久删除了 {deleted_count} 个对象")
-
-
-@trash_router.delete(
-    path='/empty',
-    summary='清空回收站',
-    description='永久删除回收站中的所有对象。',
-    status_code=204,
-)
-async def router_trash_empty(
-    session: SessionDep,
-    user: Annotated[User, Depends(auth_required)],
-) -> None:
-    """
-    清空回收站
-
-    认证：需要 JWT token
-
-    获取回收站中所有顶层对象，逐个执行永久删除。
-    """
-    user_id = user.id
-    trash_items = await Object.get_trash_items(session, user_id)
-
-    if trash_items:
-        deleted_count = await Object.permanently_delete_batch(session, trash_items, user_id)
-        l.info(f"用户 {user_id} 清空回收站，共删除 {deleted_count} 个对象")

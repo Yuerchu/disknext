@@ -15,7 +15,7 @@ from uuid import UUID
 
 import orjson
 import whatthepatch
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse
 from starlette.responses import Response
 from loguru import logger as l
@@ -133,7 +133,7 @@ router = APIRouter(prefix="/file", tags=["file"])
 _upload_router = APIRouter(prefix="/upload")
 
 
-@_upload_router.put(
+@_upload_router.post(
     path='/',
     summary='创建上传会话',
     description='创建文件上传会话，返回会话ID用于后续分片上传。',
@@ -655,7 +655,7 @@ router.include_router(viewers_router)
 # ==================== 创建空白文件 ====================
 
 @router.post(
-    path='/create',
+    path='/',
     summary='创建空白文件',
     description='在指定目录下创建空白文件。',
     status_code=204,
@@ -747,7 +747,7 @@ async def create_empty_file(
 # ==================== WOPI 会话 ====================
 
 @router.post(
-    path='/{file_id}/wopi-session',
+    path='/{file_id}/wopi_session',
     summary='创建 WOPI 会话',
     description='为 WOPI 类型的查看器创建编辑会话，返回编辑器 URL 和访问令牌。',
 )
@@ -1016,7 +1016,7 @@ async def file_source_redirect(
 
 
 @router.put(
-    path='/update/{id}',
+    path='/{id}',
     summary='更新文件',
     description='更新文件内容。',
     dependencies=[Depends(auth_required)]
@@ -1331,11 +1331,14 @@ async def file_relocate() -> ResponseBase:
 
 
 @router.get(
-    path='/search/{type}/{keyword}',
+    path='/search',
     summary='搜索文件',
     description='按关键字搜索文件。',
     dependencies=[Depends(auth_required)]
 )
-async def file_search(type: str, keyword: str) -> ResponseBase:
+async def file_search(
+    search_type: str = Query(...),
+    keyword: str = Query(...),
+) -> ResponseBase:
     """搜索文件"""
     raise HTTPException(status_code=501, detail="搜索功能暂未实现")

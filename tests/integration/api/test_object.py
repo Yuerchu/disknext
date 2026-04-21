@@ -141,7 +141,7 @@ async def test_object_copy_endpoint_exists(
 ):
     """测试复制对象端点存在"""
     response = await async_client.post(
-        "/api/v1/object/copy",
+        "/api/v1/object/copies",
         headers=auth_headers,
         json={"src_id": "00000000-0000-0000-0000-000000000000"}
     )
@@ -155,11 +155,10 @@ async def test_object_rename_endpoint_exists(
     auth_headers: dict[str, str]
 ):
     """测试重命名对象端点存在"""
-    response = await async_client.post(
-        "/api/v1/object/rename",
+    response = await async_client.patch(
+        "/api/v1/object/00000000-0000-0000-0000-000000000000",
         headers=auth_headers,
         json={
-            "id": "00000000-0000-0000-0000-000000000000",
             "name": "newname"
         }
     )
@@ -174,7 +173,7 @@ async def test_object_property_endpoint_exists(
 ):
     """测试获取对象属性端点存在"""
     response = await async_client.get(
-        "/api/v1/object/property/00000000-0000-0000-0000-000000000000",
+        "/api/v1/object/00000000-0000-0000-0000-000000000000",
         headers=auth_headers
     )
     # 未实现的端点

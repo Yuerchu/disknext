@@ -192,7 +192,7 @@ def router_callback_onedrive_finish(session_id: str) -> ResponseBase:
     http_exceptions.raise_not_implemented()
 
 @upload_router.get(
-    path='/ondrive/auth',
+    path='/onedrive/auth',
     summary='OneDrive授权回调',
     description='Handle OneDrive authorization callback and return authorization status.',
 )

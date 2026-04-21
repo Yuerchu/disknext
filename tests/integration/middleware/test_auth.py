@@ -161,7 +161,7 @@ async def test_admin_required_on_user_list(
 ):
     """测试管理员可以访问用户列表"""
     response = await async_client.get(
-        "/api/v1/admin/user/list",
+        "/api/v1/admin/user/",
         headers=admin_headers
     )
     assert response.status_code == 200

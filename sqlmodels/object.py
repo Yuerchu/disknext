@@ -1263,14 +1263,11 @@ class ObjectCopyRequest(SQLModelBase):
     """目标文件夹UUID"""
 
 
-class ObjectRenameRequest(SQLModelBase):
-    """重命名对象请求 DTO"""
+class ObjectUpdateRequest(SQLModelBase):
+    """对象更新请求 DTO（用于重命名等部分更新）"""
 
-    id: UUID
-    """对象UUID"""
-
-    new_name: Str255
-    """新名称"""
+    name: Str255 | None = None
+    """新名称（传入则更新）"""
 
 
 class ObjectPropertyResponse(SQLModelBase):
@@ -1437,5 +1434,8 @@ class TrashRestoreRequest(SQLModelBase):
 class TrashDeleteRequest(SQLModelBase):
     """永久删除对象请求 DTO"""
 
-    ids: list[UUID] = Field(min_length=1, max_length=100)
-    """待永久删除对象UUID列表"""
+    ids: list[UUID] = []
+    """待永久删除对象UUID列表（is_empty_all=False 时必填）"""
+
+    is_empty_all: bool = False
+    """是否清空整个回收站（为 True 时忽略 ids）"""

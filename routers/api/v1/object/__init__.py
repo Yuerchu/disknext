@@ -22,7 +22,7 @@ from sqlmodels import (
     ObjectMoveRequest,
     ObjectPropertyDetailResponse,
     ObjectPropertyResponse,
-    ObjectRenameRequest,
+    ObjectUpdateRequest,
     ObjectSwitchPolicyRequest,
     ObjectType,
     PhysicalFile,
@@ -288,7 +288,7 @@ async def router_object_move(
 
 
 @object_router.post(
-    path='/copy',
+    path='/copies',
     summary='复制对象',
     description='复制一个或多个对象到目标目录。文件复制仅增加物理文件引用计数，不复制物理文件。',
     status_code=204,
@@ -393,19 +393,20 @@ async def router_object_copy(
     l.info(f"用户 {user_id} 复制了 {copied_count} 个对象")
 
 
-@object_router.post(
-    path='/rename',
-    summary='重命名对象',
-    description='重命名对象（文件或目录）。',
+@object_router.patch(
+    path='/{object_id}',
+    summary='更新对象',
+    description='更新对象属性（如重命名）。',
     status_code=204,
 )
-async def router_object_rename(
+async def router_object_update(
     session: SessionDep,
     user: Annotated[User, Depends(auth_required)],
-    request: ObjectRenameRequest,
+    object_id: UUID,
+    request: ObjectUpdateRequest,
 ) -> None:
     """
-    重命名对象端点
+    更新对象端点（重命名等部分更新）
 
     流程：
     1. 验证对象存在且属于当前用户
@@ -416,8 +417,9 @@ async def router_object_rename(
 
     :param session: 数据库会话
     :param user: 当前登录用户
-    :param request: 重命名请求
-    :return: 重命名结果
+    :param object_id: 对象UUID（路径参数）
+    :param request: 更新请求
+    :return: 更新结果
     """
     # 存储 user.id，避免后续 save() 导致 user 过期后无法访问
     user_id = user.id
@@ -425,7 +427,7 @@ async def router_object_rename(
     # 验证对象存在（排除已删除的）
     obj = await Object.get(
         session,
-        (Object.id == request.id) & (Object.deleted_at == None)
+        (Object.id == object_id) & (Object.deleted_at == None)
     )
     if not obj:
         raise HTTPException(status_code=404, detail="对象不存在")
@@ -440,57 +442,58 @@ async def router_object_rename(
     if obj.parent_id is None:
         raise HTTPException(status_code=400, detail="无法重命名根目录")
 
-    # 验证新名称格式
-    new_name = request.new_name.strip()
-    if not new_name:
-        raise HTTPException(status_code=400, detail="名称不能为空")
+    if request.name is not None:
+        # 验证新名称格式
+        new_name = request.name.strip()
+        if not new_name:
+            raise HTTPException(status_code=400, detail="名称不能为空")
 
-    if '/' in new_name or '\\' in new_name:
-        raise HTTPException(status_code=400, detail="名称不能包含斜杠")
+        if '/' in new_name or '\\' in new_name:
+            raise HTTPException(status_code=400, detail="名称不能包含斜杠")
 
-    # 如果名称没有变化，直接返回
-    if obj.name == new_name:
-        return  # noqa: already 204
+        # 如果名称没有变化，直接返回
+        if obj.name == new_name:
+            return  # noqa: already 204
 
-    # 检查同目录下是否存在同名对象（仅检查未删除的）
-    existing = await Object.get(
-        session,
-        (Object.owner_id == user_id) &
-        (Object.parent_id == obj.parent_id) &
-        (Object.name == new_name) &
-        (Object.deleted_at == None)
-    )
-    if existing:
-        raise HTTPException(status_code=409, detail="同名对象已存在")
+        # 检查同目录下是否存在同名对象（仅检查未删除的）
+        existing = await Object.get(
+            session,
+            (Object.owner_id == user_id) &
+            (Object.parent_id == obj.parent_id) &
+            (Object.name == new_name) &
+            (Object.deleted_at == None)
+        )
+        if existing:
+            raise HTTPException(status_code=409, detail="同名对象已存在")
 
-    # 更新名称
-    obj.name = new_name
-    obj = await obj.save(session)
+        # 更新名称
+        obj.name = new_name
+        obj = await obj.save(session)
 
-    l.info(f"用户 {user_id} 将对象 {obj.id} 重命名为 {new_name}")
+        l.info(f"用户 {user_id} 将对象 {obj.id} 重命名为 {new_name}")
 
 
 @object_router.get(
-    path='/property/{id}',
+    path='/{object_id}',
     summary='获取对象基本属性',
     description='获取对象的基本属性信息（名称、类型、大小、创建/修改时间等）。',
 )
 async def router_object_property(
     session: SessionDep,
     user: Annotated[User, Depends(auth_required)],
-    id: UUID,
+    object_id: UUID,
 ) -> ObjectPropertyResponse:
     """
     获取对象基本属性端点
 
     :param session: 数据库会话
     :param user: 当前登录用户
-    :param id: 对象UUID
+    :param object_id: 对象UUID
     :return: 对象基本属性
     """
     obj = await Object.get(
         session,
-        (Object.id == id) & (Object.deleted_at == None)
+        (Object.id == object_id) & (Object.deleted_at == None)
     )
     if not obj:
         raise HTTPException(status_code=404, detail="对象不存在")
@@ -511,26 +514,26 @@ async def router_object_property(
 
 
 @object_router.get(
-    path='/property/{id}/detail',
+    path='/{object_id}/detail',
     summary='获取对象详细属性',
     description='获取对象的详细属性信息，包括元数据、分享统计、存储信息等。',
 )
 async def router_object_property_detail(
     session: SessionDep,
     user: Annotated[User, Depends(auth_required)],
-    id: UUID,
+    object_id: UUID,
 ) -> ObjectPropertyDetailResponse:
     """
     获取对象详细属性端点
 
     :param session: 数据库会话
     :param user: 当前登录用户
-    :param id: 对象UUID
+    :param object_id: 对象UUID
     :return: 对象详细属性
     """
     obj = await Object.get(
         session,
-        (Object.id == id) & (Object.deleted_at == None),
+        (Object.id == object_id) & (Object.deleted_at == None),
         load=Object.metadata_entries,
     )
     if not obj:

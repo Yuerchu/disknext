@@ -212,7 +212,7 @@ class TestUserFileViewerDefaults:
     ) -> None:
         """设置默认查看器"""
         response = await async_client.put(
-            "/api/v1/user/settings/file-viewers/default",
+            "/api/v1/user/settings/file_viewers/default",
             headers=auth_headers,
             json={
                 "extension": "pdf",
@@ -242,7 +242,7 @@ class TestUserFileViewerDefaults:
         ).save(initialized_db)
 
         response = await async_client.get(
-            "/api/v1/user/settings/file-viewers/defaults",
+            "/api/v1/user/settings/file_viewers/defaults",
             headers=auth_headers,
         )
         assert response.status_code == 200
@@ -268,7 +268,7 @@ class TestUserFileViewerDefaults:
         ).save(initialized_db)
 
         response = await async_client.delete(
-            f"/api/v1/user/settings/file-viewers/default/{default.id}",
+            f"/api/v1/user/settings/file_viewers/default/{default.id}",
             headers=auth_headers,
         )
         assert response.status_code == 204

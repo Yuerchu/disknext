@@ -10,7 +10,7 @@
 |------|------|-------------|
 | `builtin` | 前端内置组件 | 根据 `app_key` 路由到内置组件（如 `pdfjs`、`monaco`） |
 | `iframe` | iframe 内嵌 | 将 `iframe_url_template` 中的 `{file_url}` 替换为文件下载 URL，嵌入 iframe |
-| `wopi` | WOPI 协议 | 调用 `/file/{id}/wopi-session` 获取 `editor_url`，嵌入 iframe |
+| `wopi` | WOPI 协议 | 调用 `/file/{id}/wopi_session` 获取 `editor_url`，嵌入 iframe |
 
 ### 内置 app_key 映射
 
@@ -104,7 +104,7 @@ WOPI 类型的查看器完全由后端处理文件传输，前端只需：
 
 ```typescript
 // 1. 创建 WOPI 会话
-const session = await api.post(`/file/${fileId}/wopi-session`)
+const session = await api.post(`/file/${fileId}/wopi_session`)
 
 // 2. 直接嵌入编辑器
 // <iframe src={session.editor_url} />
@@ -178,7 +178,7 @@ Authorization: Bearer {token}
 用户在选择弹窗中勾选"始终使用此应用"时调用。
 
 ```
-PUT /api/v1/user/settings/file-viewers/default
+PUT /api/v1/user/settings/file_viewers/default
 Authorization: Bearer {token}
 Content-Type: application/json
 ```
@@ -232,7 +232,7 @@ Content-Type: application/json
 用于用户设置页展示"已设为始终使用"的列表。
 
 ```
-GET /api/v1/user/settings/file-viewers/defaults
+GET /api/v1/user/settings/file_viewers/defaults
 Authorization: Bearer {token}
 ```
 
@@ -264,7 +264,7 @@ Authorization: Bearer {token}
 用户在设置页点击"取消始终使用"时调用。
 
 ```
-DELETE /api/v1/user/settings/file-viewers/default/{id}
+DELETE /api/v1/user/settings/file_viewers/default/{id}
 Authorization: Bearer {token}
 ```
 
@@ -283,7 +283,7 @@ Authorization: Bearer {token}
 打开 WOPI 类型应用（如 Collabora、OnlyOffice）时调用。
 
 ```
-POST /api/v1/file/{file_id}/wopi-session
+POST /api/v1/file/{file_id}/wopi_session
 Authorization: Bearer {token}
 ```
 
@@ -335,7 +335,7 @@ GET /file/viewers?ext={扩展名}
                 │
                 ├── 用户选择 + 不勾选"始终使用" → 仅此一次打开
                 │
-                └── 用户选择 + 勾选"始终使用" → PUT /user/settings/file-viewers/default
+                └── 用户选择 + 勾选"始终使用" → PUT /user/settings/file_viewers/default
                                                      │
                                                      └── 然后打开
 ```
@@ -368,7 +368,7 @@ GET /file/viewers?ext={扩展名}
     │           4. <iframe src={iframeSrc} />
     │
     └── type == "wopi"
-            └── 1. POST /file/{file_id}/wopi-session → { editor_url }
+            └── 1. POST /file/{file_id}/wopi_session → { editor_url }
                 2. <iframe src={editor_url} />
                    （编辑器自动通过 WOPI 协议获取文件，前端无需处理）
 ```
@@ -382,7 +382,7 @@ GET /file/viewers?ext={扩展名}
 ### 1. 列出所有文件应用
 
 ```
-GET /api/v1/admin/file-app/list?page=1&page_size=20
+GET /api/v1/admin/file_app/?page=1&page_size=20
 Authorization: Bearer {admin_token}
 ```
 
@@ -414,7 +414,7 @@ Authorization: Bearer {admin_token}
 ### 2. 创建文件应用
 
 ```
-POST /api/v1/admin/file-app/
+POST /api/v1/admin/file_app/
 Authorization: Bearer {admin_token}
 Content-Type: application/json
 ```
@@ -440,7 +440,7 @@ Content-Type: application/json
 ### 3. 获取应用详情
 
 ```
-GET /api/v1/admin/file-app/{id}
+GET /api/v1/admin/file_app/{id}
 ```
 
 **响应** 200 — FileAppResponse
@@ -448,7 +448,7 @@ GET /api/v1/admin/file-app/{id}
 ### 4. 更新应用
 
 ```
-PATCH /api/v1/admin/file-app/{id}
+PATCH /api/v1/admin/file_app/{id}
 ```
 
 只传需要更新的字段：
@@ -465,7 +465,7 @@ PATCH /api/v1/admin/file-app/{id}
 ### 5. 删除应用
 
 ```
-DELETE /api/v1/admin/file-app/{id}
+DELETE /api/v1/admin/file_app/{id}
 ```
 
 **响应** 204 No Content（级联删除扩展名关联、用户偏好、用户组关联）
@@ -473,7 +473,7 @@ DELETE /api/v1/admin/file-app/{id}
 ### 6. 全量替换扩展名列表
 
 ```
-PUT /api/v1/admin/file-app/{id}/extensions
+PUT /api/v1/admin/file_app/{id}/extensions
 ```
 
 ```json
@@ -487,7 +487,7 @@ PUT /api/v1/admin/file-app/{id}/extensions
 ### 7. 全量替换允许的用户组
 
 ```
-PUT /api/v1/admin/file-app/{id}/groups
+PUT /api/v1/admin/file_app/{id}/groups
 ```
 
 ```json
