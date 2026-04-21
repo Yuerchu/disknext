@@ -3,8 +3,11 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 from sqlmodel import Field, Relationship
+from sqlmodel_ext.field_types.dialects.postgresql import Array
 
 from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str255, NonNegativeBigInt
+
+from .scope import ScopeValueEnum
 
 if TYPE_CHECKING:
     from .user import User
@@ -255,6 +258,9 @@ class Group(GroupBase, GroupAllOptionsBase, UUIDTableBaseMixin):
 
     speed_limit: int = 0
     """速度限制 (KB/s), 0为不限制"""
+
+    default_scopes: Array[ScopeValueEnum] = Field(default_factory=list)
+    """新用户加入该组时的默认权限模板"""
 
     # 多对多关系：用户组可以关联多个存储策略
     policies: list["Policy"] = Relationship(

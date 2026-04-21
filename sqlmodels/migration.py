@@ -73,6 +73,7 @@ _DEFAULT_MAIL_RESET_PWD_TEMPLATE = '''<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1
 async def init_default_group() -> None:
     from .group import Group
     from .policy import Policy, GroupPolicyLink
+    from .scope import ADMIN_SCOPES, USER_DEFAULT_SCOPES, WEBDAV_SCOPES
     from .server_config import ServerConfig
     from .database_connection import DatabaseManager
 
@@ -98,6 +99,7 @@ async def init_default_group() -> None:
                 aria2=True,
                 select_node=True,
                 advance_delete=True,
+                default_scopes=ADMIN_SCOPES,
             )
             admin_group_id = admin_group.id
             admin_group = await admin_group.save(session)
@@ -118,6 +120,7 @@ async def init_default_group() -> None:
                 share_enabled=True,
                 web_dav_enabled=True,
                 share_download=True,
+                default_scopes=USER_DEFAULT_SCOPES,
             )
             member_group_id = member_group.id
             member_group = await member_group.save(session)

@@ -23,6 +23,7 @@ import sqlmodels
 from middleware.auth import auth_required
 from middleware.dependencies import SessionDep, ServerConfigDep, require_captcha
 from sqlmodels.auth_identity import AuthProviderType
+from sqlmodels.group import Group
 from sqlmodels.server_config import ServerConfig
 from sqlmodels.user import User, UserStatus
 from sqlmodels.user_authn import UserAuthn
@@ -189,6 +190,7 @@ async def _auto_register_oauth_user(
         http_exceptions.raise_internal_error()
 
     default_group_id = config.default_group_id
+    default_group = await Group.get_exist_one(session, default_group_id)
 
     # 构建 OAuth 字段
     oauth_fields: dict = {}
@@ -202,6 +204,7 @@ async def _auto_register_oauth_user(
         nickname=nickname,
         avatar=avatar_url or "default",
         group_id=default_group_id,
+        scopes=default_group.default_scopes,
         **oauth_fields,
     )
     new_user_id = new_user.id
@@ -488,6 +491,7 @@ async def router_user_register(
         nickname=request.identifier,
         group_id=default_group.id,
         password_hash=hashed_password,
+        scopes=default_group.default_scopes,
     )
     new_user_id = new_user.id
     new_user = await new_user.save(session)

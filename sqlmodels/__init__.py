@@ -2,6 +2,17 @@ from .auth_identity import (
     AuthProviderType,
     ChangePasswordRequest,
 )
+from .scope import (
+    Scope,
+    ScopeAction,
+    ScopeResource,
+    ScopeSet,
+    ScopeValueEnum,
+    ScopeVisibility,
+    ADMIN_SCOPES,
+    USER_DEFAULT_SCOPES,
+    WEBDAV_SCOPES,
+)
 from .user import (
     JWTPayload,
     MagicLinkRequest,

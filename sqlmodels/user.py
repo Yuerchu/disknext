@@ -7,6 +7,7 @@ from pydantic import BaseModel, EmailStr
 from pydantic_extra_types.phone_numbers import PhoneNumber
 from sqlalchemy import BinaryExpression, ClauseElement, and_
 from sqlalchemy import update as sql_update
+from sqlmodel_ext.field_types.dialects.postgresql import Array
 from sqlalchemy.sql.functions import func
 from sqlmodel import Field, Relationship
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -17,6 +18,7 @@ from sqlmodel_ext import (
 )
 
 from .auth_identity import AuthProviderType
+from .scope import ScopeValueEnum
 from .color import ChromaticColor, NeutralColor, ThemeColorsBase
 from .model_base import ResponseBase
 
@@ -450,6 +452,9 @@ class User(UserBase, UUIDTableBaseMixin):
 
     qq_id: Str255 | None = Field(default=None, unique=True, index=True)
     """QQ OAuth openid"""
+
+    scopes: Array[ScopeValueEnum] = Field(default_factory=list)
+    """用户的细粒度权限列表（注册时从 Group.default_scopes 复制）"""
 
     group_expires: datetime | None = None
     """当前用户组过期时间"""
