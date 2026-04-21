@@ -441,10 +441,12 @@ async def delete_upload_session(
 
     # 释放预扣的存储空间
     if upload_session.file_size > 0:
-        await user.adjust_storage(session, -upload_session.file_size)
+        await user.adjust_storage(session, -upload_session.file_size, commit=False)
 
     # 删除会话记录
-    await UploadSession.delete(session, upload_session)
+    await UploadSession.delete(session, upload_session, commit=False)
+
+    await session.commit()
 
     l.info(f"删除上传会话: {session_id}")
 
@@ -486,22 +488,14 @@ async def clear_upload_sessions(
 
         # 释放预扣的存储空间
         if upload_session.file_size > 0:
-            await user.adjust_storage(session, -upload_session.file_size)
+            await user.adjust_storage(session, -upload_session.file_size, commit=False)
 
-        await UploadSession.delete(session, upload_session)
+        await UploadSession.delete(session, upload_session, commit=False)
         deleted_count += 1
 
+    await session.commit()
+
     l.info(f"清除用户 {user.id} 的所有上传会话，共 {deleted_count} 个")
-
-
-@_upload_router.get(
-    path='/archive/{session_id}/archive.zip',
-    summary='打包并下载文件',
-    description='获取打包后的文件。',
-)
-async def download_archive(session_id: str) -> ResponseBase:
-    """打包下载"""
-    raise HTTPException(status_code=501, detail="打包下载功能暂未实现")
 
 
 # ==================== 下载子路由 ====================
@@ -671,7 +665,7 @@ async def create_empty_file(
         policy_id=policy_id,
         reference_count=1,
     )
-    physical_file = await physical_file.save(session)
+    physical_file = await physical_file.save(session, commit=False)
 
     # 创建 File 记录
     file_object = File(
@@ -683,7 +677,9 @@ async def create_empty_file(
         owner_id=user_id,
         policy_id=policy_id,
     )
-    file_object = await file_object.save(session)
+    file_object = await file_object.save(session, commit=False)
+
+    await session.commit()
 
     l.info(f"创建空白文件: {file_object.name}, id={file_object.id}")
 
@@ -959,17 +955,6 @@ async def file_source_redirect(
         http_exceptions.raise_internal_error("不支持的存储类型")
 
 
-@router.put(
-    path='/update/{id}',
-    summary='更新文件',
-    description='更新文件内容。',
-    dependencies=[Depends(auth_required)]
-)
-async def file_update(id: str) -> ResponseBase:
-    """更新文件内容"""
-    raise HTTPException(status_code=501, detail="更新文件功能暂未实现")
-
-
 @router.get(
     path='/content/{file_id}',
     summary='获取文本文件内容',
@@ -1156,17 +1141,6 @@ async def patch_file_content(
     return PatchContentResponse(new_hash=new_hash, new_size=new_size)
 
 
-@router.get(
-    path='/thumb/{id}',
-    summary='获取文件缩略图',
-    description='获取文件缩略图。',
-    dependencies=[Depends(auth_required)]
-)
-async def file_thumb(id: str) -> ResponseBase:
-    """获取文件缩略图"""
-    raise HTTPException(status_code=501, detail="缩略图功能暂未实现")
-
-
 @router.post(
     path='/source/{file_id}',
     summary='创建/获取文件外链',
@@ -1230,56 +1204,3 @@ async def file_source(
     return SourceLinkResponse(url=url, downloads=link.downloads)
 
 
-@router.post(
-    path='/archive',
-    summary='打包要下载的文件',
-    description='将多个文件打包下载。',
-    dependencies=[Depends(auth_required)]
-)
-async def file_archive() -> ResponseBase:
-    """打包文件"""
-    raise HTTPException(status_code=501, detail="打包功能暂未实现")
-
-
-@router.post(
-    path='/compress',
-    summary='创建文件压缩任务',
-    description='创建文件压缩任务。',
-    dependencies=[Depends(auth_required)]
-)
-async def file_compress() -> ResponseBase:
-    """创建压缩任务"""
-    raise HTTPException(status_code=501, detail="压缩功能暂未实现")
-
-
-@router.post(
-    path='/decompress',
-    summary='创建文件解压任务',
-    description='创建文件解压任务。',
-    dependencies=[Depends(auth_required)]
-)
-async def file_decompress() -> ResponseBase:
-    """创建解压任务"""
-    raise HTTPException(status_code=501, detail="解压功能暂未实现")
-
-
-@router.post(
-    path='/relocate',
-    summary='创建文件转移任务',
-    description='创建文件转移任务。',
-    dependencies=[Depends(auth_required)]
-)
-async def file_relocate() -> ResponseBase:
-    """创建转移任务"""
-    raise HTTPException(status_code=501, detail="转移功能暂未实现")
-
-
-@router.get(
-    path='/search/{type}/{keyword}',
-    summary='搜索文件',
-    description='按关键字搜索文件。',
-    dependencies=[Depends(auth_required)]
-)
-async def file_search(type: str, keyword: str) -> ResponseBase:
-    """搜索文件"""
-    raise HTTPException(status_code=501, detail="搜索功能暂未实现")

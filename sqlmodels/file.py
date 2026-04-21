@@ -5,6 +5,7 @@ from uuid import UUID
 
 from enum import StrEnum
 from loguru import logger as l
+from sqlalchemy import select as sa_select, literal_column, union_all
 from sqlmodel import Field, Relationship, CheckConstraint, Index, text
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -154,7 +155,7 @@ class DirectoryResponse(SQLModelBase):
     parent: UUID | None = None
     """父目录UUID，根目录为None"""
 
-    objects: list[ObjectResponse] = []
+    objects: list[FileResponse] = []
     """目录下的对象列表"""
 
     policy: PolicyResponse
@@ -429,6 +430,46 @@ class File(FileBase, UUIDTableBaseMixin):
         if existing:
             raise HTTPException(status_code=409, detail="同名文件或目录已存在")
 
+    @classmethod
+    async def is_ancestor_of(
+        cls,
+        session: AsyncSession,
+        ancestor_id: UUID,
+        descendant_id: UUID,
+    ) -> bool:
+        """
+        递归 CTE 检测 ancestor_id 是否是 descendant_id 的祖先（用于循环检测）
+
+        :param session: 数据库会话
+        :param ancestor_id: 可能的祖先UUID
+        :param descendant_id: 可能的后代UUID
+        :return: True 如果 ancestor_id 是 descendant_id 的祖先
+        """
+        file_table = cls.__table__
+
+        # 从 descendant 向上遍历祖先链
+        anchor = sa_select(
+            file_table.c.id,
+            file_table.c.parent_id,
+        ).where(file_table.c.id == descendant_id)
+
+        ancestors = anchor.cte(name="ancestors", recursive=True)
+
+        parent = file_table.alias("parent")
+        recursive_part = sa_select(
+            parent.c.id,
+            parent.c.parent_id,
+        ).where(parent.c.id == ancestors.c.parent_id)
+
+        ancestors = ancestors.union_all(recursive_part)
+
+        stmt = sa_select(literal_column('1')).select_from(ancestors).where(
+            ancestors.c.id == ancestor_id
+        ).limit(1)
+
+        result = await session.exec(stmt)
+        return result.first() is not None
+
     # ==================== 业务方法 ====================
 
     @classmethod
@@ -448,12 +489,12 @@ class File(FileBase, UUIDTableBaseMixin):
     @classmethod
     async def get_by_path(
         cls,
-        session,
+        session: AsyncSession,
         user_id: UUID,
         path: str,
     ) -> "File | None":
         """
-        根据路径获取对象
+        根据路径获取对象（单次查询，动态 JOIN 链）
 
         路径从用户根目录开始，不包含用户名前缀。
         如 "/" 表示根目录，"/docs/images" 表示根目录下的 docs/images。
@@ -461,41 +502,50 @@ class File(FileBase, UUIDTableBaseMixin):
         :param session: 数据库会话
         :param user_id: 用户UUID
         :param path: 路径，如 "/" 或 "/docs/images"
-        :return: Object 或 None
+        :return: File 或 None
         """
         path = path.strip()
         if not path:
             raise ValueError("路径不能为空")
 
-        # 获取用户根目录
-        root = await cls.get_root(session, user_id)
-        if not root:
-            return None
+        parts = [p for p in path.strip("/").split("/") if p]
 
-        # 移除开头的斜杠并分割路径
-        if path.startswith("/"):
-            path = path[1:]
-        parts = [p for p in path.split("/") if p]
-
-        # 空路径 -> 返回根目录
         if not parts:
-            return root
+            return await cls.get_root(session, user_id)
 
-        # 从根目录开始遍历路径
-        current = root
-        for part in parts:
-            if not current:
-                return None
+        # 动态 JOIN 链：f0(root) → f1(seg0) → f2(seg1) → ... → fN(最终目标)
+        # 一次查询完成，JOIN 数 = 路径深度
+        from sqlalchemy.orm import aliased
 
-            current = await cls.get(
-                session,
-                (cls.owner_id == user_id) &
-                (cls.parent_id == current.id) &
-                (cls.name == part) &
-                (cls.deleted_at == None)
+        aliases = [aliased(cls, flat=True) for _ in range(len(parts) + 1)]
+        root_alias = aliases[0]
+        target_alias = aliases[-1]
+
+        # SELECT target FROM file f0 JOIN file f1 ON ... JOIN file f2 ON ...
+        stmt = sa_select(target_alias).select_from(root_alias)
+
+        # 根目录条件
+        stmt = stmt.where(
+            root_alias.owner_id == user_id,
+            root_alias.parent_id == None,
+            root_alias.deleted_at == None,
+        )
+
+        # 逐级 JOIN
+        for i, segment in enumerate(parts):
+            child = aliases[i + 1]
+            parent = aliases[i]
+            stmt = stmt.join(
+                child,
+                onclause=(
+                    (child.parent_id == parent.id) &
+                    (child.name == segment) &
+                    (child.deleted_at == None)
+                ),
             )
 
-        return current
+        result = await session.exec(stmt)
+        return result.first()
 
     @classmethod
     async def get_children(cls, session, user_id: UUID, parent_id: UUID) -> list["File"]:
@@ -554,7 +604,7 @@ class File(FileBase, UUIDTableBaseMixin):
         user_id: UUID,
         extensions: list[str],
         table_view: 'TableViewRequest | None' = None,
-    ) -> 'ListResponse[Object]':
+    ) -> 'ListResponse[File]':
         """
         按扩展名列表查询用户的所有文件（跨目录）
 
@@ -801,32 +851,56 @@ class File(FileBase, UUIDTableBaseMixin):
         include_deleted: bool = False,
     ) -> tuple[list[UUID], int]:
         """
-        BFS 收集子树中所有 PhysicalFile ID 和总文件大小
+        递归 CTE 收集子树中所有 PhysicalFile ID 和总文件大小（单次查询）
 
         :param session: 数据库会话
         :param user_id: 用户UUID
         :param include_deleted: True 时包含已软删除的子对象（永久删除场景）
         :return: (physical_file_id 列表, 总文件大小)
         """
-        physical_file_ids: list[UUID] = []
-        total_file_size = 0
+        from sqlalchemy import column as sa_col
 
-        if self.is_file and self.physical_file_id:
-            physical_file_ids.append(self.physical_file_id)
-            total_file_size += self.size
+        file_table = File.__table__
 
-        if self.is_folder:
-            get_children = File.get_all_children if include_deleted else File.get_children
-            queue: list[UUID] = [self.id]
-            while queue:
-                parent_id = queue.pop(0)
-                children = await get_children(session, user_id, parent_id)
-                for child in children:
-                    if child.is_file and child.physical_file_id:
-                        physical_file_ids.append(child.physical_file_id)
-                        total_file_size += child.size
-                    elif child.is_folder:
-                        queue.append(child.id)
+        # 锚点：当前对象自身
+        anchor = sa_select(
+            file_table.c.id,
+            file_table.c.type,
+            file_table.c.physical_file_id,
+            file_table.c.size,
+        ).where(file_table.c.id == self.id)
+
+        subtree = anchor.cte(name="subtree", recursive=True)
+
+        # 递归部分：子节点
+        child = file_table.alias("child")
+        recursive_conditions = [child.c.parent_id == subtree.c.id]
+        if not include_deleted:
+            recursive_conditions.append(child.c.deleted_at == None)
+
+        recursive_part = sa_select(
+            child.c.id,
+            child.c.type,
+            child.c.physical_file_id,
+            child.c.size,
+        ).where(*recursive_conditions)
+
+        subtree = subtree.union_all(recursive_part)
+
+        # 最终查询：只取文件类型且有 physical_file_id 的记录
+        stmt = sa_select(
+            subtree.c.physical_file_id,
+            subtree.c.size,
+        ).where(
+            subtree.c.type == FileType.FILE,
+            subtree.c.physical_file_id != None,
+        )
+
+        result = await session.exec(stmt)
+        rows = result.all()
+
+        physical_file_ids = [row[0] for row in rows]
+        total_file_size = sum(row[1] for row in rows)
 
         return physical_file_ids, total_file_size
 
@@ -942,10 +1016,10 @@ class File(FileBase, UUIDTableBaseMixin):
             physical_file = await PhysicalFile.get(session, PhysicalFile.id == src_physical_file_id)
             if physical_file:
                 physical_file.increment_reference()
-                physical_file = await physical_file.save(session)
+                physical_file = await physical_file.save(session, commit=False)
             total_copied_size += src_size
 
-        new_obj = await new_obj.save(session)
+        new_obj = await new_obj.save(session, commit=False)
         copied_count += 1
         new_ids.append(new_obj.id)
 

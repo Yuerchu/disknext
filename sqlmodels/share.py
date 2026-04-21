@@ -273,7 +273,7 @@ class AdminShareListItem(ShareListItemBase):
         cls,
         share: "Share",
         user: "User | None",
-        obj: "Object | None",
+        obj: "File | None",
     ) -> "AdminShareListItem":
         """从 Share ORM 对象构建"""
         return cls(

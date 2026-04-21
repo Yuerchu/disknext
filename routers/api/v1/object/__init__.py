@@ -14,7 +14,6 @@ from loguru import logger as l
 from middleware.auth import auth_required
 from middleware.dependencies import SessionDep
 from sqlmodels import (
-    CreateFileRequest,
     Group,
     File,
     FileCopyRequest,
@@ -27,7 +26,6 @@ from sqlmodels import (
     FileType,
     PhysicalFile,
     Policy,
-    PolicyType,
     Task,
     TaskProps,
     TaskStatus,
@@ -41,7 +39,6 @@ from sqlmodels import (
     INTERNAL_NAMESPACES,
     USER_WRITABLE_NAMESPACES,
 )
-from utils.storage import LocalStorageService
 from utils.storage.migrate import migrate_file_with_task, migrate_directory_files
 from sqlmodels.database_connection import DatabaseManager
 from utils import http_exceptions
@@ -53,73 +50,6 @@ object_router = APIRouter(
     tags=["object"]
 )
 object_router.include_router(custom_property_router)
-
-@object_router.post(
-    path='/',
-    summary='创建空白文件',
-    description='在指定目录下创建空白文件。',
-    status_code=204,
-)
-async def router_object_create(
-    session: SessionDep,
-    user: Annotated[User, Depends(auth_required)],
-    request: CreateFileRequest,
-) -> None:
-    """
-    创建空白文件端点
-
-    :param session: 数据库会话
-    :param user: 当前登录用户
-    :param request: 创建文件请求（parent_id, name）
-    :return: 创建结果
-    """
-    user_id = user.id
-
-    name = File.validate_name(request.name)
-    parent = await File.validate_parent(session, request.parent_id, user_id)
-    await File.check_name_conflict(session, user_id, parent.id, name)
-
-    # 确定存储策略
-    policy_id = request.policy_id or parent.policy_id
-    policy = await Policy.get_exist_one(session, policy_id)
-
-    parent_id = parent.id
-
-    # 生成存储路径并创建空文件
-    if policy.type == PolicyType.LOCAL:
-        storage_service = LocalStorageService(policy)
-        dir_path, storage_name, full_path = await storage_service.generate_file_path(
-            user_id=user_id,
-            original_filename=request.name,
-        )
-        await storage_service.create_empty_file(full_path)
-        storage_path = full_path
-    else:
-        raise HTTPException(status_code=501, detail="S3 存储暂未实现")
-
-    # 创建 PhysicalFile 记录
-    physical_file = PhysicalFile(
-        storage_path=storage_path,
-        size=0,
-        policy_id=policy_id,
-        reference_count=1,
-    )
-    physical_file = await physical_file.save(session)
-
-    # 创建 File 记录
-    file_object = File(
-        name=request.name,
-        type=FileType.FILE,
-        size=0,
-        physical_file_id=physical_file.id,
-        parent_id=parent_id,
-        owner_id=user_id,
-        policy_id=policy_id,
-    )
-    file_object = await file_object.save(session)
-
-    l.info(f"创建空白文件: {request.name}")
-
 
 @object_router.delete(
     path='/',
@@ -219,18 +149,9 @@ async def router_object_move(
         if src.id == dst_id:
             continue
 
-        # 检查是否将目录移动到其子目录中（循环检测）
-        if src.is_folder:
-            current_parent_id = dst_parent_id
-            is_cycle = False
-            while current_parent_id:
-                if current_parent_id == src.id:
-                    is_cycle = True
-                    break
-                current = await File.get(session, File.id == current_parent_id)
-                current_parent_id = current.parent_id if current else None
-            if is_cycle:
-                continue
+        # 检查是否将目录移动到其子目录中（递归 CTE 循环检测）
+        if src.is_folder and await File.is_ancestor_of(session, src.id, dst_id):
+            continue
 
         # 检查目标目录下是否存在同名对象（仅检查未删除的）
         existing = await File.get(
@@ -308,17 +229,9 @@ async def router_object_copy(
         if src.id == dst.id:
             continue
 
-        # 不能将目录复制到其子目录中
-        if src.is_folder:
-            current = dst
-            is_cycle = False
-            while current and current.parent_id:
-                if current.parent_id == src.id:
-                    is_cycle = True
-                    break
-                current = await File.get(session, File.id == current.parent_id)
-            if is_cycle:
-                continue
+        # 不能将目录复制到其子目录中（递归 CTE 循环检测）
+        if src.is_folder and await File.is_ancestor_of(session, src.id, dst.id):
+            continue
 
         # 检查目标目录下是否存在同名对象（仅检查未删除的）
         existing = await File.get(
@@ -340,7 +253,9 @@ async def router_object_copy(
 
     # 更新用户存储配额
     if total_copied_size > 0:
-        await user.adjust_storage(session, total_copied_size)
+        await user.adjust_storage(session, total_copied_size, commit=False)
+
+    await session.commit()
 
     l.info(f"用户 {user_id} 复制了 {copied_count} 个对象")
 
