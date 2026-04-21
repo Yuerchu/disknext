@@ -84,7 +84,7 @@ async def create_test_data(session: AsyncSession, depth: int, breadth: int) -> t
     user_id = user.id
 
     # 创建根目录
-    root = File(
+    root = Entry(
         name="/",
         type=EntryType.FOLDER,
         owner_id=user_id,
@@ -99,7 +99,7 @@ async def create_test_data(session: AsyncSession, depth: int, breadth: int) -> t
     folder_ids: list[UUID] = [root.id]
 
     for i in range(depth):
-        folder = File(
+        folder = Entry(
             name=f"level_{i}",
             type=EntryType.FOLDER,
             owner_id=user_id,
@@ -127,7 +127,7 @@ async def create_test_data(session: AsyncSession, depth: int, breadth: int) -> t
             session.add(pf)
             await session.flush()
 
-            f = File(
+            f = Entry(
                 name=f"file_{j}.txt",
                 type=EntryType.FILE,
                 size=1024 * (j + 1),
@@ -152,13 +152,13 @@ async def benchmark_get_by_path(session: AsyncSession, user_id: UUID, depth: int
     path = "/" + "/".join(f"level_{i}" for i in range(depth))
 
     # 预热
-    await File.get_by_path(session, user_id, path)
+    await Entry.get_by_path(session, user_id, path)
 
     # 计时
     iterations = 50
     start = time.perf_counter()
     for _ in range(iterations):
-        result = await File.get_by_path(session, user_id, path)
+        result = await Entry.get_by_path(session, user_id, path)
     elapsed = time.perf_counter() - start
 
     avg_ms = (elapsed / iterations) * 1000
@@ -170,17 +170,17 @@ async def benchmark_get_by_path_old(session: AsyncSession, user_id: UUID, depth:
     """模拟旧版逐级 SELECT 路径解析"""
     parts = [f"level_{i}" for i in range(depth)]
 
-    async def old_get_by_path(s: AsyncSession, uid: UUID, segments: list[str]) -> File | None:
-        root = await File.get(s, (File.owner_id == uid) & (File.parent_id == None) & (File.deleted_at == None))
+    async def old_get_by_path(s: AsyncSession, uid: UUID, segments: list[str]) -> Entry | None:
+        root = await Entry.get(s, (Entry.owner_id == uid) & (Entry.parent_id == None) & (Entry.deleted_at == None))
         if not root:
             return None
         current = root
         for part in segments:
             if not current:
                 return None
-            current = await File.get(
+            current = await Entry.get(
                 s,
-                (File.owner_id == uid) & (File.parent_id == current.id) & (File.name == part) & (File.deleted_at == None)
+                (Entry.owner_id == uid) & (Entry.parent_id == current.id) & (Entry.name == part) & (Entry.deleted_at == None)
             )
         return current
 
@@ -200,7 +200,7 @@ async def benchmark_get_by_path_old(session: AsyncSession, user_id: UUID, depth:
 
 async def benchmark_collect_refs(session: AsyncSession, user_id: UUID, root_id: UUID):
     """测试 _collect_physical_file_refs 性能（递归 CTE）"""
-    root = await File.get(session, File.id == root_id)
+    root = await Entry.get(session, Entry.id == root_id)
     if not root:
         print("  ERROR: 根目录不存在")
         return
@@ -221,12 +221,12 @@ async def benchmark_collect_refs(session: AsyncSession, user_id: UUID, root_id: 
 async def benchmark_is_ancestor(session: AsyncSession, root_id: UUID, deepest_id: UUID):
     """测试 is_ancestor_of 性能（递归 CTE）"""
     # 预热
-    await File.is_ancestor_of(session, root_id, deepest_id)
+    await Entry.is_ancestor_of(session, root_id, deepest_id)
 
     iterations = 50
     start = time.perf_counter()
     for _ in range(iterations):
-        result = await File.is_ancestor_of(session, root_id, deepest_id)
+        result = await Entry.is_ancestor_of(session, root_id, deepest_id)
     elapsed = time.perf_counter() - start
 
     avg_ms = (elapsed / iterations) * 1000

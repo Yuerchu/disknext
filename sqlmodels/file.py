@@ -232,7 +232,7 @@ class Entry(EntryBase, UUIDTableBaseMixin):
 
     parent_id: UUID | None = Field(
         default=None,
-        foreign_key="object.id",
+        foreign_key="entry.id",
         index=True,
         ondelete="CASCADE"
     )
@@ -278,7 +278,7 @@ class Entry(EntryBase, UUIDTableBaseMixin):
 
     deleted_original_parent_id: UUID | None = Field(
         default=None,
-        foreign_key="object.id",
+        foreign_key="entry.id",
         ondelete="SET NULL",
     )
     """软删除前的原始父目录UUID（恢复时用于还原位置）"""
@@ -286,7 +286,7 @@ class Entry(EntryBase, UUIDTableBaseMixin):
     # ==================== 关系 ====================
 
     owner: "User" = Relationship(
-        back_populates="objects",
+        back_populates="entries",
         sa_relationship_kwargs={"foreign_keys": "[Entry.owner_id]"}
     )
     """所有者"""
@@ -296,7 +296,7 @@ class Entry(EntryBase, UUIDTableBaseMixin):
     )
     """封禁操作者"""
 
-    policy: "Policy" = Relationship(back_populates="objects")
+    policy: "Policy" = Relationship(back_populates="entries")
     """存储策略"""
 
     # 自引用关系
@@ -317,16 +317,16 @@ class Entry(EntryBase, UUIDTableBaseMixin):
     """子对象（文件和子目录）"""
 
     # 仅文件有效的关系
-    metadata_entries: list["EntryMetadata"] = Relationship(back_populates="object", cascade_delete=True)
+    metadata_entries: list["EntryMetadata"] = Relationship(back_populates="entry", cascade_delete=True)
     """元数据键值对列表"""
 
-    source_links: list["SourceLink"] = Relationship(back_populates="object", cascade_delete=True)
+    source_links: list["SourceLink"] = Relationship(back_populates="entry", cascade_delete=True)
     """源链接列表（仅文件有效）"""
 
-    shares: list["Share"] = Relationship(back_populates="object", cascade_delete=True)
+    shares: list["Share"] = Relationship(back_populates="entry", cascade_delete=True)
     """分享列表"""
 
-    physical_file: "PhysicalFile" = Relationship(back_populates="objects")
+    physical_file: "PhysicalFile" = Relationship(back_populates="entries")
     """关联的物理文件（仅文件有效）"""
 
     # ==================== 业务属性 ====================
@@ -1144,7 +1144,7 @@ class UploadSession(UploadSessionBase, UUIDTableBaseMixin):
     owner_id: UUID = Field(foreign_key="user.id", index=True, ondelete="CASCADE")
     """上传者用户UUID"""
 
-    parent_id: UUID = Field(foreign_key="object.id", index=True, ondelete="CASCADE")
+    parent_id: UUID = Field(foreign_key="entry.id", index=True, ondelete="CASCADE")
     """目标父目录UUID"""
 
     policy_id: UUID = Field(foreign_key="policy.id", index=True, ondelete="RESTRICT")

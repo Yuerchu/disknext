@@ -28,7 +28,7 @@ from sqlmodel import Field, UniqueConstraint, Index, Relationship
 from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str255, Text2K
 
 if TYPE_CHECKING:
-    from .file import File
+    from .file import Entry
 
 
 # ==================== 枚举 ====================
@@ -62,7 +62,7 @@ USER_WRITABLE_NAMESPACES: set[str] = {MetadataNamespace.CUSTOM}
 
 # ==================== Base 模型 ====================
 
-class FileMetadataBase(SQLModelBase):
+class EntryMetadataBase(SQLModelBase):
     """对象元数据 KV 基础模型"""
 
     name: Str255
@@ -74,7 +74,7 @@ class FileMetadataBase(SQLModelBase):
 
 # ==================== 数据库模型 ====================
 
-class FileMetadata(FileMetadataBase, UUIDTableBaseMixin):
+class EntryMetadata(EntryMetadataBase, UUIDTableBaseMixin):
     """
     对象元数据 KV 模型
 
@@ -88,7 +88,7 @@ class FileMetadata(FileMetadataBase, UUIDTableBaseMixin):
     )
 
     file_id: UUID = Field(
-        foreign_key="file.id",
+        foreign_key="entry.id",
         ondelete="CASCADE",
     )
     """关联的对象UUID"""
@@ -97,7 +97,7 @@ class FileMetadata(FileMetadataBase, UUIDTableBaseMixin):
     """是否对分享页面公开"""
 
     # 关系
-    file: "File" = Relationship(back_populates="metadata_entries")
+    entry: "Entry" = Relationship(back_populates="metadata_entries")
     """关联的对象"""
 
 

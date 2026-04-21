@@ -159,6 +159,7 @@ async def init_default_user() -> None:
     from .policy import Policy
     from .server_config import ServerConfig
     from .database_connection import DatabaseManager
+    from utils.password.pwd import Password
 
     log.info('初始化管理员用户...')
 
@@ -200,7 +201,7 @@ async def init_default_user() -> None:
                 config = await config.save(session)
 
             # 为管理员创建根目录
-            await File(
+            await Entry(
                 name="/",
                 type=EntryType.FOLDER,
                 owner_id=admin_user_id,

@@ -7,7 +7,7 @@ from sqlmodel import Field, Relationship, Index
 from sqlmodel_ext import SQLModelBase, TableBaseMixin, Str255
 
 if TYPE_CHECKING:
-    from .file import File
+    from .file import Entry
 
 
 class SourceLink(SQLModelBase, TableBaseMixin):
@@ -25,12 +25,12 @@ class SourceLink(SQLModelBase, TableBaseMixin):
 
     # 外键
     file_id: UUID = Field(
-        foreign_key="file.id",
+        foreign_key="entry.id",
         index=True,
         ondelete="CASCADE"
     )
     """关联的对象UUID（必须是文件类型）"""
 
     # 关系
-    file: "File" = Relationship(back_populates="source_links")
+    entry: "Entry" = Relationship(back_populates="source_links")
     """关联的对象"""

@@ -10,8 +10,8 @@ from sqlmodels import (
     DirectoryCreateRequest,
     DirectoryResponse,
     Group,
-    File,
-    FileResponse,
+    Entry,
+    EntryResponse,
     EntryType,
     Policy,
     PolicyResponse,
@@ -29,7 +29,7 @@ directory_router = APIRouter(
 async def _get_directory_response(
         session: AsyncSession,
         user_id: UUID,
-        folder: File,
+        folder: Entry,
 ) -> DirectoryResponse:
     """
     构建目录响应 DTO
@@ -39,14 +39,14 @@ async def _get_directory_response(
     :param folder: 目录对象
     :return: DirectoryResponse
     """
-    children = await File.get_children(session, user_id, folder.id)
+    children = await Entry.get_children(session, user_id, folder.id)
     # 直接按 policy_id 查 Policy，避免触发 lazy='raise_on_sql'
     policy = await Policy.get(session, Policy.id == folder.policy_id)
     if not policy:
         raise HTTPException(status_code=500, detail="目录对应的存储策略不存在")
 
     objects = [
-        FileResponse(
+        EntryResponse(
             id=child.id,
             name=child.name,
             thumb=False,
@@ -89,7 +89,7 @@ async def router_directory_root(
     :param user: 当前登录用户
     :return: 根目录内容
     """
-    root = await File.get_root(session, user.id)
+    root = await Entry.get_root(session, user.id)
     if not root:
         raise HTTPException(status_code=404, detail="根目录不存在")
 
@@ -122,12 +122,12 @@ async def router_directory_get(
     path = path.strip("/")
     if not path:
         # 空路径交给根目录端点处理（理论上不会到达这里）
-        root = await File.get_root(session, user.id)
+        root = await Entry.get_root(session, user.id)
         if not root:
             raise HTTPException(status_code=404, detail="根目录不存在")
         return await _get_directory_response(session, user.id, root)
 
-    folder = await File.get_by_path(session, user.id, "/" + path)
+    folder = await Entry.get_by_path(session, user.id, "/" + path)
 
     if not folder:
         raise HTTPException(status_code=404, detail="目录不存在")
@@ -159,9 +159,9 @@ async def router_directory_create(
     :param request: 创建请求（包含 parent_id UUID 和 name）
     :return: 创建结果
     """
-    name = File.validate_name(request.name)
-    parent = await File.validate_parent(session, request.parent_id, user.id)
-    await File.check_name_conflict(session, user.id, parent.id, name)
+    name = Entry.validate_name(request.name)
+    parent = await Entry.validate_parent(session, request.parent_id, user.id)
+    await Entry.check_name_conflict(session, user.id, parent.id, name)
 
     policy_id = request.policy_id if request.policy_id else parent.policy_id
 
@@ -177,7 +177,7 @@ async def router_directory_create(
 
     parent_id = parent.id  # 在 save 前保存
 
-    new_folder = File(
+    new_folder = Entry(
         name=name,
         type=EntryType.FOLDER,
         owner_id=user.id,

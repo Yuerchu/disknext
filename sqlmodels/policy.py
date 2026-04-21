@@ -7,7 +7,7 @@ from sqlmodel import Field, Relationship
 from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str64, Str255, Str2048
 
 if TYPE_CHECKING:
-    from .file import File
+    from .file import Entry
     from .group import Group
 
 
@@ -201,7 +201,7 @@ class Policy(PolicyBase, UUIDTableBaseMixin):
     """策略名称"""
 
     # 关系
-    files: list["File"] = Relationship(back_populates="policy")
+    entries: list["Entry"] = Relationship(back_populates="policy")
     """策略下的所有对象"""
 
     groups: list["Group"] = Relationship(

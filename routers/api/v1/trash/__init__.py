@@ -13,7 +13,7 @@ from loguru import logger as l
 from middleware.auth import auth_required
 from middleware.dependencies import SessionDep
 from sqlmodels import Entry, User
-from sqlmodels.object import TrashDeleteRequest, TrashItemResponse, TrashRestoreRequest
+from sqlmodels.file import TrashDeleteRequest, TrashItemResponse, TrashRestoreRequest
 
 trash_router = APIRouter(
     prefix="/trash",

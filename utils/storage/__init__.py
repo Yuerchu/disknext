@@ -21,6 +21,7 @@ from .exceptions import (
     UploadSessionNotFoundError,
 )
 from .factory import create_storage_service
+from .migrate import migrate_directory_files, migrate_file_with_task
 from .local_storage import LocalStorageService
 from .naming_rule import NamingContext, NamingRuleParser
 from .protocol import StorageHandler

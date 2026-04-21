@@ -1,7 +1,7 @@
 """
-File 充血模型方法的单元测试
+Entry 充血模型方法的单元测试
 
-覆盖 File 类的业务方法：
+覆盖 Entry 类的业务方法：
 - soft_delete_batch
 - restore_batch + _resolve_name_conflict
 - delete(cleanup_storage=True) + _collect_physical_file_refs
@@ -31,7 +31,7 @@ async def _make_folder(
     policy_id: UUID,
     parent_id: UUID | None,
     name: str,
-) -> File:
+) -> Entry:
     """创建目录"""
     folder = Entry(
         name=name,
@@ -52,7 +52,7 @@ async def _make_file(
     name: str,
     size: int = 1024,
     physical_file_id: UUID | None = None,
-) -> File:
+) -> Entry:
     """创建文件"""
     file = Entry(
         name=name,

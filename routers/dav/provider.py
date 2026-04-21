@@ -1,7 +1,7 @@
 """
 DiskNext WebDAV 存储 Provider
 
-将 WsgiDAV 的文件操作映射到 DiskNext 的 File 模型。
+将 WsgiDAV 的文件操作映射到 DiskNext 的 Entry 模型。
 所有异步数据库/文件操作通过 asyncio.run_coroutine_threadsafe() 桥接。
 """
 import asyncio
@@ -64,19 +64,19 @@ async def _get_webdav_account(webdav_id: int) -> WebDAV | None:
         return await WebDAV.get(session, WebDAV.id == webdav_id)
 
 
-async def _get_object_by_path(user_id: UUID, path: str) -> File | None:
+async def _get_object_by_path(user_id: UUID, path: str) -> Entry | None:
     """根据路径获取对象"""
     async with _get_session() as session:
         return await Entry.get_by_path(session, user_id, path)
 
 
-async def _get_children(user_id: UUID, parent_id: UUID) -> list[File]:
+async def _get_children(user_id: UUID, parent_id: UUID) -> list[Entry]:
     """获取目录子对象"""
     async with _get_session() as session:
         return await Entry.get_children(session, user_id, parent_id)
 
 
-async def _get_object_by_id(file_id: UUID) -> File | None:
+async def _get_object_by_id(file_id: UUID) -> Entry | None:
     """根据ID获取对象"""
     async with _get_session() as session:
         return await Entry.get(session, Entry.id == file_id, load=Entry.physical_file)
@@ -99,7 +99,7 @@ async def _create_folder(
     parent_id: UUID,
     owner_id: UUID,
     policy_id: UUID,
-) -> File:
+) -> Entry:
     """创建目录对象"""
     async with _get_session() as session:
         obj = Entry(
@@ -119,7 +119,7 @@ async def _create_file(
     parent_id: UUID,
     owner_id: UUID,
     policy_id: UUID,
-) -> File:
+) -> Entry:
     """创建空文件对象"""
     async with _get_session() as session:
         obj = Entry(
@@ -336,7 +336,7 @@ class DiskNextCollection(DAVCollection):
         self,
         path: str,
         environ: dict[str, object],
-        obj: File,
+        obj: Entry,
         user_id: UUID,
         account: WebDAV,
     ) -> None:
@@ -455,7 +455,7 @@ class DiskNextFile(DAVNonCollection):
         self,
         path: str,
         environ: dict[str, object],
-        obj: File,
+        obj: Entry,
         user_id: UUID,
         account: WebDAV,
     ) -> None:

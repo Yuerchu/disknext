@@ -27,7 +27,7 @@ T = TypeVar("T", bound="User")
 if TYPE_CHECKING:
     from .group import Group
     from .download import Download
-    from .file import File
+    from .file import Entry
     from .order import Order
     from .redeem import Redeem
     from .share import Share
@@ -522,10 +522,10 @@ class User(UserBase, UUIDTableBaseMixin):
 
     downloads: list["Download"] = Relationship(back_populates="user", cascade_delete=True)
 
-    files: list["File"] = Relationship(
+    entries: list["Entry"] = Relationship(
         back_populates="owner",
         cascade_delete=True,
-        sa_relationship_kwargs={"foreign_keys": "[File.owner_id]"},
+        sa_relationship_kwargs={"foreign_keys": "[Entry.owner_id]"},
     )
     """用户的所有对象（文件和目录）"""
 

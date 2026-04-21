@@ -13,7 +13,7 @@ from .file import EntryType
 if TYPE_CHECKING:
     from .user import User
     from .report import Report
-    from .file import File
+    from .file import Entry
 
 
 # ==================== Base 模型 ====================
@@ -59,7 +59,7 @@ class Share(SQLModelBase, UUIDTableBaseMixin):
     """分享密码（加密后）"""
 
     file_id: UUID = Field(
-        foreign_key="file.id",
+        foreign_key="entry.id",
         index=True,
         ondelete="CASCADE"
     )
@@ -98,7 +98,7 @@ class Share(SQLModelBase, UUIDTableBaseMixin):
     user: "User" = Relationship(back_populates="shares")
     """分享创建者"""
 
-    file: "File" = Relationship(back_populates="shares")
+    entry: "Entry" = Relationship(back_populates="shares")
     """关联的对象"""
 
     reports: list["Report"] = Relationship(back_populates="share", cascade_delete=True)
@@ -273,7 +273,7 @@ class AdminShareListItem(ShareListItemBase):
         cls,
         share: "Share",
         user: "User | None",
-        obj: "File | None",
+        obj: "Entry | None",
     ) -> "AdminShareListItem":
         """从 Share ORM 对象构建"""
         return cls(

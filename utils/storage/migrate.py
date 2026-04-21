@@ -17,7 +17,7 @@ from sqlmodels.task import Task, TaskStatus
 
 async def migrate_file_with_task(
         session: AsyncSession,
-        obj: File,
+        obj: Entry,
         dest_policy: Policy,
         task: Task,
 ) -> None:
@@ -48,7 +48,7 @@ async def migrate_file_with_task(
 
 async def migrate_directory_files(
         session: AsyncSession,
-        folder: File,
+        folder: Entry,
         dest_policy: Policy,
         task: Task,
 ) -> None:
@@ -70,8 +70,8 @@ async def migrate_directory_files(
         task = await task.save(session)
 
         # 收集所有需要迁移的文件
-        files_to_migrate: list[File] = []
-        folders_to_update: list[File] = []
+        files_to_migrate: list[Entry] = []
+        folders_to_update: list[Entry] = []
         await _collect_objects_recursive(session, folder, files_to_migrate, folders_to_update)
 
         total = len(files_to_migrate)
@@ -120,9 +120,9 @@ async def migrate_directory_files(
 
 async def _collect_objects_recursive(
         session: AsyncSession,
-        folder: File,
-        files: list[File],
-        folders: list[File],
+        folder: Entry,
+        files: list[Entry],
+        folders: list[Entry],
 ) -> None:
     """
     递归收集目录下所有文件和子目录
@@ -132,7 +132,7 @@ async def _collect_objects_recursive(
     :param files: 文件列表（输出）
     :param folders: 子目录列表（输出）
     """
-    children: list[File] = await Entry.get_children(session, folder.owner_id, folder.id)
+    children: list[Entry] = await Entry.get_children(session, folder.owner_id, folder.id)
 
     for child in children:
         if child.type == EntryType.FILE:

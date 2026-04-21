@@ -11,12 +11,12 @@ from middleware.auth import admin_required
 from middleware.dependencies import SessionDep, TableViewRequestDep
 from sqlmodels import (
     JWTPayload, Policy, PolicyType, User, ListResponse,
-    File, EntryType, AdminFileResponse, FileBanRequest, )
+    Entry, EntryType, AdminFileResponse, FileBanRequest, )
 from utils.storage import LocalStorageService
 
 async def _set_ban_recursive(
     session: AsyncSession,
-    obj: File,
+    obj: Entry,
     ban: bool,
     admin_id: UUID,
     reason: str | None,
@@ -35,9 +35,9 @@ async def _set_ban_recursive(
 
     # 如果是文件夹，先递归处理子对象
     if obj.is_folder:
-        children = await File.get(
+        children = await Entry.get(
             session,
-            File.parent_id == obj.id,
+            Entry.parent_id == obj.id,
             fetch_mode="all",
         )
         for child in children:
@@ -88,13 +88,13 @@ async def router_admin_get_file_list(
     :return: 分页文件列表
     """
     # 构建查询条件
-    conditions = [File.type == EntryType.FILE]
+    conditions = [Entry.type == EntryType.FILE]
     if user_id:
-        conditions.append(File.owner_id == user_id)
+        conditions.append(Entry.owner_id == user_id)
     if is_banned is not None:
-        conditions.append(File.is_banned == is_banned)
+        conditions.append(Entry.is_banned == is_banned)
     if keyword:
-        conditions.append(File.name.ilike(f"%{keyword}%"))
+        conditions.append(Entry.name.ilike(f"%{keyword}%"))
 
     if len(conditions) > 1:
         condition = conditions[0]
@@ -102,7 +102,7 @@ async def router_admin_get_file_list(
             condition = condition & c
     else:
         condition = conditions[0]
-    result = await File.get_with_count(session, condition, table_view=table_view, load=File.owner)
+    result = await Entry.get_with_count(session, condition, table_view=table_view, load=Entry.owner)
 
     # 构建响应
     items: list[AdminFileResponse] = []
@@ -131,7 +131,7 @@ async def router_admin_preview_file(
     :param file_id: 文件UUID
     :return: 文件内容
     """
-    file_obj = await File.get_exist_one(session, file_id)
+    file_obj = await Entry.get_exist_one(session, file_id)
 
     if not file_obj.is_file:
         raise HTTPException(status_code=400, detail="对象不是文件")
@@ -180,7 +180,7 @@ async def router_admin_ban_file(
     :param claims: 当前管理员 JWT claims
     :return: 封禁结果
     """
-    file_obj = await File.get_exist_one(session, file_id)
+    file_obj = await Entry.get_exist_one(session, file_id)
 
     count = await _set_ban_recursive(session, file_obj, request.ban, claims.sub, request.reason)
 
@@ -208,7 +208,7 @@ async def router_admin_delete_file(
     :param delete_physical: 是否同时删除物理文件
     :return: 删除结果
     """
-    file_obj = await File.get_exist_one(session, file_id)
+    file_obj = await Entry.get_exist_one(session, file_id)
 
     if not file_obj.is_file:
         raise HTTPException(status_code=400, detail="对象不是文件")
@@ -237,6 +237,6 @@ async def router_admin_delete_file(
     await session.exec(stmt)
 
     # 使用条件删除
-    await File.delete(session, condition=File.id == file_obj.id)
+    await Entry.delete(session, condition=Entry.id == file_obj.id)
 
     l.info(f"管理员删除了文件: {file_name}")

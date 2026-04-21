@@ -14,8 +14,8 @@ from middleware.dependencies import SessionDep, ServerConfigDep, TableViewReques
 from sqlmodels import (
     FileCategory,
     ListResponse,
-    File,
-    FileResponse,
+    Entry,
+    EntryResponse,
     EntryType,
     User,
 )
@@ -36,7 +36,7 @@ async def router_category_list(
     user: Annotated[User, Depends(auth_required)],
     category: FileCategory,
     table_view: TableViewRequestDep,
-) -> ListResponse[FileResponse]:
+) -> ListResponse[EntryResponse]:
     """
     按文件类型分类查询用户的所有文件
 
@@ -56,7 +56,7 @@ async def router_category_list(
     - order: 排序字段（created_at / updated_at）
 
     响应：
-    - ListResponse[FileResponse]: 分页文件列表
+    - ListResponse[EntryResponse]: 分页文件列表
 
     错误处理：
     - HTTPException 422: category 参数无效
@@ -77,7 +77,7 @@ async def router_category_list(
     if not extensions:
         raise HTTPException(status_code=404, detail=f"分类 {category.value} 扩展名列表为空")
 
-    result = await File.get_by_category(
+    result = await Entry.get_by_category(
         session,
         user.id,
         extensions,
@@ -85,7 +85,7 @@ async def router_category_list(
     )
 
     items = [
-        FileResponse(
+        EntryResponse(
             id=obj.id,
             name=obj.name,
             type=EntryType.FILE,

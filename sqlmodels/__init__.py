@@ -99,8 +99,8 @@ from .file import (
     TrashDeleteRequest,
 )
 from .file_metadata import (
-    FileMetadata,
-    FileMetadataBase,
+    EntryMetadata,
+    EntryMetadataBase,
     MetadataNamespace,
     MetadataResponse,
     MetadataPatchItem,
