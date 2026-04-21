@@ -49,7 +49,7 @@ class TestAdminFileAppCRUD:
     ) -> None:
         """管理员创建文件应用"""
         response = await async_client.post(
-            "/api/v1/admin/file-app/",
+            "/api/v1/admin/file_app/",
             headers=admin_headers,
             json={
                 "name": "新建应用",
@@ -76,7 +76,7 @@ class TestAdminFileAppCRUD:
     ) -> None:
         """创建重复 app_key 返回 409"""
         response = await async_client.post(
-            "/api/v1/admin/file-app/",
+            "/api/v1/admin/file_app/",
             headers=admin_headers,
             json={
                 "name": "重复应用",
@@ -95,7 +95,7 @@ class TestAdminFileAppCRUD:
     ) -> None:
         """管理员列出文件应用"""
         response = await async_client.get(
-            "/api/v1/admin/file-app/list",
+            "/api/v1/admin/file_app/",
             headers=admin_headers,
         )
         assert response.status_code == 200
@@ -113,7 +113,7 @@ class TestAdminFileAppCRUD:
         """管理员获取应用详情"""
         app_id = setup_admin_app["app_id"]
         response = await async_client.get(
-            f"/api/v1/admin/file-app/{app_id}",
+            f"/api/v1/admin/file_app/{app_id}",
             headers=admin_headers,
         )
         assert response.status_code == 200
@@ -129,7 +129,7 @@ class TestAdminFileAppCRUD:
     ) -> None:
         """获取不存在的应用返回 404"""
         response = await async_client.get(
-            f"/api/v1/admin/file-app/{uuid4()}",
+            f"/api/v1/admin/file_app/{uuid4()}",
             headers=admin_headers,
         )
         assert response.status_code == 404
@@ -144,7 +144,7 @@ class TestAdminFileAppCRUD:
         """管理员更新应用"""
         app_id = setup_admin_app["app_id"]
         response = await async_client.patch(
-            f"/api/v1/admin/file-app/{app_id}",
+            f"/api/v1/admin/file_app/{app_id}",
             headers=admin_headers,
             json={
                 "name": "更新后的名称",
@@ -172,7 +172,7 @@ class TestAdminFileAppCRUD:
         app_id = app.id
 
         response = await async_client.delete(
-            f"/api/v1/admin/file-app/{app_id}",
+            f"/api/v1/admin/file_app/{app_id}",
             headers=admin_headers,
         )
         assert response.status_code == 204
@@ -197,7 +197,7 @@ class TestAdminExtensionManagement:
         """全量替换扩展名列表"""
         app_id = setup_admin_app["app_id"]
         response = await async_client.put(
-            f"/api/v1/admin/file-app/{app_id}/extensions",
+            f"/api/v1/admin/file_app/{app_id}/extensions",
             headers=admin_headers,
             json={"extensions": ["doc", "docx", "odt"]},
         )
@@ -225,7 +225,7 @@ class TestAdminGroupAccessManagement:
         group_id = admin_user.group_id
 
         response = await async_client.put(
-            f"/api/v1/admin/file-app/{app_id}/groups",
+            f"/api/v1/admin/file_app/{app_id}/groups",
             headers=admin_headers,
             json={"group_ids": [str(group_id)]},
         )
@@ -247,7 +247,7 @@ class TestAdminPermission:
     ) -> None:
         """普通用户访问管理端点返回 403"""
         response = await async_client.get(
-            "/api/v1/admin/file-app/list",
+            "/api/v1/admin/file_app/",
             headers=auth_headers,
         )
         assert response.status_code == 403

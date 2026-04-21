@@ -52,7 +52,7 @@ admin_task_router = APIRouter(
 )
 
 @admin_task_router.get(
-    path='/list',
+    path='/',
     summary='获取任务列表',
     description='Get task list',
     dependencies=[Depends(admin_required)]

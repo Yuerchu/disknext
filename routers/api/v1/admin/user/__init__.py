@@ -23,28 +23,7 @@ admin_user_router = APIRouter(
 
 
 @admin_user_router.get(
-    path='/info/{user_id}',
-    summary='获取用户信息',
-    description='Get user information by ID',
-    dependencies=[Depends(admin_required)],
-)
-async def router_admin_get_user(session: SessionDep, user_id: UUID) -> UserPublic:
-    """
-    根据用户ID获取用户信息，包括用户名、邮箱、注册时间等。
-
-    Args:
-        session(SessionDep): 数据库会话依赖项。
-        user_id (UUID): 用户ID。
-
-    Returns:
-        ResponseBase: 包含用户信息的响应模型。
-    """
-    user = await User.get_exist_one(session, user_id)
-    return user.to_public()
-
-
-@admin_user_router.get(
-    path='/list',
+    path='/',
     summary='获取用户列表',
     description='Get user list',
     dependencies=[Depends(admin_required)],
@@ -69,8 +48,29 @@ async def router_admin_get_users(
     )
 
 
+@admin_user_router.get(
+    path='/{user_id}',
+    summary='获取用户信息',
+    description='Get user information by ID',
+    dependencies=[Depends(admin_required)],
+)
+async def router_admin_get_user(session: SessionDep, user_id: UUID) -> UserPublic:
+    """
+    根据用户ID获取用户信息，包括用户名、邮箱、注册时间等。
+
+    Args:
+        session(SessionDep): 数据库会话依赖项。
+        user_id (UUID): 用户ID。
+
+    Returns:
+        ResponseBase: 包含用户信息的响应模型。
+    """
+    user = await User.get_exist_one(session, user_id)
+    return user.to_public()
+
+
 @admin_user_router.post(
-    path='/create',
+    path='/',
     summary='创建用户',
     description='Create a new user',
     dependencies=[Depends(admin_required)],

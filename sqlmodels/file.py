@@ -5,7 +5,6 @@ from uuid import UUID
 
 from enum import StrEnum
 from loguru import logger as l
-from sqlalchemy import select as sa_select, literal_column, union_all
 from sqlmodel import Field, Relationship, CheckConstraint, Index, text
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -13,19 +12,18 @@ from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, NonNegativeBigInt, Po
 
 from .policy import PolicyType
 
-from .physical_file import PhysicalFile
-from .user import User
-
 if TYPE_CHECKING:
+    from .user import User
     from .policy import Policy
     from .source_link import SourceLink
     from .share import Share
+    from .physical_file import PhysicalFile
     from .uri import DiskNextURI
-    from .file_metadata import FileMetadata
+    from .object_metadata import ObjectMetadata
 
 
-class FileType(StrEnum):
-    """文件类型枚举"""
+class ObjectType(StrEnum):
+    """对象类型枚举"""
     FILE = "file"
     FOLDER = "folder"
 
@@ -40,13 +38,13 @@ class FileCategory(StrEnum):
 
 # ==================== Base 模型 ====================
 
-class FileBase(SQLModelBase):
+class ObjectBase(SQLModelBase):
     """对象基础字段，供数据库模型和 DTO 共享"""
 
     name: str = Field(min_length=1, max_length=255)
     """对象名称（文件名或目录名）"""
 
-    type: FileType
+    type: ObjectType
     """对象类型"""
 
     size: int | None = None
@@ -58,7 +56,7 @@ class FileBase(SQLModelBase):
 
 # ==================== DTO 模型 ====================
 
-class FileFinalize(SQLModelBase):
+class ObjectFileFinalize(SQLModelBase):
     """文件上传完成后更新 Object 的 DTO"""
 
     size: int
@@ -68,7 +66,7 @@ class FileFinalize(SQLModelBase):
     """关联的物理文件UUID"""
 
 
-class FileMoveUpdate(SQLModelBase):
+class ObjectMoveUpdate(SQLModelBase):
     """移动/重命名 Object 的 DTO"""
 
     parent_id: UUID
@@ -91,7 +89,7 @@ class DirectoryCreateRequest(SQLModelBase):
     """存储策略UUID，不指定则继承父目录"""
 
 
-class FileMoveRequest(SQLModelBase):
+class ObjectMoveRequest(SQLModelBase):
     """移动对象请求 DTO"""
 
     src_ids: list[UUID] = Field(min_length=1, max_length=100)
@@ -101,14 +99,14 @@ class FileMoveRequest(SQLModelBase):
     """目标文件夹UUID"""
 
 
-class FileDeleteRequest(SQLModelBase):
+class ObjectDeleteRequest(SQLModelBase):
     """删除对象请求 DTO"""
 
     ids: list[UUID] = Field(min_length=1, max_length=100)
     """待删除对象UUID列表"""
 
 
-class FileResponse(FileBase):
+class ObjectResponse(ObjectBase):
     """对象响应 DTO"""
 
     id: UUID
@@ -155,7 +153,7 @@ class DirectoryResponse(SQLModelBase):
     parent: UUID | None = None
     """父目录UUID，根目录为None"""
 
-    objects: list[FileResponse] = []
+    objects: list[ObjectResponse] = []
     """目录下的对象列表"""
 
     policy: PolicyResponse
@@ -164,7 +162,7 @@ class DirectoryResponse(SQLModelBase):
 
 # ==================== 数据库模型 ====================
 
-class File(FileBase, UUIDTableBaseMixin):
+class Object(ObjectBase, UUIDTableBaseMixin):
     """
     统一对象模型
 
@@ -180,7 +178,7 @@ class File(FileBase, UUIDTableBaseMixin):
     __table_args__ = (
         # 同一父目录下名称唯一（仅对未删除记录生效）
         Index(
-            "uq_file_parent_name_active",
+            "uq_object_parent_name_active",
             "owner_id", "parent_id", "name",
             unique=True,
             postgresql_where=text("deleted_at IS NULL"),
@@ -188,15 +186,15 @@ class File(FileBase, UUIDTableBaseMixin):
         # 名称不能包含斜杠（根目录 parent_id IS NULL 除外，因为根目录 name="/"）
         CheckConstraint(
             "parent_id IS NULL OR (name NOT LIKE '%/%' AND name NOT LIKE '%\\%')",
-            name="ck_file_name_no_slash",
+            name="ck_object_name_no_slash",
         ),
         # 性能索引
-        Index("ix_file_owner_updated", "owner_id", "updated_at"),
-        Index("ix_file_parent_updated", "parent_id", "updated_at"),
-        Index("ix_file_owner_type", "owner_id", "type"),
-        Index("ix_file_owner_size", "owner_id", "size"),
+        Index("ix_object_owner_updated", "owner_id", "updated_at"),
+        Index("ix_object_parent_updated", "parent_id", "updated_at"),
+        Index("ix_object_owner_type", "owner_id", "type"),
+        Index("ix_object_owner_size", "owner_id", "size"),
         # 回收站查询索引
-        Index("ix_file_owner_deleted", "owner_id", "deleted_at"),
+        Index("ix_object_owner_deleted", "owner_id", "deleted_at"),
     )
 
     # ==================== 基础字段 ====================
@@ -204,7 +202,7 @@ class File(FileBase, UUIDTableBaseMixin):
     name: Str255
     """对象名称（文件名或目录名）"""
 
-    type: FileType
+    type: ObjectType
     """对象类型：file 或 folder"""
 
     password: Str255 | None = None
@@ -230,7 +228,7 @@ class File(FileBase, UUIDTableBaseMixin):
 
     parent_id: UUID | None = Field(
         default=None,
-        foreign_key="file.id",
+        foreign_key="object.id",
         index=True,
         ondelete="CASCADE"
     )
@@ -276,7 +274,7 @@ class File(FileBase, UUIDTableBaseMixin):
 
     deleted_original_parent_id: UUID | None = Field(
         default=None,
-        foreign_key="file.id",
+        foreign_key="object.id",
         ondelete="SET NULL",
     )
     """软删除前的原始父目录UUID（恢复时用于还原位置）"""
@@ -284,47 +282,47 @@ class File(FileBase, UUIDTableBaseMixin):
     # ==================== 关系 ====================
 
     owner: "User" = Relationship(
-        back_populates="files",
-        sa_relationship_kwargs={"foreign_keys": "[File.owner_id]"}
+        back_populates="objects",
+        sa_relationship_kwargs={"foreign_keys": "[Object.owner_id]"}
     )
     """所有者"""
 
     banner: "User" = Relationship(
-        sa_relationship_kwargs={"foreign_keys": "[File.banned_by]"}
+        sa_relationship_kwargs={"foreign_keys": "[Object.banned_by]"}
     )
     """封禁操作者"""
 
-    policy: "Policy" = Relationship(back_populates="files")
+    policy: "Policy" = Relationship(back_populates="objects")
     """存储策略"""
 
     # 自引用关系
-    parent: "File" = Relationship(
+    parent: "Object" = Relationship(
         back_populates="children",
         sa_relationship_kwargs={
-            "remote_side": "File.id",
-            "foreign_keys": "[File.parent_id]",
+            "remote_side": "Object.id",
+            "foreign_keys": "[Object.parent_id]",
         },
     )
     """父目录"""
 
-    children: list["File"] = Relationship(
+    children: list["Object"] = Relationship(
         back_populates="parent",
         cascade_delete=True,
-        sa_relationship_kwargs={"foreign_keys": "[File.parent_id]"},
+        sa_relationship_kwargs={"foreign_keys": "[Object.parent_id]"},
     )
     """子对象（文件和子目录）"""
 
     # 仅文件有效的关系
-    metadata_entries: list["FileMetadata"] = Relationship(back_populates="file", cascade_delete=True)
+    metadata_entries: list["ObjectMetadata"] = Relationship(back_populates="object", cascade_delete=True)
     """元数据键值对列表"""
 
-    source_links: list["SourceLink"] = Relationship(back_populates="file", cascade_delete=True)
+    source_links: list["SourceLink"] = Relationship(back_populates="object", cascade_delete=True)
     """源链接列表（仅文件有效）"""
 
-    shares: list["Share"] = Relationship(back_populates="file", cascade_delete=True)
+    shares: list["Share"] = Relationship(back_populates="object", cascade_delete=True)
     """分享列表"""
 
-    physical_file: "PhysicalFile" = Relationship(back_populates="files")
+    physical_file: "PhysicalFile" = Relationship(back_populates="objects")
     """关联的物理文件（仅文件有效）"""
 
     # ==================== 业务属性 ====================
@@ -343,137 +341,17 @@ class File(FileBase, UUIDTableBaseMixin):
     @property
     def is_file(self) -> bool:
         """是否为文件"""
-        return self.type == FileType.FILE
+        return self.type == ObjectType.FILE
 
     @property
     def is_folder(self) -> bool:
         """是否为目录"""
-        return self.type == FileType.FOLDER
-
-    # ==================== 验证方法 ====================
-
-    @staticmethod
-    def validate_name(name: str) -> str:
-        """
-        验证文件/目录名：非空 + 无斜杠。返回 strip 后的名称。
-
-        :param name: 原始名称
-        :return: strip 后的合法名称
-        :raises HTTPException: 400 名称无效
-        """
-        from fastapi import HTTPException
-
-        stripped = name.strip() if name else ""
-        if not stripped:
-            raise HTTPException(status_code=400, detail="名称不能为空")
-        if '/' in stripped or '\\' in stripped:
-            raise HTTPException(status_code=400, detail="名称不能包含斜杠")
-        return stripped
-
-    @classmethod
-    async def validate_parent(
-        cls,
-        session: AsyncSession,
-        parent_id: UUID,
-        owner_id: UUID,
-    ) -> "File":
-        """
-        验证父目录：存在 + 属于用户 + 是目录 + 未封禁 + 未删除
-
-        :param session: 数据库会话
-        :param parent_id: 父目录UUID
-        :param owner_id: 当前用户UUID
-        :return: 验证通过的父目录对象
-        :raises HTTPException: 404/400/403
-        """
-        from fastapi import HTTPException
-        from utils import http_exceptions
-
-        parent = await cls.get(
-            session,
-            (cls.id == parent_id) & (cls.deleted_at == None)
-        )
-        if not parent or parent.owner_id != owner_id:
-            raise HTTPException(status_code=404, detail="父目录不存在")
-        if not parent.is_folder:
-            raise HTTPException(status_code=400, detail="父对象不是目录")
-        if parent.is_banned:
-            http_exceptions.raise_banned("目标目录已被封禁，无法执行此操作")
-        return parent
-
-    @classmethod
-    async def check_name_conflict(
-        cls,
-        session: AsyncSession,
-        owner_id: UUID,
-        parent_id: UUID,
-        name: str,
-    ) -> None:
-        """
-        检查同目录下是否存在同名对象（仅未删除的）
-
-        :param session: 数据库会话
-        :param owner_id: 用户UUID
-        :param parent_id: 父目录UUID
-        :param name: 对象名称
-        :raises HTTPException: 409 同名对象已存在
-        """
-        from fastapi import HTTPException
-
-        existing = await cls.get(
-            session,
-            (cls.owner_id == owner_id) &
-            (cls.parent_id == parent_id) &
-            (cls.name == name) &
-            (cls.deleted_at == None)
-        )
-        if existing:
-            raise HTTPException(status_code=409, detail="同名文件或目录已存在")
-
-    @classmethod
-    async def is_ancestor_of(
-        cls,
-        session: AsyncSession,
-        ancestor_id: UUID,
-        descendant_id: UUID,
-    ) -> bool:
-        """
-        递归 CTE 检测 ancestor_id 是否是 descendant_id 的祖先（用于循环检测）
-
-        :param session: 数据库会话
-        :param ancestor_id: 可能的祖先UUID
-        :param descendant_id: 可能的后代UUID
-        :return: True 如果 ancestor_id 是 descendant_id 的祖先
-        """
-        file_table = cls.__table__
-
-        # 从 descendant 向上遍历祖先链
-        anchor = sa_select(
-            file_table.c.id,
-            file_table.c.parent_id,
-        ).where(file_table.c.id == descendant_id)
-
-        ancestors = anchor.cte(name="ancestors", recursive=True)
-
-        parent = file_table.alias("parent")
-        recursive_part = sa_select(
-            parent.c.id,
-            parent.c.parent_id,
-        ).where(parent.c.id == ancestors.c.parent_id)
-
-        ancestors = ancestors.union_all(recursive_part)
-
-        stmt = sa_select(literal_column('1')).select_from(ancestors).where(
-            ancestors.c.id == ancestor_id
-        ).limit(1)
-
-        result = await session.exec(stmt)
-        return result.first() is not None
+        return self.type == ObjectType.FOLDER
 
     # ==================== 业务方法 ====================
 
     @classmethod
-    async def get_root(cls, session, user_id: UUID) -> "File | None":
+    async def get_root(cls, session, user_id: UUID) -> "Object | None":
         """
         获取用户的根目录
 
@@ -489,12 +367,12 @@ class File(FileBase, UUIDTableBaseMixin):
     @classmethod
     async def get_by_path(
         cls,
-        session: AsyncSession,
+        session,
         user_id: UUID,
         path: str,
-    ) -> "File | None":
+    ) -> "Object | None":
         """
-        根据路径获取对象（单次查询，动态 JOIN 链）
+        根据路径获取对象
 
         路径从用户根目录开始，不包含用户名前缀。
         如 "/" 表示根目录，"/docs/images" 表示根目录下的 docs/images。
@@ -502,53 +380,44 @@ class File(FileBase, UUIDTableBaseMixin):
         :param session: 数据库会话
         :param user_id: 用户UUID
         :param path: 路径，如 "/" 或 "/docs/images"
-        :return: File 或 None
+        :return: Object 或 None
         """
         path = path.strip()
         if not path:
             raise ValueError("路径不能为空")
 
-        parts = [p for p in path.strip("/").split("/") if p]
+        # 获取用户根目录
+        root = await cls.get_root(session, user_id)
+        if not root:
+            return None
 
+        # 移除开头的斜杠并分割路径
+        if path.startswith("/"):
+            path = path[1:]
+        parts = [p for p in path.split("/") if p]
+
+        # 空路径 -> 返回根目录
         if not parts:
-            return await cls.get_root(session, user_id)
+            return root
 
-        # 动态 JOIN 链：f0(root) → f1(seg0) → f2(seg1) → ... → fN(最终目标)
-        # 一次查询完成，JOIN 数 = 路径深度
-        from sqlalchemy.orm import aliased
+        # 从根目录开始遍历路径
+        current = root
+        for part in parts:
+            if not current:
+                return None
 
-        aliases = [aliased(cls, flat=True) for _ in range(len(parts) + 1)]
-        root_alias = aliases[0]
-        target_alias = aliases[-1]
-
-        # SELECT target FROM file f0 JOIN file f1 ON ... JOIN file f2 ON ...
-        stmt = sa_select(target_alias).select_from(root_alias)
-
-        # 根目录条件
-        stmt = stmt.where(
-            root_alias.owner_id == user_id,
-            root_alias.parent_id == None,
-            root_alias.deleted_at == None,
-        )
-
-        # 逐级 JOIN
-        for i, segment in enumerate(parts):
-            child = aliases[i + 1]
-            parent = aliases[i]
-            stmt = stmt.join(
-                child,
-                onclause=(
-                    (child.parent_id == parent.id) &
-                    (child.name == segment) &
-                    (child.deleted_at == None)
-                ),
+            current = await cls.get(
+                session,
+                (cls.owner_id == user_id) &
+                (cls.parent_id == current.id) &
+                (cls.name == part) &
+                (cls.deleted_at == None)
             )
 
-        result = await session.exec(stmt)
-        return result.first()
+        return current
 
     @classmethod
-    async def get_children(cls, session, user_id: UUID, parent_id: UUID) -> list["File"]:
+    async def get_children(cls, session, user_id: UUID, parent_id: UUID) -> list["Object"]:
         """
         获取目录下的所有子对象（不包含已软删除的）
 
@@ -564,7 +433,7 @@ class File(FileBase, UUIDTableBaseMixin):
         )
 
     @classmethod
-    async def get_all_children(cls, session, user_id: UUID, parent_id: UUID) -> list["File"]:
+    async def get_all_children(cls, session, user_id: UUID, parent_id: UUID) -> list["Object"]:
         """
         获取目录下的所有子对象（包含已软删除的，用于永久删除场景）
 
@@ -580,7 +449,7 @@ class File(FileBase, UUIDTableBaseMixin):
         )
 
     @classmethod
-    async def get_trash_items(cls, session, user_id: UUID) -> list["File"]:
+    async def get_trash_items(cls, session, user_id: UUID) -> list["Object"]:
         """
         获取用户回收站中的顶层对象
 
@@ -604,7 +473,7 @@ class File(FileBase, UUIDTableBaseMixin):
         user_id: UUID,
         extensions: list[str],
         table_view: 'TableViewRequest | None' = None,
-    ) -> 'ListResponse[File]':
+    ) -> 'ListResponse[Object]':
         """
         按扩展名列表查询用户的所有文件（跨目录）
 
@@ -621,7 +490,7 @@ class File(FileBase, UUIDTableBaseMixin):
         ext_conditions = [cls.name.ilike(f"%.{ext}") for ext in extensions]
         condition = (
             (cls.owner_id == user_id) &
-            (cls.type == FileType.FILE) &
+            (cls.type == ObjectType.FILE) &
             (cls.deleted_at == None) &
             (cls.is_banned == False) &
             or_(*ext_conditions)
@@ -634,7 +503,7 @@ class File(FileBase, UUIDTableBaseMixin):
         session,
         uri: "DiskNextURI",
         requesting_user_id: UUID | None = None,
-    ) -> "File":
+    ) -> "Object":
         """
         将 URI 解析为 Object 实例
 
@@ -689,11 +558,11 @@ class File(FileBase, UUIDTableBaseMixin):
         :return: 完整路径，如 "/docs/images/photo.jpg"
         """
         parts: list[str] = []
-        current: File | None = self
+        current: Object | None = self
 
         while current and current.parent_id is not None:
             parts.append(current.name)
-            current = await File.get(session, File.id == current.parent_id)
+            current = await Object.get(session, Object.id == current.parent_id)
 
         # 反转顺序（从根到当前）
         parts.reverse()
@@ -705,7 +574,7 @@ class File(FileBase, UUIDTableBaseMixin):
     async def soft_delete_batch(
         cls,
         session: AsyncSession,
-        objects: list["File"],
+        objects: list["Object"],
     ) -> int:
         """
         批量软删除对象
@@ -788,7 +657,7 @@ class File(FileBase, UUIDTableBaseMixin):
     async def restore_batch(
         cls,
         session: AsyncSession,
-        objects: list["File"],
+        objects: list["Object"],
         user_id: UUID,
     ) -> int:
         """
@@ -841,134 +710,217 @@ class File(FileBase, UUIDTableBaseMixin):
         await session.commit()
         return restored_count
 
-    # ==================== 删除（硬删除） ====================
+    # ==================== 永久删除 ====================
 
-    async def _collect_physical_file_refs(
+    async def _collect_file_entries_all(
         self,
         session: AsyncSession,
         user_id: UUID,
-        *,
-        include_deleted: bool = False,
-    ) -> tuple[list[UUID], int]:
+    ) -> tuple[list[tuple[UUID, str, UUID]], int, int]:
         """
-        递归 CTE 收集子树中所有 PhysicalFile ID 和总文件大小（单次查询）
+        BFS 收集子树中所有文件的物理文件信息（包含已删除和未删除的子对象）
 
         :param session: 数据库会话
         :param user_id: 用户UUID
-        :param include_deleted: True 时包含已软删除的子对象（永久删除场景）
-        :return: (physical_file_id 列表, 总文件大小)
+        :return: (文件条目列表[(obj_id, name, physical_file_id)], 总对象数, 总文件大小)
         """
-        from sqlalchemy import column as sa_col
+        file_entries: list[tuple[UUID, str, UUID]] = []
+        total_count = 1
+        total_file_size = 0
 
-        file_table = File.__table__
+        # 根对象本身是文件
+        if self.is_file and self.physical_file_id:
+            file_entries.append((self.id, self.name, self.physical_file_id))
+            total_file_size += self.size
 
-        # 锚点：当前对象自身
-        anchor = sa_select(
-            file_table.c.id,
-            file_table.c.type,
-            file_table.c.physical_file_id,
-            file_table.c.size,
-        ).where(file_table.c.id == self.id)
+        # BFS 遍历子目录
+        if self.is_folder:
+            queue: list[UUID] = [self.id]
+            while queue:
+                parent_id = queue.pop(0)
+                children = await Object.get_all_children(session, user_id, parent_id)
+                for child in children:
+                    total_count += 1
+                    if child.is_file and child.physical_file_id:
+                        file_entries.append((child.id, child.name, child.physical_file_id))
+                        total_file_size += child.size
+                    elif child.is_folder:
+                        queue.append(child.id)
 
-        subtree = anchor.cte(name="subtree", recursive=True)
-
-        # 递归部分：子节点
-        child = file_table.alias("child")
-        recursive_conditions = [child.c.parent_id == subtree.c.id]
-        if not include_deleted:
-            recursive_conditions.append(child.c.deleted_at == None)
-
-        recursive_part = sa_select(
-            child.c.id,
-            child.c.type,
-            child.c.physical_file_id,
-            child.c.size,
-        ).where(*recursive_conditions)
-
-        subtree = subtree.union_all(recursive_part)
-
-        # 最终查询：只取文件类型且有 physical_file_id 的记录
-        stmt = sa_select(
-            subtree.c.physical_file_id,
-            subtree.c.size,
-        ).where(
-            subtree.c.type == FileType.FILE,
-            subtree.c.physical_file_id != None,
-        )
-
-        result = await session.exec(stmt)
-        rows = result.all()
-
-        physical_file_ids = [row[0] for row in rows]
-        total_file_size = sum(row[1] for row in rows)
-
-        return physical_file_ids, total_file_size
+        return file_entries, total_count, total_file_size
 
     @classmethod
-    async def delete(
+    async def permanently_delete_batch(
         cls,
         session: AsyncSession,
-        instances: 'File | list[File] | None' = None,
-        *,
-        condition: 'ColumnElement[bool] | bool | None' = None,
-        commit: bool = True,
-        cleanup_storage: bool = False,
-        release_quota: bool = True,
+        objects: list["Object"],
+        user_id: UUID,
     ) -> int:
         """
-        删除对象，可选物理文件清理和配额释放
+        永久删除回收站中的对象
 
-        ``cleanup_storage=True`` 时启用完整清理：
-
-        1. BFS 收集子树所有 PhysicalFile 引用（删除前）
-        2. 释放用户配额（同事务）
-        3. 硬删除 DB 记录（CASCADE 处理子对象）
-        4. PhysicalFile 引用计数清理 + 物理删除
+        验证对象在回收站中（deleted_at IS NOT NULL），
+        BFS 收集所有子文件的 PhysicalFile 信息，
+        处理引用计数，引用为 0 时物理删除文件，
+        最后硬删除根 Object（CASCADE 自动清理子对象）。
 
         :param session: 数据库会话
-        :param instances: 要删除的对象实例或列表
-        :param condition: WHERE 条件（不支持与 cleanup_storage 同时使用）
-        :param commit: 是否提交事务
-        :param cleanup_storage: 是否清理物理文件
-        :param release_quota: 是否释放用户配额
-        :return: 删除的记录数
+        :param objects: 待永久删除的对象列表
+        :param user_id: 用户UUID
+        :return: 永久删除的对象数量
         """
-        if cleanup_storage and condition is not None:
-            raise ValueError("cleanup_storage 不支持与 condition 同时使用，请使用实例删除模式")
+        from .physical_file import PhysicalFile
+        from .policy import Policy
+        from .user import User
+        from utils.storage.local_storage import LocalStorageService
+        from utils.storage.s3_storage import S3StorageService
 
-        # Phase 1: 收集物理文件引用和配额数据（DB 删除前）
-        physical_file_ids: list[UUID] = []
-        quota_map: dict[UUID, int] = {}
+        total_deleted = 0
 
-        if cleanup_storage and instances is not None:
-            instance_list = instances if isinstance(instances, list) else [instances]
-            for obj in instance_list:
-                is_trash = obj.deleted_at is not None
-                refs, file_size = await obj._collect_physical_file_refs(
-                    session, obj.owner_id, include_deleted=is_trash,
-                )
-                physical_file_ids.extend(refs)
-                if release_quota and file_size > 0:
-                    quota_map[obj.owner_id] = quota_map.get(obj.owner_id, 0) + file_size
+        for obj in objects:
+            if not obj.deleted_at:
+                l.warning(f"对象 {obj.id} 不在回收站中，跳过永久删除")
+                continue
 
-        # Phase 2: 释放配额（同事务）
-        for owner_id, total_size in quota_map.items():
-            user = await User.get(session, User.id == owner_id)
+            root_id = obj.id
+            file_entries, obj_count, total_file_size = await obj._collect_file_entries_all(
+                session, user_id
+            )
+
+            # 处理 PhysicalFile 引用计数
+            for obj_id, obj_name, physical_file_id in file_entries:
+                physical_file = await PhysicalFile.get(session, PhysicalFile.id == physical_file_id)
+                if not physical_file:
+                    continue
+
+                physical_file.decrement_reference()
+
+                if physical_file.can_be_deleted:
+                    # 物理删除文件
+                    policy = await Policy.get(session, Policy.id == physical_file.policy_id)
+                    if policy:
+                        try:
+                            if policy.type == PolicyType.LOCAL:
+                                storage_service = LocalStorageService(policy)
+                                await storage_service.delete_file(physical_file.storage_path)
+                            elif policy.type == PolicyType.S3:
+                                s3_service = await S3StorageService.from_policy(policy)
+                                await s3_service.delete_file(physical_file.storage_path)
+                            l.debug(f"物理文件已删除: {obj_name}")
+                        except Exception as e:
+                            l.warning(f"物理删除文件失败: {obj_name}, 错误: {e}")
+
+                    await PhysicalFile.delete(session, physical_file, commit=False)
+                    l.debug(f"物理文件记录已删除: {physical_file.storage_path}")
+                else:
+                    physical_file = await physical_file.save(session, commit=False)
+                    l.debug(f"物理文件仍有 {physical_file.reference_count} 个引用: {physical_file.storage_path}")
+
+            # 更新用户存储配额
+            if total_file_size > 0:
+                user = await User.get(session, User.id == user_id)
+                if user:
+                    await user.adjust_storage(session, -total_file_size, commit=False)
+
+            # 硬删除根对象，CASCADE 自动删除所有子对象
+            await cls.delete(session, condition=cls.id == root_id, commit=False)
+
+            total_deleted += obj_count
+
+        # 统一提交所有变更
+        await session.commit()
+        return total_deleted
+
+    # ==================== 递归删除（硬删除） ====================
+
+    async def delete_recursive(
+        self,
+        session: AsyncSession,
+        user_id: UUID,
+    ) -> int:
+        """
+        删除对象及其所有子对象（硬删除）
+
+        两阶段策略：
+        1. BFS 只读收集所有文件的 PhysicalFile 信息
+        2. 批量处理引用计数，最后删除根对象触发 CASCADE
+
+        :param session: 数据库会话
+        :param user_id: 用户UUID
+        :return: 删除的对象数量
+        """
+        from .physical_file import PhysicalFile
+        from .policy import Policy
+        from .user import User
+        from utils.storage.local_storage import LocalStorageService
+        from utils.storage.s3_storage import S3StorageService
+
+        # 阶段一：只读收集
+        root_id = self.id
+        file_entries: list[tuple[UUID, str, UUID]] = []
+        total_count = 1
+        total_file_size = 0
+
+        if self.is_file and self.physical_file_id:
+            file_entries.append((self.id, self.name, self.physical_file_id))
+            total_file_size += self.size
+
+        if self.is_folder:
+            queue: list[UUID] = [self.id]
+            while queue:
+                parent_id = queue.pop(0)
+                children = await Object.get_children(session, user_id, parent_id)
+                for child in children:
+                    total_count += 1
+                    if child.is_file and child.physical_file_id:
+                        file_entries.append((child.id, child.name, child.physical_file_id))
+                        total_file_size += child.size
+                    elif child.is_folder:
+                        queue.append(child.id)
+
+        # 阶段二：批量处理 PhysicalFile 引用
+        for obj_id, obj_name, physical_file_id in file_entries:
+            physical_file = await PhysicalFile.get(session, PhysicalFile.id == physical_file_id)
+            if not physical_file:
+                continue
+
+            physical_file.decrement_reference()
+
+            if physical_file.can_be_deleted:
+                policy = await Policy.get(session, Policy.id == physical_file.policy_id)
+                if policy:
+                    try:
+                        if policy.type == PolicyType.LOCAL:
+                            storage_service = LocalStorageService(policy)
+                            await storage_service.delete_file(physical_file.storage_path)
+                        elif policy.type == PolicyType.S3:
+                            options = await policy.awaitable_attrs.options
+                            s3_service = S3StorageService(
+                                policy,
+                                region=options.s3_region if options else 'us-east-1',
+                                is_path_style=options.s3_path_style if options else False,
+                            )
+                            await s3_service.delete_file(physical_file.storage_path)
+                        l.debug(f"物理文件已删除: {obj_name}")
+                    except Exception as e:
+                        l.warning(f"物理删除文件失败: {obj_name}, 错误: {e}")
+
+                await PhysicalFile.delete(session, physical_file, commit=False)
+                l.debug(f"物理文件记录已删除: {physical_file.storage_path}")
+            else:
+                physical_file = await physical_file.save(session, commit=False)
+                l.debug(f"物理文件仍有 {physical_file.reference_count} 个引用: {physical_file.storage_path}")
+
+        # 阶段三：更新用户存储配额
+        if total_file_size > 0:
+            user = await User.get(session, User.id == user_id)
             if user:
-                await user.adjust_storage(session, -total_size, commit=False)
+                await user.adjust_storage(session, -total_file_size, commit=False)
 
-        # Phase 3: 硬删除 DB 记录（CASCADE 自动清理子对象）
-        deleted_count: int = await super().delete(
-            session, instances, condition=condition, commit=commit,
-        )
+        # 阶段四：删除根对象，CASCADE 自动删除所有子对象
+        await Object.delete(session, condition=Object.id == root_id)
 
-        # Phase 4: PhysicalFile 引用计数清理 + 物理删除
-        for pf_id in physical_file_ids:
-            pf = await PhysicalFile.get(session, PhysicalFile.id == pf_id)
-            if pf:
-                await pf.cleanup_if_unreferenced(session)
-
-        return deleted_count
+        return total_count
 
     # ==================== 复制 ====================
 
@@ -989,6 +941,17 @@ class File(FileBase, UUIDTableBaseMixin):
         :param user_id: 用户UUID
         :return: (复制数量, 新对象UUID列表, 复制的总文件大小)
         """
+        return await self._copy_recursive_impl(session, dst_parent_id, user_id)
+
+    async def _copy_recursive_impl(
+        self,
+        session: AsyncSession,
+        dst_parent_id: UUID,
+        user_id: UUID,
+    ) -> tuple[int, list[UUID], int]:
+        """递归复制内部实现"""
+        from .physical_file import PhysicalFile
+
         copied_count = 0
         new_ids: list[UUID] = []
         total_copied_size = 0
@@ -1000,7 +963,8 @@ class File(FileBase, UUIDTableBaseMixin):
         src_size = self.size
         src_physical_file_id = self.physical_file_id
 
-        new_obj = File(
+        # 创建新的 Object 记录
+        new_obj = Object(
             name=self.name,
             type=self.type,
             size=self.size,
@@ -1011,24 +975,24 @@ class File(FileBase, UUIDTableBaseMixin):
             physical_file_id=self.physical_file_id,
         )
 
-        # 文件：增加物理文件引用计数
+        # 如果是文件，增加物理文件引用计数
         if src_is_file and src_physical_file_id:
             physical_file = await PhysicalFile.get(session, PhysicalFile.id == src_physical_file_id)
             if physical_file:
                 physical_file.increment_reference()
-                physical_file = await physical_file.save(session, commit=False)
+                physical_file = await physical_file.save(session)
             total_copied_size += src_size
 
-        new_obj = await new_obj.save(session, commit=False)
+        new_obj = await new_obj.save(session)
         copied_count += 1
         new_ids.append(new_obj.id)
 
-        # 目录：递归复制子对象
+        # 如果是目录，递归复制子对象
         if src_is_folder:
-            children = await File.get_children(session, user_id, src_id)
+            children = await Object.get_children(session, user_id, src_id)
             for child in children:
-                child_count, child_ids, child_size = await child.copy_recursive(
-                    session, new_obj.id, user_id,
+                child_count, child_ids, child_size = await child._copy_recursive_impl(
+                    session, new_obj.id, user_id
                 )
                 copied_count += child_count
                 new_ids.extend(child_ids)
@@ -1049,13 +1013,15 @@ class File(FileBase, UUIDTableBaseMixin):
         :param session: 数据库会话
         :param dest_policy: 目标存储策略
         """
-        from utils.storage.factory import create_storage_service
-        from utils.storage import LocalStorageService
+        from .physical_file import PhysicalFile
+        from .policy import Policy
+        from utils.storage.local_storage import LocalStorageService
+        from utils.storage.s3_storage import S3StorageService
 
-        if self.type != FileType.FILE:
+        if self.type != ObjectType.FILE:
             raise ValueError(f"只能迁移文件对象，当前类型: {self.type}")
 
-        src_policy = await self.awaitable_attrs.policy
+        src_policy: Policy = await self.awaitable_attrs.policy
         old_physical: PhysicalFile | None = await self.awaitable_attrs.physical_file
 
         if not old_physical:
@@ -1067,8 +1033,15 @@ class File(FileBase, UUIDTableBaseMixin):
             return
 
         # 1. 创建存储服务
-        src_service = create_storage_service(src_policy)
-        dest_service = create_storage_service(dest_policy)
+        if src_policy.type == PolicyType.LOCAL:
+            src_service: LocalStorageService | S3StorageService = LocalStorageService(src_policy)
+        else:
+            src_service = await S3StorageService.from_policy(src_policy)
+
+        if dest_policy.type == PolicyType.LOCAL:
+            dest_service: LocalStorageService | S3StorageService = LocalStorageService(dest_policy)
+        else:
+            dest_service = await S3StorageService.from_policy(dest_policy)
 
         # 2. 从源存储读取文件
         if isinstance(src_service, LocalStorageService):
@@ -1101,8 +1074,19 @@ class File(FileBase, UUIDTableBaseMixin):
         self.physical_file_id = new_physical.id
         await self.save(session)
 
-        # 6. 旧 PhysicalFile 清理
-        await old_physical.cleanup_if_unreferenced(session)
+        # 6. 旧 PhysicalFile 引用计数 -1
+        old_physical.decrement_reference()
+        if old_physical.can_be_deleted:
+            try:
+                if isinstance(src_service, LocalStorageService):
+                    await src_service.delete_file(old_physical.storage_path)
+                else:
+                    await src_service.delete_file(old_physical.storage_path)
+            except Exception as e:
+                l.warning(f"删除源文件失败（不影响迁移结果）: {old_physical.storage_path}: {e}")
+            await PhysicalFile.delete(session, old_physical)
+        else:
+            old_physical = await old_physical.save(session)
 
         l.info(f"文件迁移完成: {self.name} ({self.id}), {src_policy.name} → {dest_policy.name}")
 
@@ -1156,7 +1140,7 @@ class UploadSession(UploadSessionBase, UUIDTableBaseMixin):
     owner_id: UUID = Field(foreign_key="user.id", index=True, ondelete="CASCADE")
     """上传者用户UUID"""
 
-    parent_id: UUID = Field(foreign_key="file.id", index=True, ondelete="CASCADE")
+    parent_id: UUID = Field(foreign_key="object.id", index=True, ondelete="CASCADE")
     """目标父目录UUID"""
 
     policy_id: UUID = Field(foreign_key="policy.id", index=True, ondelete="RESTRICT")
@@ -1166,7 +1150,7 @@ class UploadSession(UploadSessionBase, UUIDTableBaseMixin):
     owner: "User" = Relationship()
     """上传者"""
 
-    parent: "File" = Relationship(
+    parent: "Object" = Relationship(
         sa_relationship_kwargs={"foreign_keys": "[UploadSession.parent_id]"}
     )
     """目标父目录"""
@@ -1240,7 +1224,7 @@ class UploadChunkResponse(SQLModelBase):
     is_complete: bool
     """是否上传完成"""
 
-    file_id: UUID | None = None
+    object_id: UUID | None = None
     """完成后的文件对象UUID，未完成时为None"""
 
 
@@ -1257,7 +1241,7 @@ class CreateFileRequest(SQLModelBase):
     """存储策略UUID，不指定则使用父目录的策略"""
 
 
-class FileSwitchPolicyRequest(SQLModelBase):
+class ObjectSwitchPolicyRequest(SQLModelBase):
     """切换对象存储策略请求"""
 
     policy_id: UUID
@@ -1269,7 +1253,7 @@ class FileSwitchPolicyRequest(SQLModelBase):
 
 # ==================== 对象操作相关 DTO ====================
 
-class FileCopyRequest(SQLModelBase):
+class ObjectCopyRequest(SQLModelBase):
     """复制对象请求 DTO"""
 
     src_ids: list[UUID] = Field(min_length=1, max_length=100)
@@ -1279,17 +1263,14 @@ class FileCopyRequest(SQLModelBase):
     """目标文件夹UUID"""
 
 
-class FileRenameRequest(SQLModelBase):
-    """重命名对象请求 DTO"""
+class ObjectUpdateRequest(SQLModelBase):
+    """对象更新请求 DTO（用于重命名等部分更新）"""
 
-    id: UUID
-    """对象UUID"""
-
-    new_name: Str255
-    """新名称"""
+    name: Str255 | None = None
+    """新名称（传入则更新）"""
 
 
-class FilePropertyResponse(SQLModelBase):
+class ObjectPropertyResponse(SQLModelBase):
     """对象基本属性响应 DTO"""
 
     id: UUID
@@ -1298,7 +1279,7 @@ class FilePropertyResponse(SQLModelBase):
     name: Str255
     """对象名称"""
 
-    type: FileType
+    type: ObjectType
     """对象类型"""
 
     size: int
@@ -1317,7 +1298,7 @@ class FilePropertyResponse(SQLModelBase):
     """父目录UUID"""
 
 
-class FilePropertyDetailResponse(FilePropertyResponse):
+class ObjectPropertyDetailResponse(ObjectPropertyResponse):
     """对象详细属性响应 DTO（继承基本属性）"""
 
     # 校验和（从 PhysicalFile 读取）
@@ -1351,7 +1332,7 @@ class FilePropertyDetailResponse(FilePropertyResponse):
 
 # ==================== 管理员文件管理 DTO ====================
 
-class AdminFileResponse(FileResponse):
+class AdminFileResponse(ObjectResponse):
     """管理员文件响应 DTO"""
 
     owner_id: UUID
@@ -1375,14 +1356,14 @@ class AdminFileResponse(FileResponse):
     @classmethod
     def from_object(
         cls,
-        obj: "File",
+        obj: "Object",
         owner: "User | None",
         policy: "Policy | None",
     ) -> "AdminFileResponse":
         """从 Object ORM 对象构建"""
         return cls(
             # ObjectBase 字段
-            **FileBase.model_validate(obj, from_attributes=True).model_dump(),
+            **ObjectBase.model_validate(obj, from_attributes=True).model_dump(),
             # ObjectResponse 字段
             id=obj.id,
             thumb=False,
@@ -1430,7 +1411,7 @@ class TrashItemResponse(SQLModelBase):
     name: str
     """对象名称"""
 
-    type: FileType
+    type: ObjectType
     """对象类型"""
 
     size: int
@@ -1453,5 +1434,8 @@ class TrashRestoreRequest(SQLModelBase):
 class TrashDeleteRequest(SQLModelBase):
     """永久删除对象请求 DTO"""
 
-    ids: list[UUID] = Field(min_length=1, max_length=100)
-    """待永久删除对象UUID列表"""
+    ids: list[UUID] = []
+    """待永久删除对象UUID列表（is_empty_all=False 时必填）"""
+
+    is_empty_all: bool = False
+    """是否清空整个回收站（为 True 时忽略 ids）"""

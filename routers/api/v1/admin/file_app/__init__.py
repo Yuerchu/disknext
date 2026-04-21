@@ -30,14 +30,14 @@ from sqlmodels.file_app import FileAppType
 from utils import http_exceptions
 
 admin_file_app_router = APIRouter(
-    prefix="/file-app",
+    prefix="/file_app",
     tags=["admin", "file_app"],
     dependencies=[Depends(admin_required)],
 )
 
 
 @admin_file_app_router.get(
-    path='/list',
+    path='/',
     summary='列出所有文件应用',
 )
 async def list_file_apps(

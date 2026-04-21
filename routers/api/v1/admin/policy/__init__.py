@@ -163,7 +163,7 @@ class PolicyTestS3Response(SQLModelBase):
 
 
 @admin_policy_router.get(
-    path='/list',
+    path='/',
     summary='列出存储策略',
     description='List all storage policies',
     dependencies=[Depends(admin_required)]

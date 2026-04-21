@@ -268,7 +268,7 @@ async def test_user_settings_returns_data(
 @pytest.mark.asyncio
 async def test_user_authn_start_requires_auth(async_client: AsyncClient):
     """测试WebAuthn初始化需要认证"""
-    response = await async_client.put("/api/v1/user/authn/start")
+    response = await async_client.post("/api/v1/user/authn/registration")
     assert response.status_code == 401
 
 
@@ -278,8 +278,8 @@ async def test_user_authn_start_disabled(
     auth_headers: dict[str, str]
 ):
     """测试WebAuthn未启用时返回 400"""
-    response = await async_client.put(
-        "/api/v1/user/authn/start",
+    response = await async_client.post(
+        "/api/v1/user/authn/registration",
         headers=auth_headers
     )
     # WebAuthn 在测试环境中未启用

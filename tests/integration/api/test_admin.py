@@ -48,7 +48,7 @@ async def test_admin_get_summary_success(
 @pytest.mark.asyncio
 async def test_admin_get_user_info_requires_auth(async_client: AsyncClient):
     """测试获取用户信息需要认证"""
-    response = await async_client.get("/api/v1/admin/user/info/1")
+    response = await async_client.get("/api/v1/admin/user/1")
     assert response.status_code == 401
 
 
@@ -59,7 +59,7 @@ async def test_admin_get_user_info_requires_admin(
 ):
     """测试普通用户无法获取用户信息"""
     response = await async_client.get(
-        "/api/v1/admin/user/info/1",
+        "/api/v1/admin/user/1",
         headers=auth_headers
     )
     assert response.status_code == 403
@@ -68,7 +68,7 @@ async def test_admin_get_user_info_requires_admin(
 @pytest.mark.asyncio
 async def test_admin_get_user_list_requires_auth(async_client: AsyncClient):
     """测试获取用户列表需要认证"""
-    response = await async_client.get("/api/v1/admin/user/list")
+    response = await async_client.get("/api/v1/admin/user/")
     assert response.status_code == 401
 
 
@@ -79,7 +79,7 @@ async def test_admin_get_user_list_success(
 ):
     """测试管理员可以获取用户列表"""
     response = await async_client.get(
-        "/api/v1/admin/user/list",
+        "/api/v1/admin/user/",
         headers=admin_headers
     )
     assert response.status_code == 200
@@ -97,7 +97,7 @@ async def test_admin_get_user_list_pagination(
 ):
     """测试用户列表分页"""
     response = await async_client.get(
-        "/api/v1/admin/user/list?page=1&page_size=10",
+        "/api/v1/admin/user/?page=1&page_size=10",
         headers=admin_headers
     )
     assert response.status_code == 200
@@ -115,7 +115,7 @@ async def test_admin_get_user_list_contains_user_data(
 ):
     """测试用户列表包含用户数据"""
     response = await async_client.get(
-        "/api/v1/admin/user/list",
+        "/api/v1/admin/user/",
         headers=admin_headers
     )
     assert response.status_code == 200
@@ -132,7 +132,7 @@ async def test_admin_get_user_list_contains_user_data(
 async def test_admin_create_user_requires_auth(async_client: AsyncClient):
     """测试创建用户需要认证"""
     response = await async_client.post(
-        "/api/v1/admin/user/create",
+        "/api/v1/admin/user/",
         json={"email": "newadminuser@test.local", "password": "pass123"}
     )
     assert response.status_code == 401
@@ -145,7 +145,7 @@ async def test_admin_create_user_requires_admin(
 ):
     """测试普通用户无法创建用户"""
     response = await async_client.post(
-        "/api/v1/admin/user/create",
+        "/api/v1/admin/user/",
         headers=auth_headers,
         json={"email": "newadminuser@test.local", "password": "pass123"}
     )
@@ -179,7 +179,7 @@ async def test_admin_get_groups_requires_admin(
 @pytest.mark.asyncio
 async def test_admin_get_file_list_requires_auth(async_client: AsyncClient):
     """测试获取文件列表需要认证"""
-    response = await async_client.get("/api/v1/admin/file/list")
+    response = await async_client.get("/api/v1/admin/file/")
     assert response.status_code == 401
 
 
@@ -190,7 +190,7 @@ async def test_admin_get_file_list_requires_admin(
 ):
     """测试普通用户无法获取文件列表"""
     response = await async_client.get(
-        "/api/v1/admin/file/list",
+        "/api/v1/admin/file/",
         headers=auth_headers
     )
     assert response.status_code == 403
@@ -247,7 +247,7 @@ async def test_admin_update_settings_requires_admin(
 @pytest.mark.asyncio
 async def test_admin_policy_list_requires_auth(async_client: AsyncClient):
     """测试获取存储策略列表需要认证"""
-    response = await async_client.get("/api/v1/admin/policy/list")
+    response = await async_client.get("/api/v1/admin/policy/")
     assert response.status_code == 401
 
 
@@ -258,7 +258,7 @@ async def test_admin_policy_list_requires_admin(
 ):
     """测试普通用户无法获取存储策略列表"""
     response = await async_client.get(
-        "/api/v1/admin/policy/list",
+        "/api/v1/admin/policy/",
         headers=auth_headers
     )
     assert response.status_code == 403

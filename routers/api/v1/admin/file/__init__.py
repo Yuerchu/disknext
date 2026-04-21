@@ -65,7 +65,7 @@ admin_file_router = APIRouter(
 )
 
 @admin_file_router.get(
-    path='/list',
+    path='/',
     summary='获取文件列表',
     description='Get file list',
     dependencies=[Depends(admin_required)],
@@ -115,7 +115,7 @@ async def router_admin_get_file_list(
 
 
 @admin_file_router.get(
-    path='/preview/{file_id}',
+    path='/{file_id}/preview',
     summary='预览文件',
     description='Preview file by ID',
     dependencies=[Depends(admin_required)],
@@ -159,7 +159,7 @@ async def router_admin_preview_file(
 
 
 @admin_file_router.patch(
-    path='/ban/{file_id}',
+    path='/{file_id}',
     summary='封禁/解禁文件',
     description='Ban the file, user can\'t open, copy, move, download or share this file if administrator ban.',
     status_code=204,

@@ -112,8 +112,8 @@ async def router_share_get(
 
     return response
 
-@share_router.put(
-    path='/download/{id}',
+@share_router.post(
+    path='/{id}/download',
     summary='创建文件下载会话',
     description='Create a file download session by ID.',
 )
@@ -130,7 +130,7 @@ def router_share_download(id: str) -> ResponseBase:
     http_exceptions.raise_not_implemented()
 
 @share_router.get(
-    path='preview/{id}',
+    path='/{id}/preview',
     summary='预览分享文件',
     description='Preview shared file by ID.',
 )
@@ -147,7 +147,7 @@ def router_share_preview(id: str) -> ResponseBase:
     http_exceptions.raise_not_implemented()
 
 @share_router.get(
-    path='/content/{id}',
+    path='/{id}/content',
     summary='获取文本文件内容',
     description='Get text file content by ID.',
 )
@@ -164,7 +164,7 @@ def router_share_content(id: str) -> ResponseBase:
     http_exceptions.raise_not_implemented()
 
 @share_router.get(
-    path='/list/{id}/{path:path}',
+    path='/{id}/children/{path:path}',
     summary='获取目录列文件',
     description='Get directory listing by ID and path.',
 )
@@ -182,26 +182,26 @@ def router_share_list(id: str, path: str = '') -> ResponseBase:
     http_exceptions.raise_not_implemented()
 
 @share_router.get(
-    path='/search/{id}/{type}/{keywords}',
+    path='/{id}/search',
     summary='分享目录搜索',
     description='Search within a shared directory by ID, type, and keywords.',
 )
-def router_share_search(id: str, type: str, keywords: str) -> ResponseBase:
+def router_share_search(
+    id: str,
+    search_type: str = Query(...),
+    keywords: str = Query(...),
+) -> ResponseBase:
     """
     Search within a shared directory by ID, type, and keywords.
-    
-    Args:
-        id (str): The ID of the shared directory.
-        type (str): The type of search (e.g., file, folder).
-        keywords (str): The keywords to search for.
-    
-    Returns:
-        dict: A dictionary containing search results.
+
+    :param id: 分享ID
+    :param search_type: 搜索类型（file / folder）
+    :param keywords: 搜索关键词
     """
     http_exceptions.raise_not_implemented()
 
 @share_router.post(
-    path='/archive/{id}',
+    path='/{id}/archive',
     summary='归档打包下载',
     description='Archive and download shared content by ID.',
 )
@@ -218,7 +218,7 @@ def router_share_archive(id: str) -> ResponseBase:
     http_exceptions.raise_not_implemented()
 
 @share_router.get(
-    path='/readme/{id}',
+    path='/{id}/readme',
     summary='获取README文本文件内容',
     description='Get README text file content by ID.',
 )
@@ -235,7 +235,7 @@ def router_share_readme(id: str) -> ResponseBase:
     http_exceptions.raise_not_implemented()
 
 @share_router.get(
-    path='/thumb/{id}/{file}',
+    path='/{id}/thumb/{file}',
     summary='获取缩略图',
     description='Get thumbnail image by ID and file name.',
 )
@@ -253,7 +253,7 @@ def router_share_thumb(id: str, file: str) -> ResponseBase:
     http_exceptions.raise_not_implemented()
 
 @share_router.post(
-    path='/report/{id}',
+    path='/{id}/report',
     summary='举报分享',
     description='Report shared content by ID.',
 )
@@ -430,7 +430,7 @@ async def router_share_list(
     return ListResponse(count=result.count, items=items)
 
 @share_router.post(
-    path='/save/{id}',
+    path='/{id}/save',
     summary='转存他人分享',
     description='Save another user\'s share by ID.',
     dependencies=[Depends(auth_required)]

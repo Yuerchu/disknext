@@ -15,7 +15,7 @@ from uuid import UUID
 
 import orjson
 import whatthepatch
-from fastapi import APIRouter, Depends, File as FileParam, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse
 from starlette.responses import Response
 from loguru import logger as l
@@ -31,8 +31,8 @@ from sqlmodels import (
     FileAppExtension,
     FileAppGroupLink,
     FileAppType,
-    File,
-    FileType,
+    Object,
+    ObjectType,
     PhysicalFile,
     Policy,
     PolicyType,
@@ -44,7 +44,9 @@ from sqlmodels import (
     User,
     WopiSessionResponse,
 )
-from utils.storage import LocalStorageService, S3StorageService, create_storage_service
+import orjson
+
+from utils.storage import LocalStorageService, S3StorageService
 from utils.JWT import create_download_token, DOWNLOAD_TOKEN_TTL
 from utils.JWT.wopi_token import create_wopi_token
 from utils import http_exceptions
@@ -131,7 +133,7 @@ router = APIRouter(prefix="/file", tags=["file"])
 _upload_router = APIRouter(prefix="/upload")
 
 
-@_upload_router.put(
+@_upload_router.post(
     path='/',
     summary='创建上传会话',
     description='创建文件上传会话，返回会话ID用于后续分片上传。',
@@ -151,8 +153,23 @@ async def create_upload_session(
     4. 创建上传会话并生成存储路径
     5. 返回会话信息
     """
-    File.validate_name(request.file_name)
-    parent = await File.validate_parent(session, request.parent_id, user.id)
+    # 验证文件名
+    if not request.file_name or '/' in request.file_name or '\\' in request.file_name:
+        raise HTTPException(status_code=400, detail="无效的文件名")
+
+    # 验证父目录（排除已删除的）
+    parent = await Object.get(
+        session,
+        (Object.id == request.parent_id) & (Object.deleted_at == None)
+    )
+    if not parent or parent.owner_id != user.id:
+        raise HTTPException(status_code=404, detail="父目录不存在")
+
+    if not parent.is_folder:
+        raise HTTPException(status_code=400, detail="父对象不是目录")
+
+    if parent.is_banned:
+        http_exceptions.raise_banned("目标目录已被封禁，无法执行此操作")
 
     # 确定存储策略
     policy_id = request.policy_id or parent.policy_id
@@ -173,10 +190,20 @@ async def create_upload_session(
     if max_storage > 0 and user.storage + request.file_size > max_storage:
         http_exceptions.raise_insufficient_quota("存储空间不足")
 
-    await File.check_name_conflict(session, user.id, parent.id, request.file_name)
+    # 检查是否已存在同名文件（仅检查未删除的）
+    existing = await Object.get(
+        session,
+        (Object.owner_id == user.id) &
+        (Object.parent_id == parent.id) &
+        (Object.name == request.file_name) &
+        (Object.deleted_at == None)
+    )
+    if existing:
+        raise HTTPException(status_code=409, detail="同名文件已存在")
 
     # 计算分片信息
-    chunk_size = policy.chunk_size
+    options = await policy.awaitable_attrs.options
+    chunk_size = options.chunk_size if options else 52428800  # 默认 50MB
     total_chunks = max(1, (request.file_size + chunk_size - 1) // chunk_size) if request.file_size > 0 else 1
 
     # 生成存储路径
@@ -190,7 +217,11 @@ async def create_upload_session(
         )
         storage_path = full_path
     elif policy.type == PolicyType.S3:
-        s3_service = S3StorageService.from_policy(policy)
+        s3_service = S3StorageService(
+            policy,
+            region=options.s3_region if options else 'us-east-1',
+            is_path_style=options.s3_path_style if options else False,
+        )
         dir_path, storage_name, storage_path = await s3_service.generate_file_path(
             user_id=user.id,
             original_filename=request.file_name,
@@ -243,7 +274,7 @@ async def upload_chunk(
     user: Annotated[User, Depends(auth_required)],
     session_id: UUID,
     chunk_index: int,
-    file: UploadFile = FileParam(...),
+    file: UploadFile = File(...),
 ) -> UploadChunkResponse:
     """
     上传文件分片端点
@@ -252,7 +283,7 @@ async def upload_chunk(
     1. 验证上传会话
     2. 写入分片数据
     3. 更新会话进度
-    4. 如果所有分片上传完成，创建 File 记录
+    4. 如果所有分片上传完成，创建 Object 记录
     """
     # 获取上传会话
     upload_session = await UploadSession.get(session, UploadSession.id == session_id)
@@ -364,10 +395,10 @@ async def upload_chunk(
         )
         physical_file = await physical_file.save(session, commit=False)
 
-        # 创建 File 记录
-        file_object = File(
+        # 创建 Object 记录
+        file_object = Object(
             name=file_name,
-            type=FileType.FILE,
+            type=ObjectType.FILE,
             size=uploaded_size,
             physical_file_id=physical_file.id,
             upload_session_id=str(upload_session_id),
@@ -401,7 +432,7 @@ async def upload_chunk(
         uploaded_chunks=uploaded_chunks if not is_complete else total_chunks,
         total_chunks=total_chunks,
         is_complete=is_complete,
-        file_id=file_object_id,
+        object_id=file_object_id,
     )
 
 
@@ -441,12 +472,10 @@ async def delete_upload_session(
 
     # 释放预扣的存储空间
     if upload_session.file_size > 0:
-        await user.adjust_storage(session, -upload_session.file_size, commit=False)
+        await user.adjust_storage(session, -upload_session.file_size)
 
     # 删除会话记录
-    await UploadSession.delete(session, upload_session, commit=False)
-
-    await session.commit()
+    await UploadSession.delete(session, upload_session)
 
     l.info(f"删除上传会话: {session_id}")
 
@@ -488,14 +517,22 @@ async def clear_upload_sessions(
 
         # 释放预扣的存储空间
         if upload_session.file_size > 0:
-            await user.adjust_storage(session, -upload_session.file_size, commit=False)
+            await user.adjust_storage(session, -upload_session.file_size)
 
-        await UploadSession.delete(session, upload_session, commit=False)
+        await UploadSession.delete(session, upload_session)
         deleted_count += 1
 
-    await session.commit()
-
     l.info(f"清除用户 {user.id} 的所有上传会话，共 {deleted_count} 个")
+
+
+@_upload_router.get(
+    path='/archive/{session_id}/archive.zip',
+    summary='打包并下载文件',
+    description='获取打包后的文件。',
+)
+async def download_archive(session_id: str) -> ResponseBase:
+    """打包下载"""
+    raise HTTPException(status_code=501, detail="打包下载功能暂未实现")
 
 
 # ==================== 下载子路由 ====================
@@ -518,9 +555,9 @@ async def create_download_token_endpoint(
 
     验证文件存在且属于当前用户后，生成 JWT 下载令牌。
     """
-    file_obj = await File.get(
+    file_obj = await Object.get(
         session,
-        (File.id == file_id) & (File.deleted_at == None)
+        (Object.id == file_id) & (Object.deleted_at == None)
     )
     if not file_obj or file_obj.owner_id != user.id:
         raise HTTPException(status_code=404, detail="文件不存在")
@@ -562,10 +599,10 @@ async def download_file(
     _, file_id, owner_id = result
 
     # 获取文件对象（排除已删除的），同时预加载 physical_file 关系
-    file_obj = await File.get(
+    file_obj = await Object.get(
         session,
-        (File.id == file_id) & (File.deleted_at == None),
-        load=File.physical_file,
+        (Object.id == file_id) & (Object.deleted_at == None),
+        load=Object.physical_file,
     )
     if not file_obj or file_obj.owner_id != owner_id:
         raise HTTPException(status_code=404, detail="文件不存在")
@@ -618,7 +655,7 @@ router.include_router(viewers_router)
 # ==================== 创建空白文件 ====================
 
 @router.post(
-    path='/create',
+    path='/',
     summary='创建空白文件',
     description='在指定目录下创建空白文件。',
     status_code=204,
@@ -632,9 +669,34 @@ async def create_empty_file(
     # 存储 user.id，避免后续 save() 导致 user 过期后无法访问
     user_id = user.id
 
-    name = File.validate_name(request.name)
-    parent = await File.validate_parent(session, request.parent_id, user_id)
-    await File.check_name_conflict(session, user_id, parent.id, name)
+    # 验证文件名
+    if not request.name or '/' in request.name or '\\' in request.name:
+        raise HTTPException(status_code=400, detail="无效的文件名")
+
+    # 验证父目录（排除已删除的）
+    parent = await Object.get(
+        session,
+        (Object.id == request.parent_id) & (Object.deleted_at == None)
+    )
+    if not parent or parent.owner_id != user_id:
+        raise HTTPException(status_code=404, detail="父目录不存在")
+
+    if not parent.is_folder:
+        raise HTTPException(status_code=400, detail="父对象不是目录")
+
+    if parent.is_banned:
+        http_exceptions.raise_banned("目标目录已被封禁，无法执行此操作")
+
+    # 检查是否已存在同名文件（仅检查未删除的）
+    existing = await Object.get(
+        session,
+        (Object.owner_id == user_id) &
+        (Object.parent_id == parent.id) &
+        (Object.name == request.name) &
+        (Object.deleted_at == None)
+    )
+    if existing:
+        raise HTTPException(status_code=409, detail="同名文件已存在")
 
     # 确定存储策略
     policy_id = request.policy_id or parent.policy_id
@@ -665,21 +727,19 @@ async def create_empty_file(
         policy_id=policy_id,
         reference_count=1,
     )
-    physical_file = await physical_file.save(session, commit=False)
+    physical_file = await physical_file.save(session)
 
-    # 创建 File 记录
-    file_object = File(
+    # 创建 Object 记录
+    file_object = Object(
         name=request.name,
-        type=FileType.FILE,
+        type=ObjectType.FILE,
         size=0,
         physical_file_id=physical_file.id,
         parent_id=request.parent_id,
         owner_id=user_id,
         policy_id=policy_id,
     )
-    file_object = await file_object.save(session, commit=False)
-
-    await session.commit()
+    file_object = await file_object.save(session)
 
     l.info(f"创建空白文件: {file_object.name}, id={file_object.id}")
 
@@ -687,7 +747,7 @@ async def create_empty_file(
 # ==================== WOPI 会话 ====================
 
 @router.post(
-    path='/{file_id}/wopi-session',
+    path='/{file_id}/wopi_session',
     summary='创建 WOPI 会话',
     description='为 WOPI 类型的查看器创建编辑会话，返回编辑器 URL 和访问令牌。',
 )
@@ -714,9 +774,9 @@ async def create_wopi_session(
     - 403: 用户组无权限
     """
     # 验证文件
-    file_obj: File | None = await File.get(
+    file_obj: Object | None = await Object.get(
         session,
-        File.id == file_id,
+        Object.id == file_id,
     )
     if not file_obj or file_obj.owner_id != user.id:
         http_exceptions.raise_not_found("文件不存在")
@@ -797,17 +857,17 @@ async def create_wopi_session(
 async def _validate_source_link(
     session: SessionDep,
     file_id: UUID,
-) -> tuple[File, SourceLink, PhysicalFile, Policy]:
+) -> tuple[Object, SourceLink, PhysicalFile, Policy]:
     """
     验证外链访问的完整链路
 
     :returns: (file_obj, link, physical_file, policy)
     :raises HTTPException: 验证失败
     """
-    file_obj = await File.get(
+    file_obj = await Object.get(
         session,
-        (File.id == file_id) & (File.deleted_at == None),
-        load=File.physical_file,
+        (Object.id == file_id) & (Object.deleted_at == None),
+        load=Object.physical_file,
     )
     if not file_obj:
         http_exceptions.raise_not_found("文件不存在")
@@ -828,7 +888,7 @@ async def _validate_source_link(
     # SourceLink 必须存在（只有主动创建过外链的文件才能通过外链访问）
     link: SourceLink | None = await SourceLink.get(
         session,
-        SourceLink.file_id == file_id,
+        SourceLink.object_id == file_id,
     )
     if not link:
         http_exceptions.raise_not_found("外链不存在")
@@ -955,6 +1015,17 @@ async def file_source_redirect(
         http_exceptions.raise_internal_error("不支持的存储类型")
 
 
+@router.put(
+    path='/{id}',
+    summary='更新文件',
+    description='更新文件内容。',
+    dependencies=[Depends(auth_required)]
+)
+async def file_update(id: str) -> ResponseBase:
+    """更新文件内容"""
+    raise HTTPException(status_code=501, detail="更新文件功能暂未实现")
+
+
 @router.get(
     path='/content/{file_id}',
     summary='获取文本文件内容',
@@ -977,10 +1048,10 @@ async def file_content(
     - 400: 文件不是有效的 UTF-8 文本
     - 404: 文件不存在
     """
-    file_obj = await File.get(
+    file_obj = await Object.get(
         session,
-        (File.id == file_id) & (File.deleted_at == None),
-        load=File.physical_file,
+        (Object.id == file_id) & (Object.deleted_at == None),
+        load=Object.physical_file,
     )
     if not file_obj or file_obj.owner_id != user.id:
         http_exceptions.raise_not_found("文件不存在")
@@ -1047,10 +1118,10 @@ async def patch_file_content(
     - 409: base_hash 不匹配（并发冲突）
     - 422: 无效的 patch 格式或 patch 应用失败
     """
-    file_obj = await File.get(
+    file_obj = await Object.get(
         session,
-        (File.id == file_id) & (File.deleted_at == None),
-        load=File.physical_file,
+        (Object.id == file_id) & (Object.deleted_at == None),
+        load=Object.physical_file,
     )
     if not file_obj or file_obj.owner_id != user.id:
         http_exceptions.raise_not_found("文件不存在")
@@ -1141,6 +1212,17 @@ async def patch_file_content(
     return PatchContentResponse(new_hash=new_hash, new_size=new_size)
 
 
+@router.get(
+    path='/thumb/{id}',
+    summary='获取文件缩略图',
+    description='获取文件缩略图。',
+    dependencies=[Depends(auth_required)]
+)
+async def file_thumb(id: str) -> ResponseBase:
+    """获取文件缩略图"""
+    raise HTTPException(status_code=501, detail="缩略图功能暂未实现")
+
+
 @router.post(
     path='/source/{file_id}',
     summary='创建/获取文件外链',
@@ -1163,9 +1245,9 @@ async def file_source(
     - 403: 存储策略未启用外链
     - 404: 文件不存在
     """
-    file_obj = await File.get(
+    file_obj = await Object.get(
         session,
-        (File.id == file_id) & (File.deleted_at == None),
+        (Object.id == file_id) & (Object.deleted_at == None),
     )
     if not file_obj or file_obj.owner_id != user.id:
         http_exceptions.raise_not_found("文件不存在")
@@ -1189,12 +1271,12 @@ async def file_source(
     # 查找已有 SourceLink
     link: SourceLink | None = await SourceLink.get(
         session,
-        (SourceLink.file_id == file_id) & (SourceLink.name == file_name),
+        (SourceLink.object_id == file_id) & (SourceLink.name == file_name),
     )
     if not link:
         link = SourceLink(
             name=file_name,
-            file_id=file_id,
+            object_id=file_id,
         )
         link = await link.save(session)
 
@@ -1204,3 +1286,59 @@ async def file_source(
     return SourceLinkResponse(url=url, downloads=link.downloads)
 
 
+@router.post(
+    path='/archive',
+    summary='打包要下载的文件',
+    description='将多个文件打包下载。',
+    dependencies=[Depends(auth_required)]
+)
+async def file_archive() -> ResponseBase:
+    """打包文件"""
+    raise HTTPException(status_code=501, detail="打包功能暂未实现")
+
+
+@router.post(
+    path='/compress',
+    summary='创建文件压缩任务',
+    description='创建文件压缩任务。',
+    dependencies=[Depends(auth_required)]
+)
+async def file_compress() -> ResponseBase:
+    """创建压缩任务"""
+    raise HTTPException(status_code=501, detail="压缩功能暂未实现")
+
+
+@router.post(
+    path='/decompress',
+    summary='创建文件解压任务',
+    description='创建文件解压任务。',
+    dependencies=[Depends(auth_required)]
+)
+async def file_decompress() -> ResponseBase:
+    """创建解压任务"""
+    raise HTTPException(status_code=501, detail="解压功能暂未实现")
+
+
+@router.post(
+    path='/relocate',
+    summary='创建文件转移任务',
+    description='创建文件转移任务。',
+    dependencies=[Depends(auth_required)]
+)
+async def file_relocate() -> ResponseBase:
+    """创建转移任务"""
+    raise HTTPException(status_code=501, detail="转移功能暂未实现")
+
+
+@router.get(
+    path='/search',
+    summary='搜索文件',
+    description='按关键字搜索文件。',
+    dependencies=[Depends(auth_required)]
+)
+async def file_search(
+    search_type: str = Query(...),
+    keyword: str = Query(...),
+) -> ResponseBase:
+    """搜索文件"""
+    raise HTTPException(status_code=501, detail="搜索功能暂未实现")

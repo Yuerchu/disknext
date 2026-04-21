@@ -513,7 +513,7 @@ async def router_user_register(
 
 
 @user_router.post(
-    path='/magic-link',
+    path='/magic_link',
     summary='发送 Magic Link 邮件',
     description='生成 Magic Link token 并发送到指定邮箱。',
     status_code=204,
@@ -752,8 +752,8 @@ async def router_user_storage(
         total=total,
     )
 
-@user_router.put(
-    path='/authn/start',
+@user_router.post(
+    path='/authn/registration',
     summary='注册 Passkey 凭证（初始化）',
     description='Initialize Passkey registration for a user.',
     dependencies=[Depends(auth_required)],
@@ -806,7 +806,7 @@ async def router_user_authn_start(
 
 
 @user_router.put(
-    path='/authn/finish',
+    path='/authn/registration',
     summary='注册 Passkey 凭证（完成）',
     description='Finish Passkey registration for a user.',
     dependencies=[Depends(auth_required)],
