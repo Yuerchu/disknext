@@ -7,7 +7,7 @@ from uuid import UUID
 
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from sqlmodels.file import File, FileType
+from sqlmodels.file import Entry, EntryType
 from sqlmodels.user import User
 
 
@@ -42,9 +42,9 @@ class FileFactory:
         if name is None:
             name = f"folder_{uuid.uuid4().hex[:8]}"
 
-        folder = File(
+        folder = Entry(
             name=name,
-            type=FileType.FOLDER,
+            type=EntryType.FOLDER,
             parent_id=parent_id,
             owner_id=owner_id,
             policy_id=policy_id,
@@ -85,9 +85,9 @@ class FileFactory:
         if name is None:
             name = f"file_{uuid.uuid4().hex[:8]}.txt"
 
-        file = File(
+        file = Entry(
             name=name,
-            type=FileType.FILE,
+            type=EntryType.FILE,
             parent_id=parent_id,
             owner_id=owner_id,
             policy_id=policy_id,
@@ -118,9 +118,9 @@ class FileFactory:
         返回:
             File: 创建的根目录实例
         """
-        root = File(
+        root = Entry(
             name="/",
-            type=FileType.FOLDER,
+            type=EntryType.FOLDER,
             parent_id=None,
             owner_id=user.id,
             policy_id=policy_id,

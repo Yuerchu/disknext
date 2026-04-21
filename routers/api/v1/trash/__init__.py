@@ -12,7 +12,7 @@ from loguru import logger as l
 
 from middleware.auth import auth_required
 from middleware.dependencies import SessionDep
-from sqlmodels import Object, User
+from sqlmodels import Entry, User
 from sqlmodels.object import TrashDeleteRequest, TrashItemResponse, TrashRestoreRequest
 
 trash_router = APIRouter(
@@ -38,7 +38,7 @@ async def router_trash_list(
     返回回收站中被直接删除的顶层对象列表，
     不包含其子对象（子对象在恢复/永久删除时会随顶层对象一起处理）。
     """
-    items = await Object.get_trash_items(session, user.id)
+    items = await Entry.get_trash_items(session, user.id)
 
     return [
         TrashItemResponse(
@@ -77,18 +77,18 @@ async def router_trash_restore(
     5. 清除 deleted_at 和 deleted_original_parent_id
     """
     user_id = user.id
-    objects_to_restore: list[Object] = []
+    objects_to_restore: list[Entry] = []
 
     for obj_id in request.ids:
-        obj = await Object.get(
+        obj = await Entry.get(
             session,
-            (Object.id == obj_id) & (Object.owner_id == user_id) & (Object.deleted_at != None)
+            (Entry.id == obj_id) & (Entry.owner_id == user_id) & (Entry.deleted_at != None)
         )
         if obj:
             objects_to_restore.append(obj)
 
     if objects_to_restore:
-        restored_count = await Object.restore_batch(session, objects_to_restore, user_id)
+        restored_count = await Entry.restore_batch(session, objects_to_restore, user_id)
         l.info(f"用户 {user_id} 从回收站恢复了 {restored_count} 个对象")
 
 
@@ -121,22 +121,22 @@ async def router_trash_delete(
     user_id = user.id
 
     if request.is_empty_all:
-        trash_items = await Object.get_trash_items(session, user_id)
+        trash_items = await Entry.get_trash_items(session, user_id)
         if trash_items:
-            deleted_count = await Object.permanently_delete_batch(session, trash_items, user_id)
+            deleted_count = await Entry.permanently_delete_batch(session, trash_items, user_id)
             l.info(f"用户 {user_id} 清空回收站，共删除 {deleted_count} 个对象")
         return
 
-    objects_to_delete: list[Object] = []
+    objects_to_delete: list[Entry] = []
 
     for obj_id in request.ids:
-        obj = await Object.get(
+        obj = await Entry.get(
             session,
-            (Object.id == obj_id) & (Object.owner_id == user_id) & (Object.deleted_at != None)
+            (Entry.id == obj_id) & (Entry.owner_id == user_id) & (Entry.deleted_at != None)
         )
         if obj:
             objects_to_delete.append(obj)
 
     if objects_to_delete:
-        deleted_count = await Object.permanently_delete_batch(session, objects_to_delete, user_id)
+        deleted_count = await Entry.permanently_delete_batch(session, objects_to_delete, user_id)
         l.info(f"用户 {user_id} 永久删除了 {deleted_count} 个对象")

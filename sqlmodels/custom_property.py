@@ -2,7 +2,7 @@
 用户自定义属性定义模型
 
 允许用户定义类型化的自定义属性模板（如标签、评分、分类等），
-实际值通过 ObjectMetadata KV 表存储，键名格式：custom:{property_definition_id}。
+实际值通过 EntryMetadata KV 表存储，键名格式：custom:{property_definition_id}。
 
 支持的属性类型：text, number, boolean, select, multi_select, rating, link
 """
@@ -67,7 +67,7 @@ class CustomPropertyDefinition(CustomPropertyDefinitionBase, UUIDTableBaseMixin)
     用户自定义属性定义
 
     每个用户独立管理自己的属性模板。
-    实际属性值存储在 ObjectMetadata 表中，键名格式：custom:{id}。
+    实际属性值存储在 EntryMetadata 表中，键名格式：custom:{id}。
     """
 
     owner_id: UUID = Field(

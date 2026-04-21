@@ -22,7 +22,7 @@ from wsgidav.dav_provider import DAVCollection, DAVNonCollection, DAVProvider
 
 from utils.storage import LocalStorageService
 from sqlmodels.database_connection import DatabaseManager
-from sqlmodels.file import File, FileType
+from sqlmodels.file import Entry, EntryType
 from sqlmodels.physical_file import PhysicalFile
 from sqlmodels.policy import Policy
 from sqlmodels.user import User
@@ -67,19 +67,19 @@ async def _get_webdav_account(webdav_id: int) -> WebDAV | None:
 async def _get_object_by_path(user_id: UUID, path: str) -> File | None:
     """根据路径获取对象"""
     async with _get_session() as session:
-        return await File.get_by_path(session, user_id, path)
+        return await Entry.get_by_path(session, user_id, path)
 
 
 async def _get_children(user_id: UUID, parent_id: UUID) -> list[File]:
     """获取目录子对象"""
     async with _get_session() as session:
-        return await File.get_children(session, user_id, parent_id)
+        return await Entry.get_children(session, user_id, parent_id)
 
 
 async def _get_object_by_id(file_id: UUID) -> File | None:
     """根据ID获取对象"""
     async with _get_session() as session:
-        return await File.get(session, File.id == file_id, load=File.physical_file)
+        return await Entry.get(session, Entry.id == file_id, load=Entry.physical_file)
 
 
 async def _get_user(user_id: UUID) -> User | None:
@@ -102,9 +102,9 @@ async def _create_folder(
 ) -> File:
     """创建目录对象"""
     async with _get_session() as session:
-        obj = File(
+        obj = Entry(
             name=name,
-            type=FileType.FOLDER,
+            type=EntryType.FOLDER,
             size=0,
             parent_id=parent_id,
             owner_id=owner_id,
@@ -122,9 +122,9 @@ async def _create_file(
 ) -> File:
     """创建空文件对象"""
     async with _get_session() as session:
-        obj = File(
+        obj = Entry(
             name=name,
-            type=FileType.FILE,
+            type=EntryType.FILE,
             size=0,
             parent_id=parent_id,
             owner_id=owner_id,
@@ -137,9 +137,9 @@ async def _create_file(
 async def _soft_delete_object(file_id: UUID) -> None:
     """软删除对象（移入回收站）"""
     async with _get_session() as session:
-        obj = await File.get(session, File.id == file_id)
+        obj = await Entry.get(session, Entry.id == file_id)
         if obj:
-            await File.soft_delete_batch(session, [obj])
+            await Entry.soft_delete_batch(session, [obj])
 
 
 async def _finalize_upload(
@@ -170,7 +170,7 @@ async def _finalize_upload(
         pf = await pf.save(session)
 
         # 更新 File
-        obj = await File.get(session, File.id == file_id)
+        obj = await Entry.get(session, Entry.id == file_id)
         if obj:
             obj.sqlmodel_update({'size': size, 'physical_file_id': pf.id})
             obj = await obj.save(session)
@@ -189,7 +189,7 @@ async def _move_object(
 ) -> None:
     """移动/重命名对象"""
     async with _get_session() as session:
-        obj = await File.get(session, File.id == file_id)
+        obj = await Entry.get(session, Entry.id == file_id)
         if obj:
             obj.sqlmodel_update({'parent_id': new_parent_id, 'name': new_name})
             obj = await obj.save(session)
@@ -203,7 +203,7 @@ async def _copy_object_recursive(
 ) -> None:
     """递归复制对象"""
     async with _get_session() as session:
-        src = await File.get(session, File.id == src_id)
+        src = await Entry.get(session, Entry.id == src_id)
         if not src:
             return
         await src.copy_recursive(session, dst_parent_id, owner_id)

@@ -10,7 +10,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from sqlmodels.user import User
 from sqlmodels.group import Group
-from sqlmodels.file import File, FileType
+from sqlmodels.file import Entry, EntryType
 from tests.fixtures import UserFactory, GroupFactory, FileFactory
 
 
@@ -90,7 +90,7 @@ async def test_object_factory(db_session: AsyncSession):
     assert root.parent_id is None
     assert folder.parent_id == root.id
     assert file.parent_id == folder.id
-    assert file.type == FileType.FILE
+    assert file.type == EntryType.FILE
     assert file.size == 1024
 
 
@@ -132,13 +132,13 @@ async def test_test_directory_fixture(
     assert "videos" in test_directory
 
     # 验证目录存在于数据库中
-    documents = await File.get(db_session, File.id == test_directory["documents"])
+    documents = await Entry.get(db_session, Entry.id == test_directory["documents"])
     assert documents is not None
     assert documents.name == "documents"
-    assert documents.type == FileType.FOLDER
+    assert documents.type == EntryType.FOLDER
 
     # 验证层级关系
-    work = await File.get(db_session, File.id == test_directory["work"])
+    work = await Entry.get(db_session, Entry.id == test_directory["work"])
     assert work is not None
     assert work.parent_id == documents.id
 
@@ -179,10 +179,10 @@ async def test_nested_structure_factory(db_session: AsyncSession):
     assert "videos" in structure
 
     # 验证文件存在
-    report = await File.get(db_session, File.id == structure["report"])
+    report = await Entry.get(db_session, Entry.id == structure["report"])
     assert report is not None
     assert report.name == "report.pdf"
-    assert report.type == FileType.FILE
+    assert report.type == EntryType.FILE
     assert report.size == 1024 * 100
 
 

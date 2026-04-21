@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
 from main import app
-from sqlmodels import Group, GroupClaims, File, FileType, Policy, PolicyType, ServerConfig, User
+from sqlmodels import Group, GroupClaims, Entry, EntryType, Policy, PolicyType, ServerConfig, User
 from sqlmodels.policy import GroupPolicyLink
 from sqlmodels.user import UserStatus
 from utils import Password
@@ -205,10 +205,10 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
     await test_session.refresh(banned_user)
 
     # 8. 创建用户根目录
-    test_user_root = File(
+    test_user_root = Entry(
         id=uuid4(),
         name="/",
-        type=FileType.FOLDER,
+        type=EntryType.FOLDER,
         owner_id=test_user.id,
         parent_id=None,
         policy_id=default_policy.id,
@@ -216,10 +216,10 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
     )
     test_session.add(test_user_root)
 
-    admin_user_root = File(
+    admin_user_root = Entry(
         id=uuid4(),
         name="/",
-        type=FileType.FOLDER,
+        type=EntryType.FOLDER,
         owner_id=admin_user.id,
         parent_id=None,
         policy_id=default_policy.id,
@@ -371,15 +371,15 @@ async def test_directory_structure(initialized_db: AsyncSession) -> dict[str, UU
 
     # 获取测试用户和根目录
     test_user = await User.get(initialized_db, User.email == "testuser@test.local")
-    test_user_root = await File.get_root(initialized_db, test_user.id)
+    test_user_root = await Entry.get_root(initialized_db, test_user.id)
 
     default_policy = await Policy.get(initialized_db, Policy.name == "本地存储")
 
     # 创建 docs 目录
-    docs_folder = File(
+    docs_folder = Entry(
         id=uuid4(),
         name="docs",
-        type=FileType.FOLDER,
+        type=EntryType.FOLDER,
         owner_id=test_user.id,
         parent_id=test_user_root.id,
         policy_id=default_policy.id,
@@ -388,10 +388,10 @@ async def test_directory_structure(initialized_db: AsyncSession) -> dict[str, UU
     initialized_db.add(docs_folder)
 
     # 创建 images 子目录
-    images_folder = File(
+    images_folder = Entry(
         id=uuid4(),
         name="images",
-        type=FileType.FOLDER,
+        type=EntryType.FOLDER,
         owner_id=test_user.id,
         parent_id=docs_folder.id,
         policy_id=default_policy.id,
@@ -400,10 +400,10 @@ async def test_directory_structure(initialized_db: AsyncSession) -> dict[str, UU
     initialized_db.add(images_folder)
 
     # 创建测试文件
-    test_file = File(
+    test_file = Entry(
         id=uuid4(),
         name="readme.md",
-        type=FileType.FILE,
+        type=EntryType.FILE,
         owner_id=test_user.id,
         parent_id=docs_folder.id,
         policy_id=default_policy.id,

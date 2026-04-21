@@ -5,12 +5,12 @@
 - 单文件迁移（带任务状态更新）
 - 目录批量迁移（带进度更新）
 
-底层迁移逻辑由 File.migrate_to_policy() 实现。
+底层迁移逻辑由 Entry.migrate_to_policy() 实现。
 """
 from loguru import logger as l
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from sqlmodels.file import File, FileType
+from sqlmodels.file import Entry, EntryType
 from sqlmodels.policy import Policy
 from sqlmodels.task import Task, TaskStatus
 
@@ -132,11 +132,11 @@ async def _collect_objects_recursive(
     :param files: 文件列表（输出）
     :param folders: 子目录列表（输出）
     """
-    children: list[File] = await File.get_children(session, folder.owner_id, folder.id)
+    children: list[File] = await Entry.get_children(session, folder.owner_id, folder.id)
 
     for child in children:
-        if child.type == FileType.FILE:
+        if child.type == EntryType.FILE:
             files.append(child)
-        elif child.type == FileType.FOLDER:
+        elif child.type == EntryType.FOLDER:
             folders.append(child)
             await _collect_objects_recursive(session, child, files, folders)

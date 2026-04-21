@@ -16,15 +16,15 @@ from middleware.dependencies import SessionDep
 from sqlmodels import (
     CreateFileRequest,
     Group,
-    Object,
-    ObjectCopyRequest,
-    ObjectDeleteRequest,
-    ObjectMoveRequest,
-    ObjectPropertyDetailResponse,
-    ObjectPropertyResponse,
-    ObjectUpdateRequest,
-    ObjectSwitchPolicyRequest,
-    ObjectType,
+    Entry,
+    EntryCopyRequest,
+    EntryDeleteRequest,
+    EntryMoveRequest,
+    EntryPropertyDetailResponse,
+    EntryPropertyResponse,
+    EntryUpdateRequest,
+    EntrySwitchPolicyRequest,
+    EntryType,
     PhysicalFile,
     Policy,
     PolicyType,
@@ -35,7 +35,7 @@ from sqlmodels import (
     TaskType,
     User,
     # 元数据相关
-    ObjectMetadata,
+    EntryMetadata,
     MetadataResponse,
     MetadataPatchRequest,
     INTERNAL_NAMESPACES,
@@ -79,9 +79,9 @@ async def router_object_create(
         raise HTTPException(status_code=400, detail="无效的文件名")
 
     # 验证父目录（排除已删除的）
-    parent = await Object.get(
+    parent = await Entry.get(
         session,
-        (Object.id == request.parent_id) & (Object.deleted_at == None)
+        (Entry.id == request.parent_id) & (Entry.deleted_at == None)
     )
     if not parent or parent.owner_id != user_id:
         raise HTTPException(status_code=404, detail="父目录不存在")
@@ -93,12 +93,12 @@ async def router_object_create(
         http_exceptions.raise_banned("目标目录已被封禁，无法执行此操作")
 
     # 检查是否已存在同名文件（仅检查未删除的）
-    existing = await Object.get(
+    existing = await Entry.get(
         session,
-        (Object.owner_id == user_id) &
-        (Object.parent_id == parent.id) &
-        (Object.name == request.name) &
-        (Object.deleted_at == None)
+        (Entry.owner_id == user_id) &
+        (Entry.parent_id == parent.id) &
+        (Entry.name == request.name) &
+        (Entry.deleted_at == None)
     )
     if existing:
         raise HTTPException(status_code=409, detail="同名文件已存在")
@@ -130,10 +130,10 @@ async def router_object_create(
     )
     physical_file = await physical_file.save(session)
 
-    # 创建 Object 记录
-    file_object = Object(
+    # 创建 Entry 记录
+    file_object = Entry(
         name=request.name,
-        type=ObjectType.FILE,
+        type=EntryType.FILE,
         size=0,
         physical_file_id=physical_file.id,
         parent_id=parent_id,
@@ -154,7 +154,7 @@ async def router_object_create(
 async def router_object_delete(
     session: SessionDep,
     user: Annotated[User, Depends(auth_required)],
-    request: ObjectDeleteRequest,
+    request: EntryDeleteRequest,
 ) -> None:
     """
     删除对象端点（软删除到回收站）
@@ -172,12 +172,12 @@ async def router_object_delete(
     :return: 删除结果
     """
     user_id = user.id
-    objects_to_delete: list[Object] = []
+    objects_to_delete: list[Entry] = []
 
     for obj_id in request.ids:
-        obj = await Object.get(
+        obj = await Entry.get(
             session,
-            (Object.id == obj_id) & (Object.deleted_at == None)
+            (Entry.id == obj_id) & (Entry.deleted_at == None)
         )
         if not obj or obj.owner_id != user_id:
             continue
@@ -190,7 +190,7 @@ async def router_object_delete(
         objects_to_delete.append(obj)
 
     if objects_to_delete:
-        deleted_count = await Object.soft_delete_batch(session, objects_to_delete)
+        deleted_count = await Entry.soft_delete_batch(session, objects_to_delete)
         l.info(f"用户 {user_id} 软删除了 {deleted_count} 个对象到回收站")
 
 
@@ -203,7 +203,7 @@ async def router_object_delete(
 async def router_object_move(
     session: SessionDep,
     user: Annotated[User, Depends(auth_required)],
-    request: ObjectMoveRequest,
+    request: EntryMoveRequest,
 ) -> None:
     """
     移动对象端点
@@ -217,9 +217,9 @@ async def router_object_move(
     user_id = user.id
 
     # 验证目标目录（排除已删除的）
-    dst = await Object.get(
+    dst = await Entry.get(
         session,
-        (Object.id == request.dst_id) & (Object.deleted_at == None)
+        (Entry.id == request.dst_id) & (Entry.deleted_at == None)
     )
     if not dst or dst.owner_id != user_id:
         raise HTTPException(status_code=404, detail="目标目录不存在")
@@ -237,9 +237,9 @@ async def router_object_move(
     moved_count = 0
 
     for src_id in request.src_ids:
-        src = await Object.get(
+        src = await Entry.get(
             session,
-            (Object.id == src_id) & (Object.deleted_at == None)
+            (Entry.id == src_id) & (Entry.deleted_at == None)
         )
         if not src or src.owner_id != user_id:
             continue
@@ -263,18 +263,18 @@ async def router_object_move(
                 if current_parent_id == src.id:
                     is_cycle = True
                     break
-                current = await Object.get(session, Object.id == current_parent_id)
+                current = await Entry.get(session, Entry.id == current_parent_id)
                 current_parent_id = current.parent_id if current else None
             if is_cycle:
                 continue
 
         # 检查目标目录下是否存在同名对象（仅检查未删除的）
-        existing = await Object.get(
+        existing = await Entry.get(
             session,
-            (Object.owner_id == user_id) &
-            (Object.parent_id == dst_id) &
-            (Object.name == src.name) &
-            (Object.deleted_at == None)
+            (Entry.owner_id == user_id) &
+            (Entry.parent_id == dst_id) &
+            (Entry.name == src.name) &
+            (Entry.deleted_at == None)
         )
         if existing:
             continue  # 跳过重名对象
@@ -296,7 +296,7 @@ async def router_object_move(
 async def router_object_copy(
     session: SessionDep,
     user: Annotated[User, Depends(auth_required)],
-    request: ObjectCopyRequest,
+    request: EntryCopyRequest,
 ) -> None:
     """
     复制对象端点
@@ -306,7 +306,7 @@ async def router_object_copy(
     2. 对于每个源对象：
        - 验证源对象存在且属于当前用户
        - 检查目标目录下是否存在同名对象
-       - 如果是文件：增加 PhysicalFile 引用计数，创建新 Object
+       - 如果是文件：增加 PhysicalFile 引用计数，创建新 Entry
        - 如果是目录：递归复制所有子对象
     3. 返回复制结果
 
@@ -319,9 +319,9 @@ async def router_object_copy(
     user_id = user.id
 
     # 验证目标目录（排除已删除的）
-    dst = await Object.get(
+    dst = await Entry.get(
         session,
-        (Object.id == request.dst_id) & (Object.deleted_at == None)
+        (Entry.id == request.dst_id) & (Entry.deleted_at == None)
     )
     if not dst or dst.owner_id != user_id:
         raise HTTPException(status_code=404, detail="目标目录不存在")
@@ -337,9 +337,9 @@ async def router_object_copy(
     total_copied_size = 0
 
     for src_id in request.src_ids:
-        src = await Object.get(
+        src = await Entry.get(
             session,
-            (Object.id == src_id) & (Object.deleted_at == None)
+            (Entry.id == src_id) & (Entry.deleted_at == None)
         )
         if not src or src.owner_id != user_id:
             continue
@@ -364,17 +364,17 @@ async def router_object_copy(
                 if current.parent_id == src.id:
                     is_cycle = True
                     break
-                current = await Object.get(session, Object.id == current.parent_id)
+                current = await Entry.get(session, Entry.id == current.parent_id)
             if is_cycle:
                 continue
 
         # 检查目标目录下是否存在同名对象（仅检查未删除的）
-        existing = await Object.get(
+        existing = await Entry.get(
             session,
-            (Object.owner_id == user_id) &
-            (Object.parent_id == dst.id) &
-            (Object.name == src.name) &
-            (Object.deleted_at == None)
+            (Entry.owner_id == user_id) &
+            (Entry.parent_id == dst.id) &
+            (Entry.name == src.name) &
+            (Entry.deleted_at == None)
         )
         if existing:
             # [TODO] 应当询问用户是否覆盖、跳过或创建副本
@@ -403,7 +403,7 @@ async def router_object_update(
     session: SessionDep,
     user: Annotated[User, Depends(auth_required)],
     object_id: UUID,
-    request: ObjectUpdateRequest,
+    request: EntryUpdateRequest,
 ) -> None:
     """
     更新对象端点（重命名等部分更新）
@@ -425,9 +425,9 @@ async def router_object_update(
     user_id = user.id
 
     # 验证对象存在（排除已删除的）
-    obj = await Object.get(
+    obj = await Entry.get(
         session,
-        (Object.id == object_id) & (Object.deleted_at == None)
+        (Entry.id == object_id) & (Entry.deleted_at == None)
     )
     if not obj:
         raise HTTPException(status_code=404, detail="对象不存在")
@@ -456,12 +456,12 @@ async def router_object_update(
             return  # noqa: already 204
 
         # 检查同目录下是否存在同名对象（仅检查未删除的）
-        existing = await Object.get(
+        existing = await Entry.get(
             session,
-            (Object.owner_id == user_id) &
-            (Object.parent_id == obj.parent_id) &
-            (Object.name == new_name) &
-            (Object.deleted_at == None)
+            (Entry.owner_id == user_id) &
+            (Entry.parent_id == obj.parent_id) &
+            (Entry.name == new_name) &
+            (Entry.deleted_at == None)
         )
         if existing:
             raise HTTPException(status_code=409, detail="同名对象已存在")
@@ -482,7 +482,7 @@ async def router_object_property(
     session: SessionDep,
     user: Annotated[User, Depends(auth_required)],
     object_id: UUID,
-) -> ObjectPropertyResponse:
+) -> EntryPropertyResponse:
     """
     获取对象基本属性端点
 
@@ -491,9 +491,9 @@ async def router_object_property(
     :param object_id: 对象UUID
     :return: 对象基本属性
     """
-    obj = await Object.get(
+    obj = await Entry.get(
         session,
-        (Object.id == object_id) & (Object.deleted_at == None)
+        (Entry.id == object_id) & (Entry.deleted_at == None)
     )
     if not obj:
         raise HTTPException(status_code=404, detail="对象不存在")
@@ -501,7 +501,7 @@ async def router_object_property(
     if obj.owner_id != user.id:
         raise HTTPException(status_code=403, detail="无权查看此对象")
 
-    return ObjectPropertyResponse(
+    return EntryPropertyResponse(
         id=obj.id,
         name=obj.name,
         type=obj.type,
@@ -522,7 +522,7 @@ async def router_object_property_detail(
     session: SessionDep,
     user: Annotated[User, Depends(auth_required)],
     object_id: UUID,
-) -> ObjectPropertyDetailResponse:
+) -> EntryPropertyDetailResponse:
     """
     获取对象详细属性端点
 
@@ -531,10 +531,10 @@ async def router_object_property_detail(
     :param object_id: 对象UUID
     :return: 对象详细属性
     """
-    obj = await Object.get(
+    obj = await Entry.get(
         session,
-        (Object.id == object_id) & (Object.deleted_at == None),
-        load=Object.metadata_entries,
+        (Entry.id == object_id) & (Entry.deleted_at == None),
+        load=Entry.metadata_entries,
     )
     if not obj:
         raise HTTPException(status_code=404, detail="对象不存在")
@@ -575,7 +575,7 @@ async def router_object_property_detail(
         if ns not in INTERNAL_NAMESPACES:
             metadata[entry.name] = entry.value
 
-    return ObjectPropertyDetailResponse(
+    return EntryPropertyDetailResponse(
         id=obj.id,
         name=obj.name,
         type=obj.type,
@@ -604,7 +604,7 @@ async def router_object_switch_policy(
     background_tasks: BackgroundTasks,
     user: Annotated[User, Depends(auth_required)],
     object_id: UUID,
-    request: ObjectSwitchPolicyRequest,
+    request: EntrySwitchPolicyRequest,
 ) -> TaskSummaryBase:
     """
     切换对象的存储策略
@@ -623,9 +623,9 @@ async def router_object_switch_policy(
     user_id = user.id
 
     # 查找对象
-    obj = await Object.get(
+    obj = await Entry.get(
         session,
-        (Object.id == object_id) & (Object.deleted_at == None)
+        (Entry.id == object_id) & (Entry.deleted_at == None)
     )
     if not obj:
         http_exceptions.raise_not_found("对象不存在")
@@ -657,7 +657,7 @@ async def router_object_switch_policy(
     # 保存必要的属性，避免 save 后对象过期
     src_policy_id = obj.policy_id
     obj_id = obj.id
-    obj_is_file = obj.type == ObjectType.FILE
+    obj_is_file = obj.type == EntryType.FILE
     dest_policy_id = request.policy_id
     dest_policy_name = dest_policy.name
 
@@ -682,7 +682,7 @@ async def router_object_switch_policy(
         # 文件：后台迁移
         async def _run_file_migration() -> None:
             async with DatabaseManager.session() as bg_session:
-                bg_obj = await Object.get(bg_session, Object.id == obj_id)
+                bg_obj = await Entry.get(bg_session, Entry.id == obj_id)
                 bg_policy = await Policy.get(bg_session, Policy.id == dest_policy_id)
                 bg_task = await Task.get(bg_session, Task.id == task_id)
                 await migrate_file_with_task(bg_session, bg_obj, bg_policy, bg_task)
@@ -690,7 +690,7 @@ async def router_object_switch_policy(
         background_tasks.add_task(_run_file_migration)
     else:
         # 目录：先更新目录自身的 policy_id
-        obj = await Object.get(session, Object.id == obj_id)
+        obj = await Entry.get(session, Entry.id == obj_id)
         obj.policy_id = dest_policy_id
         obj = await obj.save(session)
 
@@ -698,7 +698,7 @@ async def router_object_switch_policy(
             # 后台迁移所有已有文件
             async def _run_dir_migration() -> None:
                 async with DatabaseManager.session() as bg_session:
-                    bg_folder = await Object.get(bg_session, Object.id == obj_id)
+                    bg_folder = await Entry.get(bg_session, Entry.id == obj_id)
                     bg_policy = await Policy.get(bg_session, Policy.id == dest_policy_id)
                     bg_task = await Task.get(bg_session, Task.id == task_id)
                     await migrate_directory_files(bg_session, bg_folder, bg_policy, bg_task)
@@ -753,10 +753,10 @@ async def router_get_object_metadata(
     - 404: 对象不存在
     - 403: 无权查看此对象
     """
-    obj = await Object.get(
+    obj = await Entry.get(
         session,
-        (Object.id == object_id) & (Object.deleted_at == None),
-        load=Object.metadata_entries,
+        (Entry.id == object_id) & (Entry.deleted_at == None),
+        load=Entry.metadata_entries,
     )
     if not obj:
         raise HTTPException(status_code=404, detail="对象不存在")
@@ -809,9 +809,9 @@ async def router_patch_object_metadata(
     - 404: 对象不存在
     - 403: 无权操作此对象
     """
-    obj = await Object.get(
+    obj = await Entry.get(
         session,
-        (Object.id == object_id) & (Object.deleted_at == None),
+        (Entry.id == object_id) & (Entry.deleted_at == None),
     )
     if not obj:
         raise HTTPException(status_code=404, detail="对象不存在")
@@ -830,23 +830,23 @@ async def router_patch_object_metadata(
 
         if patch.value is None:
             # 删除元数据条目
-            existing = await ObjectMetadata.get(
+            existing = await EntryMetadata.get(
                 session,
-                (ObjectMetadata.object_id == object_id) & (ObjectMetadata.name == patch.key),
+                (EntryMetadata.object_id == object_id) & (EntryMetadata.name == patch.key),
             )
             if existing:
-                await ObjectMetadata.delete(session, instances=existing)
+                await EntryMetadata.delete(session, instances=existing)
         else:
             # 设置/更新元数据条目
-            existing = await ObjectMetadata.get(
+            existing = await EntryMetadata.get(
                 session,
-                (ObjectMetadata.object_id == object_id) & (ObjectMetadata.name == patch.key),
+                (EntryMetadata.object_id == object_id) & (EntryMetadata.name == patch.key),
             )
             if existing:
                 existing.value = patch.value
                 existing = await existing.save(session)
             else:
-                entry = ObjectMetadata(
+                entry = EntryMetadata(
                     object_id=object_id,
                     name=patch.key,
                     value=patch.value,

@@ -5,7 +5,7 @@
 如 exif:width, stream:duration, music:artist 等。
 
 架构：
-    ObjectMetadata (KV 表，与 Object 一对多关系)
+    EntryMetadata (KV 表，与 Object 一对多关系)
     └── 每个 Object 可以有多条元数据记录
     └── (file_id, name) 组合唯一索引
 

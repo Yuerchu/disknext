@@ -20,7 +20,7 @@ import pytest_asyncio
 from httpx import AsyncClient
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from sqlmodels import File, FileType, PhysicalFile, Policy, PolicyType, SourceLink, User
+from sqlmodels import Entry, EntryType, PhysicalFile, Policy, PolicyType, SourceLink, User
 
 
 # ==================== Fixtures ====================
@@ -54,7 +54,7 @@ async def source_file(
 ) -> dict[str, str | int]:
     """创建一个文本测试文件，关联到启用外链的存储策略"""
     user = await User.get(initialized_db, User.email == "testuser@test.local")
-    root = await File.get_root(initialized_db, user.id)
+    root = await Entry.get_root(initialized_db, user.id)
 
     content = "A" * 50
     content_bytes = content.encode('utf-8')
@@ -72,10 +72,10 @@ async def source_file(
     )
     initialized_db.add(physical_file)
 
-    file_obj = File(
+    file_obj = Entry(
         id=uuid4(),
         name="source_test.txt",
-        type=FileType.FILE,
+        type=EntryType.FILE,
         size=len(content_bytes),
         physical_file_id=physical_file.id,
         parent_id=root.id,
@@ -441,7 +441,7 @@ class TestPatchMaxSizePolicy:
     ) -> dict[str, str | int]:
         """创建一个 50 字节的文本文件（策略限制 100 字节）"""
         user = await User.get(initialized_db, User.email == "testuser@test.local")
-        root = await File.get_root(initialized_db, user.id)
+        root = await Entry.get_root(initialized_db, user.id)
 
         content = "A" * 50
         content_bytes = content.encode('utf-8')
@@ -459,10 +459,10 @@ class TestPatchMaxSizePolicy:
         )
         initialized_db.add(physical_file)
 
-        file_obj = File(
+        file_obj = Entry(
             id=uuid4(),
             name="small.txt",
-            type=FileType.FILE,
+            type=EntryType.FILE,
             size=len(content_bytes),
             physical_file_id=physical_file.id,
             parent_id=root.id,

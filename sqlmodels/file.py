@@ -19,13 +19,17 @@ if TYPE_CHECKING:
     from .share import Share
     from .physical_file import PhysicalFile
     from .uri import DiskNextURI
-    from .object_metadata import ObjectMetadata
+    from .object_metadata import EntryMetadata
 
 
-class ObjectType(StrEnum):
-    """对象类型枚举"""
+class EntryType(StrEnum):
+    """条目类型枚举"""
     FILE = "file"
+    """文件"""
     FOLDER = "folder"
+    """文件夹"""
+    SYMLINK = "symlink"
+    """软链接（删除不影响源，源被删则自动级联删除）"""
 
 
 class FileCategory(StrEnum):
@@ -38,13 +42,13 @@ class FileCategory(StrEnum):
 
 # ==================== Base 模型 ====================
 
-class ObjectBase(SQLModelBase):
+class EntryBase(SQLModelBase):
     """对象基础字段，供数据库模型和 DTO 共享"""
 
     name: str = Field(min_length=1, max_length=255)
     """对象名称（文件名或目录名）"""
 
-    type: ObjectType
+    type: EntryType
     """对象类型"""
 
     size: int | None = None
@@ -56,8 +60,8 @@ class ObjectBase(SQLModelBase):
 
 # ==================== DTO 模型 ====================
 
-class ObjectFileFinalize(SQLModelBase):
-    """文件上传完成后更新 Object 的 DTO"""
+class EntryFileFinalize(SQLModelBase):
+    """文件上传完成后更新 Entry 的 DTO"""
 
     size: int
     """文件大小（字节）"""
@@ -66,8 +70,8 @@ class ObjectFileFinalize(SQLModelBase):
     """关联的物理文件UUID"""
 
 
-class ObjectMoveUpdate(SQLModelBase):
-    """移动/重命名 Object 的 DTO"""
+class EntryMoveUpdate(SQLModelBase):
+    """移动/重命名 Entry 的 DTO"""
 
     parent_id: UUID
     """新的父目录UUID"""
@@ -89,7 +93,7 @@ class DirectoryCreateRequest(SQLModelBase):
     """存储策略UUID，不指定则继承父目录"""
 
 
-class ObjectMoveRequest(SQLModelBase):
+class EntryMoveRequest(SQLModelBase):
     """移动对象请求 DTO"""
 
     src_ids: list[UUID] = Field(min_length=1, max_length=100)
@@ -99,14 +103,14 @@ class ObjectMoveRequest(SQLModelBase):
     """目标文件夹UUID"""
 
 
-class ObjectDeleteRequest(SQLModelBase):
+class EntryDeleteRequest(SQLModelBase):
     """删除对象请求 DTO"""
 
     ids: list[UUID] = Field(min_length=1, max_length=100)
     """待删除对象UUID列表"""
 
 
-class ObjectResponse(ObjectBase):
+class EntryResponse(EntryBase):
     """对象响应 DTO"""
 
     id: UUID
@@ -153,7 +157,7 @@ class DirectoryResponse(SQLModelBase):
     parent: UUID | None = None
     """父目录UUID，根目录为None"""
 
-    objects: list[ObjectResponse] = []
+    objects: list[EntryResponse] = []
     """目录下的对象列表"""
 
     policy: PolicyResponse
@@ -162,7 +166,7 @@ class DirectoryResponse(SQLModelBase):
 
 # ==================== 数据库模型 ====================
 
-class Object(ObjectBase, UUIDTableBaseMixin):
+class Entry(EntryBase, UUIDTableBaseMixin):
     """
     统一对象模型
 
@@ -202,7 +206,7 @@ class Object(ObjectBase, UUIDTableBaseMixin):
     name: Str255
     """对象名称（文件名或目录名）"""
 
-    type: ObjectType
+    type: EntryType
     """对象类型：file 或 folder"""
 
     password: Str255 | None = None
@@ -283,12 +287,12 @@ class Object(ObjectBase, UUIDTableBaseMixin):
 
     owner: "User" = Relationship(
         back_populates="objects",
-        sa_relationship_kwargs={"foreign_keys": "[Object.owner_id]"}
+        sa_relationship_kwargs={"foreign_keys": "[Entry.owner_id]"}
     )
     """所有者"""
 
     banner: "User" = Relationship(
-        sa_relationship_kwargs={"foreign_keys": "[Object.banned_by]"}
+        sa_relationship_kwargs={"foreign_keys": "[Entry.banned_by]"}
     )
     """封禁操作者"""
 
@@ -296,24 +300,24 @@ class Object(ObjectBase, UUIDTableBaseMixin):
     """存储策略"""
 
     # 自引用关系
-    parent: "Object" = Relationship(
+    parent: "Entry" = Relationship(
         back_populates="children",
         sa_relationship_kwargs={
-            "remote_side": "Object.id",
-            "foreign_keys": "[Object.parent_id]",
+            "remote_side": "Entry.id",
+            "foreign_keys": "[Entry.parent_id]",
         },
     )
     """父目录"""
 
-    children: list["Object"] = Relationship(
+    children: list["Entry"] = Relationship(
         back_populates="parent",
         cascade_delete=True,
-        sa_relationship_kwargs={"foreign_keys": "[Object.parent_id]"},
+        sa_relationship_kwargs={"foreign_keys": "[Entry.parent_id]"},
     )
     """子对象（文件和子目录）"""
 
     # 仅文件有效的关系
-    metadata_entries: list["ObjectMetadata"] = Relationship(back_populates="object", cascade_delete=True)
+    metadata_entries: list["EntryMetadata"] = Relationship(back_populates="object", cascade_delete=True)
     """元数据键值对列表"""
 
     source_links: list["SourceLink"] = Relationship(back_populates="object", cascade_delete=True)
@@ -341,17 +345,17 @@ class Object(ObjectBase, UUIDTableBaseMixin):
     @property
     def is_file(self) -> bool:
         """是否为文件"""
-        return self.type == ObjectType.FILE
+        return self.type == EntryType.FILE
 
     @property
     def is_folder(self) -> bool:
         """是否为目录"""
-        return self.type == ObjectType.FOLDER
+        return self.type == EntryType.FOLDER
 
     # ==================== 业务方法 ====================
 
     @classmethod
-    async def get_root(cls, session, user_id: UUID) -> "Object | None":
+    async def get_root(cls, session, user_id: UUID) -> "Entry | None":
         """
         获取用户的根目录
 
@@ -370,7 +374,7 @@ class Object(ObjectBase, UUIDTableBaseMixin):
         session,
         user_id: UUID,
         path: str,
-    ) -> "Object | None":
+    ) -> "Entry | None":
         """
         根据路径获取对象
 
@@ -380,7 +384,7 @@ class Object(ObjectBase, UUIDTableBaseMixin):
         :param session: 数据库会话
         :param user_id: 用户UUID
         :param path: 路径，如 "/" 或 "/docs/images"
-        :return: Object 或 None
+        :return: Entry 或 None
         """
         path = path.strip()
         if not path:
@@ -417,7 +421,7 @@ class Object(ObjectBase, UUIDTableBaseMixin):
         return current
 
     @classmethod
-    async def get_children(cls, session, user_id: UUID, parent_id: UUID) -> list["Object"]:
+    async def get_children(cls, session, user_id: UUID, parent_id: UUID) -> list["Entry"]:
         """
         获取目录下的所有子对象（不包含已软删除的）
 
@@ -433,7 +437,7 @@ class Object(ObjectBase, UUIDTableBaseMixin):
         )
 
     @classmethod
-    async def get_all_children(cls, session, user_id: UUID, parent_id: UUID) -> list["Object"]:
+    async def get_all_children(cls, session, user_id: UUID, parent_id: UUID) -> list["Entry"]:
         """
         获取目录下的所有子对象（包含已软删除的，用于永久删除场景）
 
@@ -449,7 +453,7 @@ class Object(ObjectBase, UUIDTableBaseMixin):
         )
 
     @classmethod
-    async def get_trash_items(cls, session, user_id: UUID) -> list["Object"]:
+    async def get_trash_items(cls, session, user_id: UUID) -> list["Entry"]:
         """
         获取用户回收站中的顶层对象
 
@@ -473,7 +477,7 @@ class Object(ObjectBase, UUIDTableBaseMixin):
         user_id: UUID,
         extensions: list[str],
         table_view: 'TableViewRequest | None' = None,
-    ) -> 'ListResponse[Object]':
+    ) -> 'ListResponse[Entry]':
         """
         按扩展名列表查询用户的所有文件（跨目录）
 
@@ -490,7 +494,7 @@ class Object(ObjectBase, UUIDTableBaseMixin):
         ext_conditions = [cls.name.ilike(f"%.{ext}") for ext in extensions]
         condition = (
             (cls.owner_id == user_id) &
-            (cls.type == ObjectType.FILE) &
+            (cls.type == EntryType.FILE) &
             (cls.deleted_at == None) &
             (cls.is_banned == False) &
             or_(*ext_conditions)
@@ -503,9 +507,9 @@ class Object(ObjectBase, UUIDTableBaseMixin):
         session,
         uri: "DiskNextURI",
         requesting_user_id: UUID | None = None,
-    ) -> "Object":
+    ) -> "Entry":
         """
-        将 URI 解析为 Object 实例
+        将 URI 解析为 Entry 实例
 
         分派逻辑（类似 Cloudreve 的 getNavigator）：
         - MY    → user_id = uri.id(str(requesting_user_id))
@@ -517,7 +521,7 @@ class Object(ObjectBase, UUIDTableBaseMixin):
         :param session: 数据库会话
         :param uri: DiskNextURI 实例
         :param requesting_user_id: 请求用户UUID
-        :return: Object 实例
+        :return: Entry 实例
         :raises ValueError: URI 无法解析
         :raises PermissionError: 权限不足
         :raises NotImplementedError: 不支持的命名空间
@@ -558,11 +562,11 @@ class Object(ObjectBase, UUIDTableBaseMixin):
         :return: 完整路径，如 "/docs/images/photo.jpg"
         """
         parts: list[str] = []
-        current: Object | None = self
+        current: Entry | None = self
 
         while current and current.parent_id is not None:
             parts.append(current.name)
-            current = await Object.get(session, Object.id == current.parent_id)
+            current = await Entry.get(session, Entry.id == current.parent_id)
 
         # 反转顺序（从根到当前）
         parts.reverse()
@@ -574,7 +578,7 @@ class Object(ObjectBase, UUIDTableBaseMixin):
     async def soft_delete_batch(
         cls,
         session: AsyncSession,
-        objects: list["Object"],
+        objects: list["Entry"],
     ) -> int:
         """
         批量软删除对象
@@ -657,7 +661,7 @@ class Object(ObjectBase, UUIDTableBaseMixin):
     async def restore_batch(
         cls,
         session: AsyncSession,
-        objects: list["Object"],
+        objects: list["Entry"],
         user_id: UUID,
     ) -> int:
         """
@@ -738,7 +742,7 @@ class Object(ObjectBase, UUIDTableBaseMixin):
             queue: list[UUID] = [self.id]
             while queue:
                 parent_id = queue.pop(0)
-                children = await Object.get_all_children(session, user_id, parent_id)
+                children = await Entry.get_all_children(session, user_id, parent_id)
                 for child in children:
                     total_count += 1
                     if child.is_file and child.physical_file_id:
@@ -753,7 +757,7 @@ class Object(ObjectBase, UUIDTableBaseMixin):
     async def permanently_delete_batch(
         cls,
         session: AsyncSession,
-        objects: list["Object"],
+        objects: list["Entry"],
         user_id: UUID,
     ) -> int:
         """
@@ -869,7 +873,7 @@ class Object(ObjectBase, UUIDTableBaseMixin):
             queue: list[UUID] = [self.id]
             while queue:
                 parent_id = queue.pop(0)
-                children = await Object.get_children(session, user_id, parent_id)
+                children = await Entry.get_children(session, user_id, parent_id)
                 for child in children:
                     total_count += 1
                     if child.is_file and child.physical_file_id:
@@ -918,7 +922,7 @@ class Object(ObjectBase, UUIDTableBaseMixin):
                 await user.adjust_storage(session, -total_file_size, commit=False)
 
         # 阶段四：删除根对象，CASCADE 自动删除所有子对象
-        await Object.delete(session, condition=Object.id == root_id)
+        await Entry.delete(session, condition=Entry.id == root_id)
 
         return total_count
 
@@ -933,7 +937,7 @@ class Object(ObjectBase, UUIDTableBaseMixin):
         """
         递归复制对象
 
-        对于文件：增加 PhysicalFile 引用计数，创建新的 Object 记录指向同一 PhysicalFile。
+        对于文件：增加 PhysicalFile 引用计数，创建新的 Entry 记录指向同一 PhysicalFile。
         对于目录：创建新目录，递归复制所有子对象。
 
         :param session: 数据库会话
@@ -963,8 +967,8 @@ class Object(ObjectBase, UUIDTableBaseMixin):
         src_size = self.size
         src_physical_file_id = self.physical_file_id
 
-        # 创建新的 Object 记录
-        new_obj = Object(
+        # 创建新的 Entry 记录
+        new_obj = Entry(
             name=self.name,
             type=self.type,
             size=self.size,
@@ -989,7 +993,7 @@ class Object(ObjectBase, UUIDTableBaseMixin):
 
         # 如果是目录，递归复制子对象
         if src_is_folder:
-            children = await Object.get_children(session, user_id, src_id)
+            children = await Entry.get_children(session, user_id, src_id)
             for child in children:
                 child_count, child_ids, child_size = await child._copy_recursive_impl(
                     session, new_obj.id, user_id
@@ -1018,7 +1022,7 @@ class Object(ObjectBase, UUIDTableBaseMixin):
         from utils.storage.local_storage import LocalStorageService
         from utils.storage.s3_storage import S3StorageService
 
-        if self.type != ObjectType.FILE:
+        if self.type != EntryType.FILE:
             raise ValueError(f"只能迁移文件对象，当前类型: {self.type}")
 
         src_policy: Policy = await self.awaitable_attrs.policy
@@ -1069,7 +1073,7 @@ class Object(ObjectBase, UUIDTableBaseMixin):
         )
         new_physical = await new_physical.save(session)
 
-        # 5. 更新 Object
+        # 5. 更新 Entry
         self.policy_id = dest_policy.id
         self.physical_file_id = new_physical.id
         await self.save(session)
@@ -1150,7 +1154,7 @@ class UploadSession(UploadSessionBase, UUIDTableBaseMixin):
     owner: "User" = Relationship()
     """上传者"""
 
-    parent: "Object" = Relationship(
+    parent: "Entry" = Relationship(
         sa_relationship_kwargs={"foreign_keys": "[UploadSession.parent_id]"}
     )
     """目标父目录"""
@@ -1241,7 +1245,7 @@ class CreateFileRequest(SQLModelBase):
     """存储策略UUID，不指定则使用父目录的策略"""
 
 
-class ObjectSwitchPolicyRequest(SQLModelBase):
+class EntrySwitchPolicyRequest(SQLModelBase):
     """切换对象存储策略请求"""
 
     policy_id: UUID
@@ -1253,7 +1257,7 @@ class ObjectSwitchPolicyRequest(SQLModelBase):
 
 # ==================== 对象操作相关 DTO ====================
 
-class ObjectCopyRequest(SQLModelBase):
+class EntryCopyRequest(SQLModelBase):
     """复制对象请求 DTO"""
 
     src_ids: list[UUID] = Field(min_length=1, max_length=100)
@@ -1263,14 +1267,14 @@ class ObjectCopyRequest(SQLModelBase):
     """目标文件夹UUID"""
 
 
-class ObjectUpdateRequest(SQLModelBase):
+class EntryUpdateRequest(SQLModelBase):
     """对象更新请求 DTO（用于重命名等部分更新）"""
 
     name: Str255 | None = None
     """新名称（传入则更新）"""
 
 
-class ObjectPropertyResponse(SQLModelBase):
+class EntryPropertyResponse(SQLModelBase):
     """对象基本属性响应 DTO"""
 
     id: UUID
@@ -1279,7 +1283,7 @@ class ObjectPropertyResponse(SQLModelBase):
     name: Str255
     """对象名称"""
 
-    type: ObjectType
+    type: EntryType
     """对象类型"""
 
     size: int
@@ -1298,7 +1302,7 @@ class ObjectPropertyResponse(SQLModelBase):
     """父目录UUID"""
 
 
-class ObjectPropertyDetailResponse(ObjectPropertyResponse):
+class EntryPropertyDetailResponse(EntryPropertyResponse):
     """对象详细属性响应 DTO（继承基本属性）"""
 
     # 校验和（从 PhysicalFile 读取）
@@ -1332,7 +1336,7 @@ class ObjectPropertyDetailResponse(ObjectPropertyResponse):
 
 # ==================== 管理员文件管理 DTO ====================
 
-class AdminFileResponse(ObjectResponse):
+class AdminFileResponse(EntryResponse):
     """管理员文件响应 DTO"""
 
     owner_id: UUID
@@ -1356,15 +1360,15 @@ class AdminFileResponse(ObjectResponse):
     @classmethod
     def from_object(
         cls,
-        obj: "Object",
+        obj: "Entry",
         owner: "User | None",
         policy: "Policy | None",
     ) -> "AdminFileResponse":
-        """从 Object ORM 对象构建"""
+        """从 Entry ORM 对象构建"""
         return cls(
-            # ObjectBase 字段
-            **ObjectBase.model_validate(obj, from_attributes=True).model_dump(),
-            # ObjectResponse 字段
+            # EntryBase 字段
+            **EntryBase.model_validate(obj, from_attributes=True).model_dump(),
+            # EntryResponse 字段
             id=obj.id,
             thumb=False,
             created_at=obj.created_at,
@@ -1411,7 +1415,7 @@ class TrashItemResponse(SQLModelBase):
     name: str
     """对象名称"""
 
-    type: ObjectType
+    type: EntryType
     """对象类型"""
 
     size: int

@@ -8,7 +8,7 @@ import pytest_asyncio
 from httpx import AsyncClient
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from sqlmodels import Group, GroupClaims, File, FileType, User
+from sqlmodels import Group, GroupClaims, Entry, EntryType, User
 from sqlmodels.user import UserStatus
 from utils import Password
 from utils.JWT import create_access_token
@@ -58,10 +58,10 @@ async def no_webdav_headers(initialized_db: AsyncSession) -> dict[str, str]:
     from sqlmodels import Policy
     policy = await Policy.get(initialized_db, Policy.name == "本地存储")
 
-    root = File(
+    root = Entry(
         id=uuid4(),
         name="/",
-        type=FileType.FOLDER,
+        type=EntryType.FOLDER,
         owner_id=user.id,
         parent_id=None,
         policy_id=policy.id,

@@ -31,8 +31,8 @@ from sqlmodels import (
     FileAppExtension,
     FileAppGroupLink,
     FileAppType,
-    Object,
-    ObjectType,
+    Entry,
+    EntryType,
     PhysicalFile,
     Policy,
     PolicyType,
@@ -158,9 +158,9 @@ async def create_upload_session(
         raise HTTPException(status_code=400, detail="无效的文件名")
 
     # 验证父目录（排除已删除的）
-    parent = await Object.get(
+    parent = await Entry.get(
         session,
-        (Object.id == request.parent_id) & (Object.deleted_at == None)
+        (Entry.id == request.parent_id) & (Entry.deleted_at == None)
     )
     if not parent or parent.owner_id != user.id:
         raise HTTPException(status_code=404, detail="父目录不存在")
@@ -191,12 +191,12 @@ async def create_upload_session(
         http_exceptions.raise_insufficient_quota("存储空间不足")
 
     # 检查是否已存在同名文件（仅检查未删除的）
-    existing = await Object.get(
+    existing = await Entry.get(
         session,
-        (Object.owner_id == user.id) &
-        (Object.parent_id == parent.id) &
-        (Object.name == request.file_name) &
-        (Object.deleted_at == None)
+        (Entry.owner_id == user.id) &
+        (Entry.parent_id == parent.id) &
+        (Entry.name == request.file_name) &
+        (Entry.deleted_at == None)
     )
     if existing:
         raise HTTPException(status_code=409, detail="同名文件已存在")
@@ -283,7 +283,7 @@ async def upload_chunk(
     1. 验证上传会话
     2. 写入分片数据
     3. 更新会话进度
-    4. 如果所有分片上传完成，创建 Object 记录
+    4. 如果所有分片上传完成，创建 Entry 记录
     """
     # 获取上传会话
     upload_session = await UploadSession.get(session, UploadSession.id == session_id)
@@ -395,10 +395,10 @@ async def upload_chunk(
         )
         physical_file = await physical_file.save(session, commit=False)
 
-        # 创建 Object 记录
-        file_object = Object(
+        # 创建 Entry 记录
+        file_object = Entry(
             name=file_name,
-            type=ObjectType.FILE,
+            type=EntryType.FILE,
             size=uploaded_size,
             physical_file_id=physical_file.id,
             upload_session_id=str(upload_session_id),
@@ -555,9 +555,9 @@ async def create_download_token_endpoint(
 
     验证文件存在且属于当前用户后，生成 JWT 下载令牌。
     """
-    file_obj = await Object.get(
+    file_obj = await Entry.get(
         session,
-        (Object.id == file_id) & (Object.deleted_at == None)
+        (Entry.id == file_id) & (Entry.deleted_at == None)
     )
     if not file_obj or file_obj.owner_id != user.id:
         raise HTTPException(status_code=404, detail="文件不存在")
@@ -599,10 +599,10 @@ async def download_file(
     _, file_id, owner_id = result
 
     # 获取文件对象（排除已删除的），同时预加载 physical_file 关系
-    file_obj = await Object.get(
+    file_obj = await Entry.get(
         session,
-        (Object.id == file_id) & (Object.deleted_at == None),
-        load=Object.physical_file,
+        (Entry.id == file_id) & (Entry.deleted_at == None),
+        load=Entry.physical_file,
     )
     if not file_obj or file_obj.owner_id != owner_id:
         raise HTTPException(status_code=404, detail="文件不存在")
@@ -674,9 +674,9 @@ async def create_empty_file(
         raise HTTPException(status_code=400, detail="无效的文件名")
 
     # 验证父目录（排除已删除的）
-    parent = await Object.get(
+    parent = await Entry.get(
         session,
-        (Object.id == request.parent_id) & (Object.deleted_at == None)
+        (Entry.id == request.parent_id) & (Entry.deleted_at == None)
     )
     if not parent or parent.owner_id != user_id:
         raise HTTPException(status_code=404, detail="父目录不存在")
@@ -688,12 +688,12 @@ async def create_empty_file(
         http_exceptions.raise_banned("目标目录已被封禁，无法执行此操作")
 
     # 检查是否已存在同名文件（仅检查未删除的）
-    existing = await Object.get(
+    existing = await Entry.get(
         session,
-        (Object.owner_id == user_id) &
-        (Object.parent_id == parent.id) &
-        (Object.name == request.name) &
-        (Object.deleted_at == None)
+        (Entry.owner_id == user_id) &
+        (Entry.parent_id == parent.id) &
+        (Entry.name == request.name) &
+        (Entry.deleted_at == None)
     )
     if existing:
         raise HTTPException(status_code=409, detail="同名文件已存在")
@@ -729,10 +729,10 @@ async def create_empty_file(
     )
     physical_file = await physical_file.save(session)
 
-    # 创建 Object 记录
-    file_object = Object(
+    # 创建 Entry 记录
+    file_object = Entry(
         name=request.name,
-        type=ObjectType.FILE,
+        type=EntryType.FILE,
         size=0,
         physical_file_id=physical_file.id,
         parent_id=request.parent_id,
@@ -774,9 +774,9 @@ async def create_wopi_session(
     - 403: 用户组无权限
     """
     # 验证文件
-    file_obj: Object | None = await Object.get(
+    file_obj: Entry | None = await Entry.get(
         session,
-        Object.id == file_id,
+        Entry.id == file_id,
     )
     if not file_obj or file_obj.owner_id != user.id:
         http_exceptions.raise_not_found("文件不存在")
@@ -857,17 +857,17 @@ async def create_wopi_session(
 async def _validate_source_link(
     session: SessionDep,
     file_id: UUID,
-) -> tuple[Object, SourceLink, PhysicalFile, Policy]:
+) -> tuple[Entry, SourceLink, PhysicalFile, Policy]:
     """
     验证外链访问的完整链路
 
     :returns: (file_obj, link, physical_file, policy)
     :raises HTTPException: 验证失败
     """
-    file_obj = await Object.get(
+    file_obj = await Entry.get(
         session,
-        (Object.id == file_id) & (Object.deleted_at == None),
-        load=Object.physical_file,
+        (Entry.id == file_id) & (Entry.deleted_at == None),
+        load=Entry.physical_file,
     )
     if not file_obj:
         http_exceptions.raise_not_found("文件不存在")
@@ -1048,10 +1048,10 @@ async def file_content(
     - 400: 文件不是有效的 UTF-8 文本
     - 404: 文件不存在
     """
-    file_obj = await Object.get(
+    file_obj = await Entry.get(
         session,
-        (Object.id == file_id) & (Object.deleted_at == None),
-        load=Object.physical_file,
+        (Entry.id == file_id) & (Entry.deleted_at == None),
+        load=Entry.physical_file,
     )
     if not file_obj or file_obj.owner_id != user.id:
         http_exceptions.raise_not_found("文件不存在")
@@ -1118,10 +1118,10 @@ async def patch_file_content(
     - 409: base_hash 不匹配（并发冲突）
     - 422: 无效的 patch 格式或 patch 应用失败
     """
-    file_obj = await Object.get(
+    file_obj = await Entry.get(
         session,
-        (Object.id == file_id) & (Object.deleted_at == None),
-        load=Object.physical_file,
+        (Entry.id == file_id) & (Entry.deleted_at == None),
+        load=Entry.physical_file,
     )
     if not file_obj or file_obj.owner_id != user.id:
         http_exceptions.raise_not_found("文件不存在")
@@ -1245,9 +1245,9 @@ async def file_source(
     - 403: 存储策略未启用外链
     - 404: 文件不存在
     """
-    file_obj = await Object.get(
+    file_obj = await Entry.get(
         session,
-        (Object.id == file_id) & (Object.deleted_at == None),
+        (Entry.id == file_id) & (Entry.deleted_at == None),
     )
     if not file_obj or file_obj.owner_id != user.id:
         http_exceptions.raise_not_found("文件不存在")

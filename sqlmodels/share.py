@@ -8,7 +8,7 @@ from sqlmodel import Field, Relationship, UniqueConstraint, Index
 from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str64, Str128, Str255
 
 from .model_base import ResponseBase
-from .file import FileType
+from .file import EntryType
 
 if TYPE_CHECKING:
     from .user import User
@@ -107,8 +107,8 @@ class Share(SQLModelBase, UUIDTableBaseMixin):
     @property
     def is_dir(self) -> bool:
         """是否为目录分享（向后兼容属性）"""
-        from .file import FileType
-        return self.object.type == FileType.FOLDER if self.object else False
+        from .file import EntryType
+        return self.object.type == EntryType.FOLDER if self.object else False
 
 
 # ==================== DTO 模型 ====================
@@ -187,7 +187,7 @@ class ShareObjectItem(SQLModelBase):
     name: Str255
     """名称"""
 
-    type: FileType
+    type: EntryType
     """类型：file 或 folder"""
 
     size: int

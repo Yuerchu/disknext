@@ -11,7 +11,7 @@ from middleware.auth import admin_required
 from middleware.dependencies import SessionDep, TableViewRequestDep
 from sqlmodels import (
     JWTPayload, Policy, PolicyType, User, ListResponse,
-    File, FileType, AdminFileResponse, FileBanRequest, )
+    File, EntryType, AdminFileResponse, FileBanRequest, )
 from utils.storage import LocalStorageService
 
 async def _set_ban_recursive(
@@ -88,7 +88,7 @@ async def router_admin_get_file_list(
     :return: 分页文件列表
     """
     # 构建查询条件
-    conditions = [File.type == FileType.FILE]
+    conditions = [File.type == EntryType.FILE]
     if user_id:
         conditions.append(File.owner_id == user_id)
     if is_banned is not None:

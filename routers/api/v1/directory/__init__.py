@@ -12,7 +12,7 @@ from sqlmodels import (
     Group,
     File,
     FileResponse,
-    FileType,
+    EntryType,
     Policy,
     PolicyResponse,
     User,
@@ -51,7 +51,7 @@ async def _get_directory_response(
             name=child.name,
             thumb=False,
             size=child.size,
-            type=FileType.FOLDER if child.is_folder else FileType.FILE,
+            type=EntryType.FOLDER if child.is_folder else EntryType.FILE,
             created_at=child.created_at,
             updated_at=child.updated_at,
             source_enabled=False,
@@ -179,7 +179,7 @@ async def router_directory_create(
 
     new_folder = File(
         name=name,
-        type=FileType.FOLDER,
+        type=EntryType.FOLDER,
         owner_id=user.id,
         parent_id=parent_id,
         policy_id=policy_id,

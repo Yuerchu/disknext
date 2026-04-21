@@ -113,7 +113,7 @@ from main import app
 from utils.redis import RedisManager
 from sqlmodels.database_connection import DatabaseManager
 from sqlmodels.group import Group, GroupClaims
-from sqlmodels.file import File, FileType
+from sqlmodels.file import Entry, EntryType
 from sqlmodels.policy import Policy, PolicyType
 from sqlmodels.user import User, UserStatus
 import utils.conf.appmeta as appmeta
@@ -296,9 +296,9 @@ async def test_user(db_session: AsyncSession) -> dict[str, str | UUID]:
     )
     user = await user.save(db_session)
 
-    root_folder = File(
+    root_folder = Entry(
         name="/",
-        type=FileType.FOLDER,
+        type=EntryType.FOLDER,
         parent_id=None,
         owner_id=user.id,
         policy_id=policy.id,
@@ -365,9 +365,9 @@ async def admin_user(db_session: AsyncSession) -> dict[str, str | UUID]:
     )
     admin = await admin.save(db_session)
 
-    root_folder = File(
+    root_folder = Entry(
         name="/",
-        type=FileType.FOLDER,
+        type=EntryType.FOLDER,
         parent_id=None,
         owner_id=admin.id,
         policy_id=policy.id,
@@ -429,13 +429,13 @@ async def test_directory(
     user_id: UUID = test_user["id"]
     policy_id: UUID = test_user["policy_id"]
 
-    root = await File.get_root(db_session, user_id)
+    root = await Entry.get_root(db_session, user_id)
     if not root:
         raise ValueError("测试用户的根目录不存在")
 
-    documents = File(
+    documents = Entry(
         name="documents",
-        type=FileType.FOLDER,
+        type=EntryType.FOLDER,
         parent_id=root.id,
         owner_id=user_id,
         policy_id=policy_id,
@@ -443,9 +443,9 @@ async def test_directory(
     )
     documents = await documents.save(db_session)
 
-    images = File(
+    images = Entry(
         name="images",
-        type=FileType.FOLDER,
+        type=EntryType.FOLDER,
         parent_id=root.id,
         owner_id=user_id,
         policy_id=policy_id,
@@ -453,9 +453,9 @@ async def test_directory(
     )
     images = await images.save(db_session)
 
-    videos = File(
+    videos = Entry(
         name="videos",
-        type=FileType.FOLDER,
+        type=EntryType.FOLDER,
         parent_id=root.id,
         owner_id=user_id,
         policy_id=policy_id,
@@ -463,9 +463,9 @@ async def test_directory(
     )
     videos = await videos.save(db_session)
 
-    work = File(
+    work = Entry(
         name="work",
-        type=FileType.FOLDER,
+        type=EntryType.FOLDER,
         parent_id=documents.id,
         owner_id=user_id,
         policy_id=policy_id,
@@ -473,9 +473,9 @@ async def test_directory(
     )
     work = await work.save(db_session)
 
-    personal = File(
+    personal = Entry(
         name="personal",
-        type=FileType.FOLDER,
+        type=EntryType.FOLDER,
         parent_id=documents.id,
         owner_id=user_id,
         policy_id=policy_id,
@@ -532,9 +532,9 @@ async def minimal_setup(db_session: AsyncSession, faker: Faker) -> dict[str, obj
     )
     user = await user.save(db_session)
 
-    root = File(
+    root = Entry(
         name="/",
-        type=FileType.FOLDER,
+        type=EntryType.FOLDER,
         parent_id=None,
         owner_id=user.id,
         policy_id=policy.id,

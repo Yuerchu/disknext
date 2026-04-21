@@ -16,7 +16,7 @@ from sqlmodels import (
     ListResponse,
     File,
     FileResponse,
-    FileType,
+    EntryType,
     User,
 )
 
@@ -88,7 +88,7 @@ async def router_category_list(
         FileResponse(
             id=obj.id,
             name=obj.name,
-            type=FileType.FILE,
+            type=EntryType.FILE,
             size=obj.size,
             mime_type=obj.mime_type,
             thumb=False,

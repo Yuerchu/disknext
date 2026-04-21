@@ -17,7 +17,7 @@ from faker import Faker
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from sqlmodels.group import Group
-from sqlmodels.file import File, FileType
+from sqlmodels.file import Entry, EntryType
 from sqlmodels.physical_file import PhysicalFile
 from sqlmodels.policy import Policy, PolicyType
 from sqlmodels.user import User, UserStatus
@@ -33,9 +33,9 @@ async def _make_folder(
     name: str,
 ) -> File:
     """创建目录"""
-    folder = File(
+    folder = Entry(
         name=name,
-        type=FileType.FOLDER,
+        type=EntryType.FOLDER,
         parent_id=parent_id,
         owner_id=owner_id,
         policy_id=policy_id,
@@ -54,9 +54,9 @@ async def _make_file(
     physical_file_id: UUID | None = None,
 ) -> File:
     """创建文件"""
-    file = File(
+    file = Entry(
         name=name,
-        type=FileType.FILE,
+        type=EntryType.FILE,
         parent_id=parent_id,
         owner_id=owner_id,
         policy_id=policy_id,
@@ -86,7 +86,7 @@ async def _make_physical_file(
 # ==================== soft_delete_batch ====================
 
 class TestSoftDeleteBatch:
-    """File.soft_delete_batch() 测试"""
+    """Entry.soft_delete_batch() 测试"""
 
     @pytest.mark.asyncio
     async def test_empty_list(self, minimal_setup):
@@ -108,10 +108,10 @@ class TestSoftDeleteBatch:
         original_parent_id = file.parent_id
         assert original_parent_id == root.id
 
-        count = await File.soft_delete_batch(db_session, [file])
+        count = await Entry.soft_delete_batch(db_session, [file])
         assert count == 1
 
-        refreshed = await File.get(db_session, File.id == file.id)
+        refreshed = await Entry.get(db_session, Entry.id == file.id)
         assert refreshed.deleted_at is not None
         assert isinstance(refreshed.deleted_at, datetime)
         assert refreshed.parent_id is None
@@ -122,7 +122,7 @@ class TestSoftDeleteBatch:
         self, db_session: AsyncSession, minimal_setup
     ):
         """空列表直接返回 0，不触发任何数据库变更"""
-        count = await File.soft_delete_batch(db_session, [])
+        count = await Entry.soft_delete_batch(db_session, [])
         assert count == 0
 
     @pytest.mark.asyncio
@@ -141,11 +141,11 @@ class TestSoftDeleteBatch:
                 await _make_file(db_session, user.id, policy.id, root.id, name)
             )
 
-        count = await File.soft_delete_batch(db_session, files)
+        count = await Entry.soft_delete_batch(db_session, files)
         assert count == 10
 
         for f in files:
-            refreshed = await File.get(db_session, File.id == f.id)
+            refreshed = await Entry.get(db_session, Entry.id == f.id)
             assert refreshed.deleted_at is not None
             assert refreshed.parent_id is None
 
@@ -163,9 +163,9 @@ class TestSoftDeleteBatch:
             db_session, user.id, policy.id, folder.id, "child.txt"
         )
 
-        await File.soft_delete_batch(db_session, [folder])
+        await Entry.soft_delete_batch(db_session, [folder])
 
-        refreshed_child = await File.get(db_session, File.id == child_file.id)
+        refreshed_child = await Entry.get(db_session, Entry.id == child_file.id)
         assert refreshed_child.deleted_at is None
         assert refreshed_child.parent_id == folder.id
 
@@ -183,17 +183,17 @@ class TestSoftDeleteBatch:
             await _make_file(db_session, user.id, policy.id, root.id, f"f{i}.txt")
             for i in range(3)
         ]
-        await File.soft_delete_batch(db_session, files)
+        await Entry.soft_delete_batch(db_session, files)
 
         for f in files:
-            refreshed = await File.get(db_session, File.id == f.id)
+            refreshed = await Entry.get(db_session, Entry.id == f.id)
             assert refreshed.deleted_at >= before
 
 
 # ==================== _resolve_name_conflict ====================
 
 class TestResolveNameConflict:
-    """File._resolve_name_conflict() 测试"""
+    """Entry._resolve_name_conflict() 测试"""
 
     @pytest.mark.asyncio
     async def test_no_conflict_returns_original(
@@ -203,7 +203,7 @@ class TestResolveNameConflict:
         user = minimal_setup["user"]
         root = minimal_setup["root"]
 
-        result = await File._resolve_name_conflict(
+        result = await Entry._resolve_name_conflict(
             db_session, user.id, root.id, "unique_name.txt"
         )
         assert result == "unique_name.txt"
@@ -219,7 +219,7 @@ class TestResolveNameConflict:
 
         await _make_file(db_session, user.id, policy.id, root.id, "test.txt")
 
-        result = await File._resolve_name_conflict(
+        result = await Entry._resolve_name_conflict(
             db_session, user.id, root.id, "test.txt"
         )
         assert result == "test (1).txt"
@@ -237,7 +237,7 @@ class TestResolveNameConflict:
         await _make_file(db_session, user.id, policy.id, root.id, "report (1).pdf")
         await _make_file(db_session, user.id, policy.id, root.id, "report (2).pdf")
 
-        result = await File._resolve_name_conflict(
+        result = await Entry._resolve_name_conflict(
             db_session, user.id, root.id, "report.pdf"
         )
         assert result == "report (3).pdf"
@@ -253,7 +253,7 @@ class TestResolveNameConflict:
 
         await _make_file(db_session, user.id, policy.id, root.id, "LICENSE")
 
-        result = await File._resolve_name_conflict(
+        result = await Entry._resolve_name_conflict(
             db_session, user.id, root.id, "LICENSE"
         )
         assert result == "LICENSE (1)"
@@ -271,7 +271,7 @@ class TestResolveNameConflict:
             db_session, user.id, policy.id, root.id, "archive.tar.gz"
         )
 
-        result = await File._resolve_name_conflict(
+        result = await Entry._resolve_name_conflict(
             db_session, user.id, root.id, "archive.tar.gz"
         )
         # rsplit('.', 1) → "archive.tar" + "gz"
@@ -287,10 +287,10 @@ class TestResolveNameConflict:
         root = minimal_setup["root"]
 
         file = await _make_file(db_session, user.id, policy.id, root.id, "doc.txt")
-        await File.soft_delete_batch(db_session, [file])
+        await Entry.soft_delete_batch(db_session, [file])
 
         # 软删除后同名文件不再冲突
-        result = await File._resolve_name_conflict(
+        result = await Entry._resolve_name_conflict(
             db_session, user.id, root.id, "doc.txt"
         )
         assert result == "doc.txt"
@@ -310,7 +310,7 @@ class TestResolveNameConflict:
         await _make_file(db_session, user.id, policy.id, folder_a.id, "shared.txt")
 
         # folder_b 下应可以创建同名文件
-        result = await File._resolve_name_conflict(
+        result = await Entry._resolve_name_conflict(
             db_session, user.id, folder_b.id, "shared.txt"
         )
         assert result == "shared.txt"
@@ -339,7 +339,7 @@ class TestResolveNameConflict:
         await _make_file(db_session, user_a.id, policy.id, root_a.id, "data.csv")
 
         # user_b 根目录下的同名文件不冲突
-        result = await File._resolve_name_conflict(
+        result = await Entry._resolve_name_conflict(
             db_session, user_b.id, root_b.id, "data.csv"
         )
         assert result == "data.csv"
@@ -348,7 +348,7 @@ class TestResolveNameConflict:
 # ==================== restore_batch ====================
 
 class TestRestoreBatch:
-    """File.restore_batch() 测试"""
+    """Entry.restore_batch() 测试"""
 
     @pytest.mark.asyncio
     async def test_restore_to_original_parent(
@@ -362,15 +362,15 @@ class TestRestoreBatch:
         folder = await _make_folder(db_session, user.id, policy.id, root.id, "docs")
         file = await _make_file(db_session, user.id, policy.id, folder.id, "a.txt")
 
-        await File.soft_delete_batch(db_session, [file])
-        deleted = await File.get(db_session, File.id == file.id)
+        await Entry.soft_delete_batch(db_session, [file])
+        deleted = await Entry.get(db_session, Entry.id == file.id)
         assert deleted.parent_id is None
         assert deleted.deleted_original_parent_id == folder.id
 
-        count = await File.restore_batch(db_session, [deleted], user.id)
+        count = await Entry.restore_batch(db_session, [deleted], user.id)
         assert count == 1
 
-        restored = await File.get(db_session, File.id == file.id)
+        restored = await Entry.get(db_session, Entry.id == file.id)
         assert restored.deleted_at is None
         assert restored.deleted_original_parent_id is None
         assert restored.parent_id == folder.id
@@ -387,15 +387,15 @@ class TestRestoreBatch:
         folder = await _make_folder(db_session, user.id, policy.id, root.id, "temp")
         file = await _make_file(db_session, user.id, policy.id, folder.id, "b.txt")
 
-        await File.soft_delete_batch(db_session, [file])
+        await Entry.soft_delete_batch(db_session, [file])
 
         # 硬删除原父目录
-        await File.delete(db_session, condition=File.id == folder.id)
+        await Entry.delete(db_session, condition=Entry.id == folder.id)
 
-        deleted = await File.get(db_session, File.id == file.id)
-        await File.restore_batch(db_session, [deleted], user.id)
+        deleted = await Entry.get(db_session, Entry.id == file.id)
+        await Entry.restore_batch(db_session, [deleted], user.id)
 
-        restored = await File.get(db_session, File.id == file.id)
+        restored = await Entry.get(db_session, Entry.id == file.id)
         assert restored.parent_id == root.id
         assert restored.deleted_at is None
 
@@ -411,17 +411,17 @@ class TestRestoreBatch:
         file1 = await _make_file(
             db_session, user.id, policy.id, root.id, "collide.txt"
         )
-        await File.soft_delete_batch(db_session, [file1])
+        await Entry.soft_delete_batch(db_session, [file1])
 
         # 软删除后在原位置创建同名文件
         await _make_file(
             db_session, user.id, policy.id, root.id, "collide.txt"
         )
 
-        deleted = await File.get(db_session, File.id == file1.id)
-        await File.restore_batch(db_session, [deleted], user.id)
+        deleted = await Entry.get(db_session, Entry.id == file1.id)
+        await Entry.restore_batch(db_session, [deleted], user.id)
 
-        restored = await File.get(db_session, File.id == file1.id)
+        restored = await Entry.get(db_session, Entry.id == file1.id)
         assert restored.name == "collide (1).txt"
         assert restored.deleted_at is None
         assert restored.parent_id == root.id
@@ -437,7 +437,7 @@ class TestRestoreBatch:
 
         file = await _make_file(db_session, user.id, policy.id, root.id, "x.txt")
 
-        count = await File.restore_batch(db_session, [file], user.id)
+        count = await Entry.restore_batch(db_session, [file], user.id)
         assert count == 0
 
     @pytest.mark.asyncio
@@ -458,9 +458,9 @@ class TestRestoreBatch:
         orphan = await orphan.save(db_session)
 
         # 创建一个假的"已软删除"对象
-        obj = File(
+        obj = Entry(
             name="ghost.txt",
-            type=FileType.FILE,
+            type=EntryType.FILE,
             owner_id=orphan.id,
             policy_id=policy.id,
             parent_id=None,
@@ -469,13 +469,13 @@ class TestRestoreBatch:
         obj = await obj.save(db_session)
 
         with pytest.raises(ValueError, match="用户根目录不存在"):
-            await File.restore_batch(db_session, [obj], orphan.id)
+            await Entry.restore_batch(db_session, [obj], orphan.id)
 
 
 # ==================== copy_recursive ====================
 
 class TestCopyRecursive:
-    """File.copy_recursive() 测试"""
+    """Entry.copy_recursive() 测试"""
 
     @pytest.mark.asyncio
     async def test_copy_single_file(
@@ -508,7 +508,7 @@ class TestCopyRecursive:
         assert pf_refreshed.reference_count == 2
 
         # 新 File 存在且指向同一 PhysicalFile
-        new_obj = await File.get(db_session, File.id == new_ids[0])
+        new_obj = await Entry.get(db_session, Entry.id == new_ids[0])
         assert new_obj is not None
         assert new_obj.physical_file_id == pf.id
         assert new_obj.parent_id == dst_folder.id
@@ -588,7 +588,7 @@ class TestCopyRecursive:
 
         _, new_ids, _ = await src.copy_recursive(db_session, dst.id, user.id)
 
-        new_obj = await File.get(db_session, File.id == new_ids[0])
+        new_obj = await Entry.get(db_session, Entry.id == new_ids[0])
         assert new_obj.name == "keep_name.doc"
         assert new_obj.policy_id == policy.id
 

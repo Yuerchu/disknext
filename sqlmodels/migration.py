@@ -155,7 +155,7 @@ async def init_default_group() -> None:
 async def init_default_user() -> None:
     from .user import User
     from .group import Group
-    from .file import File, FileType
+    from .file import Entry, EntryType
     from .policy import Policy
     from .server_config import ServerConfig
     from .database_connection import DatabaseManager
@@ -202,7 +202,7 @@ async def init_default_user() -> None:
             # 为管理员创建根目录
             await File(
                 name="/",
-                type=FileType.FOLDER,
+                type=EntryType.FOLDER,
                 owner_id=admin_user_id,
                 parent_id=None,
                 policy_id=default_policy_id,

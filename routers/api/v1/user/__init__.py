@@ -213,9 +213,9 @@ async def _auto_register_oauth_user(
     # 创建用户根目录
     default_policy = await sqlmodels.Policy.get(session, sqlmodels.Policy.name == "本地存储")
     if default_policy:
-        await sqlmodels.File(
+        await sqlmodels.Entry(
             name="/",
-            type=sqlmodels.FileType.FOLDER,
+            type=sqlmodels.EntryType.FOLDER,
             owner_id=new_user_id,
             parent_id=None,
             policy_id=default_policy.id,
@@ -503,9 +503,9 @@ async def router_user_register(
         http_exceptions.raise_internal_error()
     default_policy = default_group.policies[0]
 
-    await sqlmodels.File(
+    await sqlmodels.Entry(
         name="/",
-        type=sqlmodels.FileType.FOLDER,
+        type=sqlmodels.EntryType.FOLDER,
         owner_id=new_user_id,
         parent_id=None,
         policy_id=default_policy.id,
