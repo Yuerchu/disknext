@@ -159,11 +159,37 @@ async def router_directory_create(
     :param request: 创建请求（包含 parent_id UUID 和 name）
     :return: 创建结果
     """
-    name = Entry.validate_name(request.name)
-    parent = await Entry.validate_parent(session, request.parent_id, user.id)
-    await Entry.check_name_conflict(session, user.id, parent.id, name)
+    user_id = user.id
+    name = request.name.strip()
+
+    if not name or '/' in name or '\\' in name:
+        raise HTTPException(status_code=400, detail="无效的目录名")
+
+    parent = await Entry.get(
+        session,
+        (Entry.id == request.parent_id) & (Entry.deleted_at == None)
+    )
+    if not parent or parent.owner_id != user_id:
+        raise HTTPException(status_code=404, detail="父目录不存在")
+
+    if not parent.is_folder:
+        raise HTTPException(status_code=400, detail="父对象不是目录")
+
+    if parent.is_banned:
+        http_exceptions.raise_banned("目标目录已被封禁，无法执行此操作")
+
+    existing = await Entry.get(
+        session,
+        (Entry.owner_id == user_id) &
+        (Entry.parent_id == parent.id) &
+        (Entry.name == name) &
+        (Entry.deleted_at == None)
+    )
+    if existing:
+        raise HTTPException(status_code=409, detail="同名目录已存在")
 
     policy_id = request.policy_id if request.policy_id else parent.policy_id
+    await Policy.get_exist_one(session, policy_id)
 
     # 校验用户组是否有权使用该策略（仅当用户显式指定 policy_id 时）
     if request.policy_id:
@@ -180,7 +206,7 @@ async def router_directory_create(
     new_folder = Entry(
         name=name,
         type=EntryType.FOLDER,
-        owner_id=user.id,
+        owner_id=user_id,
         parent_id=parent_id,
         policy_id=policy_id,
     )

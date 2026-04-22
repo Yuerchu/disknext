@@ -31,6 +31,7 @@ async def _set_ban_recursive(
     :param reason: 封禁原因
     :return: 受影响的对象数量
     """
+    # [TODO] 效率太低了
     count = 0
 
     # 如果是文件夹，先递归处理子对象

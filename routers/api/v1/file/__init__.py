@@ -1118,23 +1118,20 @@ async def file_source(
     if not policy.is_origin_link_enable:
         http_exceptions.raise_forbidden("当前存储策略未启用外链功能")
 
-    # 缓存文件名（save 后对象属性会过期）
-    file_name = file_obj.name
-
     # 查找已有 SourceLink
     link: SourceLink | None = await SourceLink.get(
         session,
-        (SourceLink.object_id == file_id) & (SourceLink.name == file_name),
+        (SourceLink.object_id == file_id) & (SourceLink.name == file_obj.name),
     )
     if not link:
         link = SourceLink(
-            name=file_name,
+            name=file_obj.name,
             object_id=file_id,
         )
         link = await link.save(session)
 
     site_url = config.site_url
-    url = f"{site_url}/api/v1/file/source/{file_id}/{file_name}"
+    url = f"{site_url}/api/v1/file/source/{file_id}/{file_obj.name}"
 
     return SourceLinkResponse(url=url, downloads=link.downloads)
 

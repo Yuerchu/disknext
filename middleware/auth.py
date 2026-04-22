@@ -2,6 +2,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import Depends
+from sqlmodel_ext import rel
 import jwt
 
 from sqlmodels.user import JWTPayload, User, UserStatus
@@ -70,7 +71,7 @@ async def auth_required(
     claims: Annotated[JWTPayload, Depends(jwt_required)],
 ) -> User:
     """验证 JWT + 从数据库加载完整 User（含 group 关系）"""
-    user = await User.get(session, User.id == claims.sub, load=User.group)
+    user = await User.get(session, User.id == claims.sub, load=rel(User.group))
     if not user:
         http_exceptions.raise_unauthorized("用户不存在")
     return user

@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from loguru import logger
 from sqlmodel.ext.asyncio.session import AsyncSession
+from sqlmodel_ext import rel, cond
 from webauthn import (
     generate_authentication_options,
     generate_registration_options,
@@ -69,7 +70,7 @@ async def _login_email_password(
     if not request.credential:
         http_exceptions.raise_bad_request("密码不能为空")
 
-    user: User | None = await User.get(session, User.email == request.identifier, load=User.group)
+    user: User | None = await User.get(session, cond(User.email == request.identifier), load=rel(User.group))
     if not user or not user.password_hash:
         logger.debug(f"未找到邮箱密码身份: {request.identifier}")
         http_exceptions.raise_unauthorized("邮箱或密码错误")
@@ -149,9 +150,9 @@ async def _login_oauth(
 
     # 按 provider 查找已绑定的用户
     if provider == AuthProviderType.GITHUB:
-        user: User | None = await User.get(session, User.github_id == openid, load=User.group)
+        user: User | None = await User.get(session, cond(User.github_id == openid), load=rel(User.group))
     elif provider == AuthProviderType.QQ:
-        user: User | None = await User.get(session, User.qq_id == openid, load=User.group)
+        user: User | None = await User.get(session, cond(User.qq_id == openid), load=rel(User.group))
     else:
         http_exceptions.raise_bad_request(f"不支持的 OAuth 提供者: {provider.value}")
 
@@ -222,7 +223,7 @@ async def _auto_register_oauth_user(
         ).save(session)
 
     # 重新加载用户（含 group 关系）
-    user: User = await User.get(session, User.id == new_user_id, load=User.group)
+    user: User = await User.get_exist_one(session, new_user_id, load=rel(User.group))
     logger.info(f"OAuth 自动注册用户: provider={provider.value}, openid={openid}")
     return user
 
@@ -284,9 +285,7 @@ async def _login_passkey(
     authn = await authn.save(session)
 
     # 加载用户
-    user: User = await User.get(session, User.id == authn.user_id, load=User.group)
-    if not user:
-        http_exceptions.raise_unauthorized("用户不存在")
+    user: User = await User.get_exist_one(session, authn.user_id, load=rel(User.group))
     if user.status != UserStatus.ACTIVE:
         http_exceptions.raise_forbidden("账户已被禁用")
 
@@ -317,9 +316,7 @@ async def _login_magic_link(
     if not is_first_use:
         http_exceptions.raise_unauthorized("Magic Link 已被使用")
 
-    user: User | None = await User.get(session, User.email == email, load=User.group)
-    if not user:
-        http_exceptions.raise_unauthorized("该邮箱未注册")
+    user: User = await User.get_exist_one(session, User.email == email, load=rel(User.group))
     if user.status != UserStatus.ACTIVE:
         http_exceptions.raise_forbidden("账户已被禁用")
 
@@ -410,9 +407,7 @@ async def router_user_session_refresh(
     if not user_id_str:
         http_exceptions.raise_unauthorized("令牌缺少用户标识")
 
-    user = await User.get(session, User.id == UUID(user_id_str), load=User.group)
-    if not user:
-        http_exceptions.raise_unauthorized("用户不存在")
+    user: User = await User.get_exist_one(session, UUID(user_id_str), load=rel(User.group))
 
     if user.status != UserStatus.ACTIVE:
         http_exceptions.raise_forbidden("账户已被禁用")
