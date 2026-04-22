@@ -776,8 +776,7 @@ class Entry(EntryBase, UUIDTableBaseMixin):
         from .physical_file import PhysicalFile
         from .policy import Policy
         from .user import User
-        from utils.storage.local_storage import LocalStorageService
-        from utils.storage.s3_storage import S3StorageService
+        from utils.storage.factory import create_storage_driver
 
         total_deleted = 0
 
@@ -804,12 +803,8 @@ class Entry(EntryBase, UUIDTableBaseMixin):
                     policy = await Policy.get(session, Policy.id == physical_file.policy_id)
                     if policy:
                         try:
-                            if policy.type == PolicyType.LOCAL:
-                                storage_service = LocalStorageService(policy)
-                                await storage_service.delete_file(physical_file.storage_path)
-                            elif policy.type == PolicyType.S3:
-                                s3_service = await S3StorageService.from_policy(policy)
-                                await s3_service.delete_file(physical_file.storage_path)
+                            driver = create_storage_driver(policy)
+                            await driver.delete(physical_file.storage_path)
                             l.debug(f"物理文件已删除: {obj_name}")
                         except Exception as e:
                             l.warning(f"物理删除文件失败: {obj_name}, 错误: {e}")
@@ -856,8 +851,7 @@ class Entry(EntryBase, UUIDTableBaseMixin):
         from .physical_file import PhysicalFile
         from .policy import Policy
         from .user import User
-        from utils.storage.local_storage import LocalStorageService
-        from utils.storage.s3_storage import S3StorageService
+        from utils.storage.factory import create_storage_driver
 
         # 阶段一：只读收集
         root_id = self.id
@@ -894,17 +888,8 @@ class Entry(EntryBase, UUIDTableBaseMixin):
                 policy = await Policy.get(session, Policy.id == physical_file.policy_id)
                 if policy:
                     try:
-                        if policy.type == PolicyType.LOCAL:
-                            storage_service = LocalStorageService(policy)
-                            await storage_service.delete_file(physical_file.storage_path)
-                        elif policy.type == PolicyType.S3:
-                            options = await policy.awaitable_attrs.options
-                            s3_service = S3StorageService(
-                                policy,
-                                region=options.s3_region if options else 'us-east-1',
-                                is_path_style=options.s3_path_style if options else False,
-                            )
-                            await s3_service.delete_file(physical_file.storage_path)
+                        driver = create_storage_driver(policy)
+                        await driver.delete(physical_file.storage_path)
                         l.debug(f"物理文件已删除: {obj_name}")
                     except Exception as e:
                         l.warning(f"物理删除文件失败: {obj_name}, 错误: {e}")
@@ -1019,8 +1004,7 @@ class Entry(EntryBase, UUIDTableBaseMixin):
         """
         from .physical_file import PhysicalFile
         from .policy import Policy
-        from utils.storage.local_storage import LocalStorageService
-        from utils.storage.s3_storage import S3StorageService
+        from utils.storage.factory import create_storage_driver
 
         if self.type != EntryType.FILE:
             raise ValueError(f"只能迁移文件对象，当前类型: {self.type}")
@@ -1036,32 +1020,19 @@ class Entry(EntryBase, UUIDTableBaseMixin):
             l.debug(f"文件 {self.id} 已在目标策略中，跳过")
             return
 
-        # 1. 创建存储服务
-        if src_policy.type == PolicyType.LOCAL:
-            src_service: LocalStorageService | S3StorageService = LocalStorageService(src_policy)
-        else:
-            src_service = await S3StorageService.from_policy(src_policy)
-
-        if dest_policy.type == PolicyType.LOCAL:
-            dest_service: LocalStorageService | S3StorageService = LocalStorageService(dest_policy)
-        else:
-            dest_service = await S3StorageService.from_policy(dest_policy)
+        # 1. 创建存储驱动
+        src_driver = create_storage_driver(src_policy)
+        dest_driver = create_storage_driver(dest_policy)
 
         # 2. 从源存储读取文件
-        if isinstance(src_service, LocalStorageService):
-            data = await src_service.read_file(old_physical.storage_path)
-        else:
-            data = await src_service.download_file(old_physical.storage_path)
+        data = await src_driver.read(old_physical.storage_path)
 
         # 3. 在目标存储生成新路径并写入
-        _dir_path, _storage_name, new_storage_path = await dest_service.generate_file_path(
+        _dir_path, _storage_name, new_storage_path = await dest_driver.generate_path(
             user_id=self.owner_id,
             original_filename=self.name,
         )
-        if isinstance(dest_service, LocalStorageService):
-            await dest_service.write_file(new_storage_path, data)
-        else:
-            await dest_service.upload_file(new_storage_path, data)
+        await dest_driver.write(new_storage_path, data)
 
         # 4. 创建新的 PhysicalFile
         new_physical = PhysicalFile(
@@ -1082,10 +1053,7 @@ class Entry(EntryBase, UUIDTableBaseMixin):
         old_physical.decrement_reference()
         if old_physical.can_be_deleted:
             try:
-                if isinstance(src_service, LocalStorageService):
-                    await src_service.delete_file(old_physical.storage_path)
-                else:
-                    await src_service.delete_file(old_physical.storage_path)
+                await src_driver.delete(old_physical.storage_path)
             except Exception as e:
                 l.warning(f"删除源文件失败（不影响迁移结果）: {old_physical.storage_path}: {e}")
             await PhysicalFile.delete(session, old_physical)

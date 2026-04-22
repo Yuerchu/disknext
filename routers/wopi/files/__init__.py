@@ -13,8 +13,8 @@ from fastapi.responses import JSONResponse
 from loguru import logger as l
 
 from middleware.dependencies import SessionDep
-from sqlmodels import Entry, PhysicalFile, Policy, PolicyType, User, WopiFileInfo
-from utils.storage import LocalStorageService
+from sqlmodels import Entry, PhysicalFile, Policy, User, WopiFileInfo
+from utils.storage import create_storage_driver
 from utils import http_exceptions
 from utils.JWT.wopi_token import verify_wopi_token
 
@@ -108,22 +108,17 @@ async def get_file(
     if not policy:
         http_exceptions.raise_internal_error("存储策略不存在")
 
-    if policy.type == PolicyType.LOCAL:
-        storage_service = LocalStorageService(policy)
-        if not await storage_service.file_exists(physical_file.storage_path):
-            http_exceptions.raise_not_found("物理文件不存在")
+    driver = create_storage_driver(policy)
+    if not await driver.exists(physical_file.storage_path):
+        http_exceptions.raise_not_found("物理文件不存在")
 
-        import aiofiles
-        async with aiofiles.open(physical_file.storage_path, 'rb') as f:
-            content = await f.read()
+    content = await driver.read(physical_file.storage_path)
 
-        return Response(
-            content=content,
-            media_type="application/octet-stream",
-            headers={"X-WOPI-ItemVersion": file_obj.updated_at.isoformat() if file_obj.updated_at else ""},
-        )
-    else:
-        http_exceptions.raise_not_implemented("S3 存储暂未实现")
+    return Response(
+        content=content,
+        media_type="application/octet-stream",
+        headers={"X-WOPI-ItemVersion": file_obj.updated_at.isoformat() if file_obj.updated_at else ""},
+    )
 
 
 @wopi_files_router.post(
@@ -170,36 +165,32 @@ async def put_file(
     # 读取请求体
     content = await request.body()
 
-    if policy.type == PolicyType.LOCAL:
-        import aiofiles
-        async with aiofiles.open(physical_file.storage_path, 'wb') as f:
-            await f.write(content)
+    driver = create_storage_driver(policy)
+    await driver.write(physical_file.storage_path, content)
 
-        # 更新文件大小
-        new_size = len(content)
-        old_size = file_obj.size or 0
-        file_obj.size = new_size
-        file_obj = await file_obj.save(session, commit=False)
+    # 更新文件大小
+    new_size = len(content)
+    old_size = file_obj.size or 0
+    file_obj.size = new_size
+    file_obj = await file_obj.save(session, commit=False)
 
-        # 更新物理文件大小
-        physical_file.size = new_size
-        await physical_file.save(session, commit=False)
+    # 更新物理文件大小
+    physical_file.size = new_size
+    await physical_file.save(session, commit=False)
 
-        # 更新用户存储配额
-        size_diff = new_size - old_size
-        if size_diff != 0:
-            from sqlmodels.user import User
-            owner = await User.get(session, User.id == file_obj.owner_id)
-            if owner:
-                await owner.adjust_storage(session, size_diff, commit=False)
+    # 更新用户存储配额
+    size_diff = new_size - old_size
+    if size_diff != 0:
+        from sqlmodels.user import User
+        owner = await User.get(session, User.id == file_obj.owner_id)
+        if owner:
+            await owner.adjust_storage(session, size_diff, commit=False)
 
-        await session.commit()
+    await session.commit()
 
-        l.info(f"WOPI PutFile: file_id={file_id}, new_size={new_size}")
+    l.info(f"WOPI PutFile: file_id={file_id}, new_size={new_size}")
 
-        return JSONResponse(
-            content={"ItemVersion": file_obj.updated_at.isoformat() if file_obj.updated_at else ""},
-            status_code=200,
-        )
-    else:
-        http_exceptions.raise_not_implemented("S3 存储暂未实现")
+    return JSONResponse(
+        content={"ItemVersion": file_obj.updated_at.isoformat() if file_obj.updated_at else ""},
+        status_code=200,
+    )

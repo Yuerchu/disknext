@@ -20,7 +20,7 @@ from wsgidav.dav_error import (
 )
 from wsgidav.dav_provider import DAVCollection, DAVNonCollection, DAVProvider
 
-from utils.storage import LocalStorageService
+from utils.storage import create_storage_driver
 from sqlmodels.database_connection import DatabaseManager
 from sqlmodels.file import Entry, EntryType
 from sqlmodels.physical_file import PhysicalFile
@@ -541,9 +541,9 @@ class DiskNextFile(DAVNonCollection):
         if not policy or not policy.server:
             raise DAVError(HTTP_NOT_FOUND, "存储策略不存在")
 
-        storage_service = LocalStorageService(policy)
+        driver = create_storage_driver(policy)
         dir_path, storage_name, full_path = _run_async(
-            storage_service.generate_file_path(
+            driver.generate_path(
                 user_id=self._user_id,
                 original_filename=self._obj.name,
             )

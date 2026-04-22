@@ -8,7 +8,7 @@ from routers import router
 from routers.dav import dav_app
 from routers.dav.provider import EventLoopRef
 from utils.redis import RedisManager
-from utils.storage import S3StorageService
+from utils.storage import S3StorageDriver
 from sqlmodels.database_connection import DatabaseManager
 from sqlmodels.migration import migration
 from utils.conf import appmeta
@@ -51,10 +51,10 @@ lifespan.add_startup(EventLoopRef.capture)
 lifespan.add_startup(_init_db)
 lifespan.add_startup(migration)
 lifespan.add_startup(RedisManager.connect)
-lifespan.add_startup(S3StorageService.initialize_session)
+lifespan.add_startup(S3StorageDriver.initialize_session)
 
 # 添加关闭项
-lifespan.add_shutdown(S3StorageService.close_session)
+lifespan.add_shutdown(S3StorageDriver.close_session)
 lifespan.add_shutdown(DatabaseManager.close)
 lifespan.add_shutdown(RedisManager.disconnect)
 

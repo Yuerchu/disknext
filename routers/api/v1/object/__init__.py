@@ -41,7 +41,7 @@ from sqlmodels import (
     INTERNAL_NAMESPACES,
     USER_WRITABLE_NAMESPACES,
 )
-from utils.storage import LocalStorageService, migrate_file_with_task, migrate_directory_files
+from utils.storage import create_storage_driver, migrate_file_with_task, migrate_directory_files
 from sqlmodels.database_connection import DatabaseManager
 from utils import http_exceptions
 
@@ -110,16 +110,12 @@ async def router_object_create(
     parent_id = parent.id
 
     # 生成存储路径并创建空文件
-    if policy.type == PolicyType.LOCAL:
-        storage_service = LocalStorageService(policy)
-        dir_path, storage_name, full_path = await storage_service.generate_file_path(
-            user_id=user_id,
-            original_filename=request.name,
-        )
-        await storage_service.create_empty_file(full_path)
-        storage_path = full_path
-    else:
-        raise HTTPException(status_code=501, detail="S3 存储暂未实现")
+    driver = create_storage_driver(policy)
+    _dir_path, _storage_name, storage_path = await driver.generate_path(
+        user_id=user_id,
+        original_filename=request.name,
+    )
+    await driver.create_empty(storage_path)
 
     # 创建 PhysicalFile 记录
     physical_file = PhysicalFile(

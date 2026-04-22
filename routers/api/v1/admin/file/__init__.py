@@ -3,16 +3,16 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 from loguru import logger as l
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from middleware.auth import admin_required
 from middleware.dependencies import SessionDep, TableViewRequestDep
 from sqlmodels import (
-    JWTPayload, Policy, PolicyType, User, ListResponse,
+    JWTPayload, Policy, User, ListResponse,
     Entry, EntryType, AdminFileResponse, FileBanRequest, )
-from utils.storage import LocalStorageService
+from utils.storage import create_storage_driver
 
 async def _set_ban_recursive(
     session: AsyncSession,
@@ -123,7 +123,7 @@ async def router_admin_get_file_list(
 async def router_admin_preview_file(
     session: SessionDep,
     file_id: UUID,
-) -> FileResponse:
+) -> Response:
     """
     管理员预览文件内容。
 
@@ -145,17 +145,11 @@ async def router_admin_preview_file(
     if not policy:
         raise HTTPException(status_code=500, detail="存储策略不存在")
 
-    if policy.type == PolicyType.LOCAL:
-        storage_service = LocalStorageService(policy)
-        if not await storage_service.file_exists(physical_file.storage_path):
-            raise HTTPException(status_code=404, detail="物理文件不存在")
+    driver = create_storage_driver(policy)
+    if not await driver.exists(physical_file.storage_path):
+        raise HTTPException(status_code=404, detail="物理文件不存在")
 
-        return FileResponse(
-            path=physical_file.storage_path,
-            filename=file_obj.name,
-        )
-    else:
-        raise HTTPException(status_code=501, detail="S3 存储暂未实现")
+    return (await driver.get_download_result(physical_file.storage_path, file_obj.name)).to_response()
 
 
 @admin_file_router.patch(
@@ -222,10 +216,10 @@ async def router_admin_delete_file(
         physical_file = await file_obj.awaitable_attrs.physical_file
         if physical_file and physical_file.storage_path:
             policy = await Policy.get(session, Policy.id == file_obj.policy_id)
-            if policy and policy.type == PolicyType.LOCAL:
+            if policy:
                 try:
-                    storage_service = LocalStorageService(policy)
-                    await storage_service.delete_file(physical_file.storage_path)
+                    driver = create_storage_driver(policy)
+                    await driver.delete(physical_file.storage_path)
                 except Exception as e:
                     l.warning(f"删除物理文件失败: {e}")
 

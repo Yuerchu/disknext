@@ -11,7 +11,7 @@ from sqlmodels import (
     PolicyUpdateRequest, ResponseBase, ListResponse, Entry,
 )
 from sqlmodel_ext import SQLModelBase
-from utils.storage import DirectoryCreationError, LocalStorageService, S3StorageService
+from utils.storage import DirectoryCreationError, create_storage_driver, S3StorageDriver
 
 admin_policy_router = APIRouter(
     prefix='/policy',
@@ -304,14 +304,12 @@ async def router_policy_add_policy(
     # 创建策略对象（所有字段已合并到 Policy 表）
     policy = Policy.model_validate(request, from_attributes=True)
 
-    # 对于本地存储策略，创建物理目录
-    if policy.type == PolicyType.LOCAL:
-        try:
-            storage_service = LocalStorageService(policy)
-            await storage_service.ensure_base_directory()
-            l.info(f"已为本地存储策略 '{policy.name}' 创建目录: {policy.server}")
-        except DirectoryCreationError as e:
-            raise HTTPException(status_code=500, detail=f"创建存储目录失败: {e}")
+    # 确保存储后端基础设施就绪（Local 创建目录，S3 no-op）
+    try:
+        driver = create_storage_driver(policy)
+        await driver.ensure_base_directory()
+    except DirectoryCreationError as e:
+        raise HTTPException(status_code=500, detail=f"创建存储目录失败: {e}")
 
     policy = await policy.save(session)
 
@@ -501,7 +499,7 @@ async def router_policy_test_s3(
     """
     from utils.storage import S3APIError
 
-    # 构造临时 Policy 对象用于创建 S3StorageService
+    # 构造临时 Policy 对象用于创建 S3StorageDriver
     temp_policy = Policy(
         name="__test__",
         type=PolicyType.S3,
@@ -509,16 +507,14 @@ async def router_policy_test_s3(
         bucket_name=request.bucket_name,
         access_key=request.access_key,
         secret_key=request.secret_key,
+        s3_region=request.s3_region,
+        s3_path_style=request.s3_path_style,
     )
-    s3_service = S3StorageService(
-        temp_policy,
-        region=request.s3_region,
-        is_path_style=request.s3_path_style,
-    )
+    s3_driver = S3StorageDriver(temp_policy)
 
     try:
-        # 使用 file_exists 发送 HEAD 请求来验证连通性
-        await s3_service.file_exists("__connection_test__")
+        # 使用 exists 发送 HEAD 请求来验证连通性
+        await s3_driver.exists("__connection_test__")
         return PolicyTestS3Response(is_connected=True, message="连接成功")
     except S3APIError as e:
         return PolicyTestS3Response(is_connected=False, message=f"S3 API 错误: {e}")

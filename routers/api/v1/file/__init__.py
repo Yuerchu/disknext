@@ -16,7 +16,6 @@ from uuid import UUID
 import orjson
 import whatthepatch
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
-from fastapi.responses import FileResponse, RedirectResponse
 from starlette.responses import Response
 from loguru import logger as l
 from sqlmodel_ext import SQLModelBase
@@ -35,7 +34,6 @@ from sqlmodels import (
     EntryType,
     PhysicalFile,
     Policy,
-    PolicyType,
     ResponseBase,
     SourceLink,
     UploadChunkResponse,
@@ -44,9 +42,8 @@ from sqlmodels import (
     User,
     WopiSessionResponse,
 )
-import orjson
 
-from utils.storage import LocalStorageService, S3StorageService
+from utils.storage import create_storage_driver, UploadContext
 from utils.JWT import create_download_token, DOWNLOAD_TOKEN_TTL
 from utils.JWT.wopi_token import create_wopi_token
 from utils import http_exceptions
@@ -202,35 +199,17 @@ async def create_upload_session(
         raise HTTPException(status_code=409, detail="同名文件已存在")
 
     # 计算分片信息
-    options = await policy.awaitable_attrs.options
-    chunk_size = options.chunk_size if options else 52428800  # 默认 50MB
+    chunk_size = policy.chunk_size
     total_chunks = max(1, (request.file_size + chunk_size - 1) // chunk_size) if request.file_size > 0 else 1
 
-    # 生成存储路径
-    storage_path: str | None = None
-    s3_upload_id: str | None = None
-    if policy.type == PolicyType.LOCAL:
-        storage_service = LocalStorageService(policy)
-        dir_path, storage_name, full_path = await storage_service.generate_file_path(
-            user_id=user.id,
-            original_filename=request.file_name,
-        )
-        storage_path = full_path
-    elif policy.type == PolicyType.S3:
-        s3_service = S3StorageService(
-            policy,
-            region=options.s3_region if options else 'us-east-1',
-            is_path_style=options.s3_path_style if options else False,
-        )
-        dir_path, storage_name, storage_path = await s3_service.generate_file_path(
-            user_id=user.id,
-            original_filename=request.file_name,
-        )
-        # 多分片时创建 multipart upload
-        if total_chunks > 1:
-            s3_upload_id = await s3_service.create_multipart_upload(
-                storage_path, content_type='application/octet-stream',
-            )
+    # 生成存储路径 + 初始化上传
+    driver = create_storage_driver(policy)
+    _dir_path, _storage_name, storage_path = await driver.generate_path(
+        user_id=user.id,
+        original_filename=request.file_name,
+    )
+    upload_ctx = await driver.init_upload(storage_path, request.file_size, chunk_size)
+    s3_upload_id = upload_ctx.s3_upload_id
 
     # 预扣存储空间（与创建会话在同一事务中提交，防止并发绕过配额）
     if request.file_size > 0:
@@ -308,49 +287,22 @@ async def upload_chunk(
     content = await file.read()
 
     # 写入分片
-    if policy.type == PolicyType.LOCAL:
-        if not upload_session.storage_path:
-            raise HTTPException(status_code=500, detail="存储路径丢失")
+    if not upload_session.storage_path:
+        raise HTTPException(status_code=500, detail="存储路径丢失")
 
-        storage_service = LocalStorageService(policy)
-        offset = chunk_index * upload_session.chunk_size
-        await storage_service.write_file_chunk(
-            upload_session.storage_path,
-            content,
-            offset,
-        )
-    elif policy.type == PolicyType.S3:
-        if not upload_session.storage_path:
-            raise HTTPException(status_code=500, detail="存储路径丢失")
+    driver = create_storage_driver(policy)
+    upload_ctx = UploadContext(
+        path=upload_session.storage_path,
+        total_size=upload_session.file_size,
+        chunk_size=upload_session.chunk_size,
+        s3_upload_id=upload_session.s3_upload_id,
+        s3_part_etags=orjson.loads(upload_session.s3_part_etags or '[]'),
+    )
+    chunk_result = await driver.upload_chunk(upload_ctx, chunk_index, content)
 
-        s3_service = await S3StorageService.from_policy(policy)
-
-        if upload_session.total_chunks == 1:
-            # 单分片：直接 PUT 上传
-            await s3_service.upload_file(upload_session.storage_path, content)
-        else:
-            # 多分片：UploadPart
-            if not upload_session.s3_upload_id:
-                raise HTTPException(status_code=500, detail="S3 分片上传 ID 丢失")
-
-            etag = await s3_service.upload_part(
-                upload_session.storage_path,
-                upload_session.s3_upload_id,
-                chunk_index + 1,  # S3 part number 从 1 开始
-                content,
-            )
-            # 追加 ETag 到 s3_part_etags
-            etags: list[list[int | str]] = orjson.loads(upload_session.s3_part_etags or '[]')
-            etags.append([chunk_index + 1, etag])
-            upload_session.s3_part_etags = orjson.dumps(etags).decode()
-
-    # 在 save（commit）前缓存后续需要的属性（commit 后 ORM 对象会过期）
-    policy_type = policy.type
-    s3_upload_id = upload_session.s3_upload_id
-    s3_part_etags = upload_session.s3_part_etags
-    s3_service_for_complete: S3StorageService | None = None
-    if policy_type == PolicyType.S3:
-        s3_service_for_complete = await S3StorageService.from_policy(policy)
+    # 将 S3 ETag 状态回写到会话（驱动已更新 upload_ctx.s3_part_etags）
+    if upload_ctx.s3_part_etags:
+        upload_session.s3_part_etags = orjson.dumps(upload_ctx.s3_part_etags).decode()
 
     # 更新会话进度
     upload_session.uploaded_chunks += 1
@@ -373,18 +325,8 @@ async def upload_chunk(
         parent_id = upload_session.parent_id
         policy_id = upload_session.policy_id
 
-        # S3 多分片上传完成：合并分片
-        if (
-            policy_type == PolicyType.S3
-            and s3_upload_id
-            and s3_part_etags
-            and s3_service_for_complete
-        ):
-            parts_data: list[list[int | str]] = orjson.loads(s3_part_etags)
-            parts = [(int(pn), str(et)) for pn, et in parts_data]
-            await s3_service_for_complete.complete_multipart_upload(
-                storage_path, s3_upload_id, parts,
-            )
+        # 完成分片上传（S3 合并分片 / Local no-op）
+        await driver.complete_upload(upload_ctx)
 
         # 创建 PhysicalFile 记录
         physical_file = PhysicalFile(
@@ -455,20 +397,14 @@ async def delete_upload_session(
     # 删除临时文件
     policy = await Policy.get(session, Policy.id == upload_session.policy_id)
     if policy and upload_session.storage_path:
-        if policy.type == PolicyType.LOCAL:
-            storage_service = LocalStorageService(policy)
-            await storage_service.delete_file(upload_session.storage_path)
-        elif policy.type == PolicyType.S3:
-            s3_service = await S3StorageService.from_policy(policy)
-            # 如果有分片上传，先取消
-            if upload_session.s3_upload_id:
-                await s3_service.abort_multipart_upload(
-                    upload_session.storage_path, upload_session.s3_upload_id,
-                )
-            else:
-                # 单分片上传已完成的话，删除已上传的文件
-                if upload_session.uploaded_chunks > 0:
-                    await s3_service.delete_file(upload_session.storage_path)
+        driver = create_storage_driver(policy)
+        abort_ctx = UploadContext(
+            path=upload_session.storage_path,
+            total_size=upload_session.file_size,
+            chunk_size=upload_session.chunk_size,
+            s3_upload_id=upload_session.s3_upload_id,
+        )
+        await driver.abort_upload(abort_ctx)
 
     # 释放预扣的存储空间
     if upload_session.file_size > 0:
@@ -503,17 +439,14 @@ async def clear_upload_sessions(
         # 删除临时文件
         policy = await Policy.get(session, Policy.id == upload_session.policy_id)
         if policy and upload_session.storage_path:
-            if policy.type == PolicyType.LOCAL:
-                storage_service = LocalStorageService(policy)
-                await storage_service.delete_file(upload_session.storage_path)
-            elif policy.type == PolicyType.S3:
-                s3_service = await S3StorageService.from_policy(policy)
-                if upload_session.s3_upload_id:
-                    await s3_service.abort_multipart_upload(
-                        upload_session.storage_path, upload_session.s3_upload_id,
-                    )
-                elif upload_session.uploaded_chunks > 0:
-                    await s3_service.delete_file(upload_session.storage_path)
+            driver = create_storage_driver(policy)
+            abort_ctx = UploadContext(
+                path=upload_session.storage_path,
+                total_size=upload_session.file_size,
+                chunk_size=upload_session.chunk_size,
+                s3_upload_id=upload_session.s3_upload_id,
+            )
+            await driver.abort_upload(abort_ctx)
 
         # 释放预扣的存储空间
         if upload_session.file_size > 0:
@@ -624,25 +557,11 @@ async def download_file(
     if not policy:
         raise HTTPException(status_code=500, detail="存储策略不存在")
 
-    if policy.type == PolicyType.LOCAL:
-        storage_service = LocalStorageService(policy)
-        if not await storage_service.file_exists(storage_path):
-            raise HTTPException(status_code=404, detail="物理文件不存在")
+    driver = create_storage_driver(policy)
+    if not await driver.exists(storage_path):
+        raise HTTPException(status_code=404, detail="物理文件不存在")
 
-        return FileResponse(
-            path=storage_path,
-            filename=file_obj.name,
-            media_type="application/octet-stream",
-        )
-    elif policy.type == PolicyType.S3:
-        s3_service = await S3StorageService.from_policy(policy)
-        # 302 重定向到预签名 URL
-        presigned_url = s3_service.generate_presigned_url(
-            storage_path, method='GET', expires_in=3600, filename=file_obj.name,
-        )
-        return RedirectResponse(url=presigned_url, status_code=302)
-    else:
-        raise HTTPException(status_code=500, detail="不支持的存储类型")
+    return (await driver.get_download_result(storage_path, file_obj.name)).to_response()
 
 
 # ==================== 包含子路由 ====================
@@ -703,22 +622,12 @@ async def create_empty_file(
     policy = await Policy.get_exist_one(session, policy_id)
 
     # 生成存储路径并创建空文件
-    storage_path: str | None = None
-    if policy.type == PolicyType.LOCAL:
-        storage_service = LocalStorageService(policy)
-        dir_path, storage_name, full_path = await storage_service.generate_file_path(
-            user_id=user_id,
-            original_filename=request.name,
-        )
-        await storage_service.create_empty_file(full_path)
-        storage_path = full_path
-    elif policy.type == PolicyType.S3:
-        s3_service = await S3StorageService.from_policy(policy)
-        dir_path, storage_name, storage_path = await s3_service.generate_file_path(
-            user_id=user_id,
-            original_filename=request.name,
-        )
-        await s3_service.upload_file(storage_path, b'')
+    driver = create_storage_driver(policy)
+    _dir_path, _storage_name, storage_path = await driver.generate_path(
+        user_id=user_id,
+        original_filename=request.name,
+    )
+    await driver.create_empty(storage_path)
 
     # 创建 PhysicalFile 记录
     physical_file = PhysicalFile(
@@ -929,25 +838,11 @@ async def file_get(
     link.downloads += 1
     link = await link.save(session)
 
-    if policy.type == PolicyType.LOCAL:
-        storage_service = LocalStorageService(policy)
-        if not await storage_service.file_exists(file_path):
-            http_exceptions.raise_not_found("物理文件不存在")
+    driver = create_storage_driver(policy)
+    if not await driver.exists(file_path):
+        http_exceptions.raise_not_found("物理文件不存在")
 
-        return FileResponse(
-            path=file_path,
-            filename=name,
-            media_type="application/octet-stream",
-        )
-    elif policy.type == PolicyType.S3:
-        # S3 外链直接输出：302 重定向到预签名 URL
-        s3_service = await S3StorageService.from_policy(policy)
-        presigned_url = s3_service.generate_presigned_url(
-            file_path, method='GET', expires_in=3600, filename=name,
-        )
-        return RedirectResponse(url=presigned_url, status_code=302)
-    else:
-        http_exceptions.raise_internal_error("不支持的存储类型")
+    return (await driver.get_download_result(file_path, name)).to_response()
 
 
 @router.get(
@@ -974,45 +869,18 @@ async def file_source_redirect(
     """
     file_obj, link, physical_file, policy = await _validate_source_link(session, file_id)
 
-    # 缓存所有需要的值（save 后对象属性会过期）
+    # 缓存物理路径（save 后对象属性会过期）
     file_path = physical_file.storage_path
-    is_private = policy.is_private
-    base_url = policy.base_url
 
     # 递增下载次数
     link.downloads += 1
     link = await link.save(session)
 
-    if policy.type == PolicyType.LOCAL:
-        storage_service = LocalStorageService(policy)
-        if not await storage_service.file_exists(file_path):
-            http_exceptions.raise_not_found("物理文件不存在")
+    driver = create_storage_driver(policy)
+    if not await driver.exists(file_path):
+        http_exceptions.raise_not_found("物理文件不存在")
 
-        # 公有存储：302 重定向到 base_url
-        if not is_private and base_url:
-            relative_path = storage_service.get_relative_path(file_path)
-            redirect_url = f"{base_url}/{relative_path}"
-            return RedirectResponse(url=redirect_url, status_code=302)
-
-        # 私有存储或 base_url 为空：通过应用代理文件
-        return FileResponse(
-            path=file_path,
-            filename=name,
-            media_type="application/octet-stream",
-        )
-    elif policy.type == PolicyType.S3:
-        s3_service = await S3StorageService.from_policy(policy)
-        # 公有存储且有 base_url：直接重定向到公开 URL
-        if not is_private and base_url:
-            redirect_url = f"{base_url.rstrip('/')}/{file_path}"
-            return RedirectResponse(url=redirect_url, status_code=302)
-        # 私有存储：生成预签名 URL 重定向
-        presigned_url = s3_service.generate_presigned_url(
-            file_path, method='GET', expires_in=3600, filename=name,
-        )
-        return RedirectResponse(url=presigned_url, status_code=302)
-    else:
-        http_exceptions.raise_internal_error("不支持的存储类型")
+    return (await driver.get_source_link_result(file_path, name)).to_response()
 
 
 @router.put(
@@ -1068,14 +936,8 @@ async def file_content(
         http_exceptions.raise_internal_error("存储策略不存在")
 
     # 读取文件内容
-    if policy.type == PolicyType.LOCAL:
-        storage_service = LocalStorageService(policy)
-        raw_bytes = await storage_service.read_file(physical_file.storage_path)
-    elif policy.type == PolicyType.S3:
-        s3_service = await S3StorageService.from_policy(policy)
-        raw_bytes = await s3_service.download_file(physical_file.storage_path)
-    else:
-        http_exceptions.raise_internal_error("不支持的存储类型")
+    driver = create_storage_driver(policy)
+    raw_bytes = await driver.read(physical_file.storage_path)
 
     try:
         content = raw_bytes.decode('utf-8')
@@ -1143,14 +1005,8 @@ async def patch_file_content(
         http_exceptions.raise_internal_error("存储策略不存在")
 
     # 读取文件内容
-    if policy.type == PolicyType.LOCAL:
-        storage_service = LocalStorageService(policy)
-        raw_bytes = await storage_service.read_file(storage_path)
-    elif policy.type == PolicyType.S3:
-        s3_service = await S3StorageService.from_policy(policy)
-        raw_bytes = await s3_service.download_file(storage_path)
-    else:
-        http_exceptions.raise_internal_error("不支持的存储类型")
+    driver = create_storage_driver(policy)
+    raw_bytes = await driver.read(storage_path)
 
     # 解码 + 规范化
     original_text = raw_bytes.decode('utf-8')
@@ -1184,10 +1040,7 @@ async def patch_file_content(
     _check_policy_size_limit(policy, len(new_bytes))
 
     # 写入文件
-    if policy.type == PolicyType.LOCAL:
-        await storage_service.write_file(storage_path, new_bytes)
-    elif policy.type == PolicyType.S3:
-        await s3_service.upload_file(storage_path, new_bytes)
+    await driver.write(storage_path, new_bytes)
 
     # 更新数据库
     owner_id = file_obj.owner_id
