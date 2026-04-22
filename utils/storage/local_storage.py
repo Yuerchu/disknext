@@ -1,5 +1,5 @@
 """
-本地存储服务
+本地存储驱动
 
 负责本地文件系统的物理操作：
 - 目录创建
@@ -15,7 +15,7 @@ import aiofiles
 import aiofiles.os
 from loguru import logger as l
 
-from sqlmodels.policy import Policy
+from .base import StorageDriver
 from .exceptions import (
     DirectoryCreationError,
     FileReadError,
@@ -24,39 +24,32 @@ from .exceptions import (
     StorageException,
     StorageFileNotFoundError,
 )
-from .naming_rule import NamingContext, NamingRuleParser
+from .models import ChunkResult, DownloadKind, DownloadResult, UploadContext
 
 
-class LocalStorageService:
+class LocalStorageDriver(StorageDriver):
     """
-    本地存储服务
+    本地存储驱动
 
     实现本地文件系统的异步文件操作。
     所有 IO 操作都使用 aiofiles 确保异步执行。
 
     使用示例::
 
-        service = LocalStorageService(policy)
-        await service.ensure_base_directory()
+        driver = LocalStorageDriver(policy)
+        await driver.ensure_base_directory()
 
-        dir_path, storage_name, full_path = await service.generate_file_path(
+        dir_path, storage_name, full_path = await driver.generate_path(
             user_id=user.id,
             original_filename="document.pdf",
         )
-        await service.write_file(full_path, content)
+        await driver.write(full_path, content)
     """
 
-    def __init__(self, policy: Policy):
-        """
-        初始化本地存储服务
-
-        :param policy: 存储策略配置
-        :raises StorageException: 本地存储策略未指定 server 路径时抛出
-        """
+    def __init__(self, policy: Policy) -> None:
+        super().__init__(policy)
         if not policy.server:
             raise StorageException("本地存储策略必须指定 server 路径")
-
-        self._policy = policy
         self._base_path = Path(policy.server).resolve()
 
     @property
@@ -64,13 +57,27 @@ class LocalStorageService:
         """存储根目录"""
         return self._base_path
 
+    # ==================== 能力声明 ====================
+
+    @property
+    def is_supports_direct_serving(self) -> bool:
+        return True
+
+    # ==================== 路径组装 ====================
+
+    async def _assemble_path(self, dir_path: str, storage_name: str) -> str:
+        """Local：拼接本地路径 + 确保目录存在"""
+        if dir_path:
+            full_dir = await self.ensure_directory(dir_path)
+        else:
+            full_dir = self._base_path
+        return str(full_dir / storage_name)
+
     # ==================== 目录操作 ====================
 
     async def ensure_base_directory(self) -> None:
         """
         确保存储根目录存在
-
-        创建策略时调用，确保物理目录已创建。
 
         :raises DirectoryCreationError: 目录创建失败时抛出
         """
@@ -99,8 +106,6 @@ class LocalStorageService:
         """
         确保用户的回收站目录存在
 
-        回收站路径格式: {storage_root}/{user_id}/.trash
-
         :param user_id: 用户UUID
         :return: 回收站目录路径
         :raises DirectoryCreationError: 目录创建失败时抛出
@@ -112,53 +117,9 @@ class LocalStorageService:
         except OSError as e:
             raise DirectoryCreationError(f"无法创建回收站目录: {e}")
 
-    # ==================== 路径生成 ====================
+    # ==================== 核心 I/O ====================
 
-    async def generate_file_path(
-        self,
-        user_id: UUID,
-        original_filename: str,
-    ) -> tuple[str, str, str]:
-        """
-        根据命名规则生成文件存储路径
-
-        :param user_id: 用户UUID
-        :param original_filename: 原始文件名
-        :return: (相对目录路径, 存储文件名, 完整物理路径)
-        """
-        context = NamingContext(
-            user_id=user_id,
-            original_filename=original_filename,
-        )
-
-        # 解析目录规则
-        dir_path = ""
-        if self._policy.dir_name_rule:
-            dir_path = NamingRuleParser.parse(self._policy.dir_name_rule, context)
-
-        # 解析文件名规则
-        if self._policy.auto_rename and self._policy.file_name_rule:
-            storage_name = NamingRuleParser.parse(self._policy.file_name_rule, context)
-            # 确保有扩展名
-            if '.' in original_filename and '.' not in storage_name:
-                ext = original_filename.rsplit('.', 1)[1]
-                storage_name = f"{storage_name}.{ext}"
-        else:
-            storage_name = original_filename
-
-        # 确保目录存在
-        if dir_path:
-            full_dir = await self.ensure_directory(dir_path)
-        else:
-            full_dir = self._base_path
-
-        full_path = str(full_dir / storage_name)
-
-        return dir_path, storage_name, full_path
-
-    # ==================== 文件写入 ====================
-
-    async def write_file(self, path: str, content: bytes) -> int:
+    async def write(self, path: str, content: bytes) -> int:
         """
         写入文件内容
 
@@ -174,49 +135,7 @@ class LocalStorageService:
         except OSError as e:
             raise FileWriteError(f"写入文件失败 {path}: {e}")
 
-    async def write_file_chunk(
-        self,
-        path: str,
-        content: bytes,
-        offset: int,
-    ) -> int:
-        """
-        写入文件分片
-
-        :param path: 完整文件路径
-        :param content: 分片内容
-        :param offset: 写入偏移量
-        :return: 写入的字节数
-        :raises FileWriteError: 写入失败时抛出
-        """
-        try:
-            # 检查文件是否存在，决定打开模式
-            is_exists = await self.file_exists(path)
-            mode = 'r+b' if is_exists else 'wb'
-
-            async with aiofiles.open(path, mode) as f:
-                await f.seek(offset)
-                await f.write(content)
-            return len(content)
-        except OSError as e:
-            raise FileWriteError(f"写入文件分片失败 {path}: {e}")
-
-    async def create_empty_file(self, path: str) -> None:
-        """
-        创建空白文件
-
-        :param path: 完整文件路径
-        :raises FileWriteError: 创建失败时抛出
-        """
-        try:
-            async with aiofiles.open(path, 'wb'):
-                pass  # 创建空文件
-        except OSError as e:
-            raise FileWriteError(f"创建空文件失败 {path}: {e}")
-
-    # ==================== 文件读取 ====================
-
-    async def read_file(self, path: str) -> bytes:
+    async def read(self, path: str) -> bytes:
         """
         读取完整文件
 
@@ -225,30 +144,29 @@ class LocalStorageService:
         :raises StorageFileNotFoundError: 文件不存在时抛出
         :raises FileReadError: 读取失败时抛出
         """
-        if not await self.file_exists(path):
+        if not await self.exists(path):
             raise StorageFileNotFoundError(f"文件不存在: {path}")
-
         try:
             async with aiofiles.open(path, 'rb') as f:
                 return await f.read()
         except OSError as e:
             raise FileReadError(f"读取文件失败 {path}: {e}")
 
-    async def get_file_size(self, path: str) -> int:
+    async def delete(self, path: str) -> None:
         """
-        获取文件大小
+        删除文件（物理删除）
 
         :param path: 完整文件路径
-        :return: 文件大小（字节）
-        :raises StorageFileNotFoundError: 文件不存在时抛出
         """
-        if not await self.file_exists(path):
-            raise StorageFileNotFoundError(f"文件不存在: {path}")
+        if await self.exists(path):
+            try:
+                await aiofiles.os.remove(path)
+                l.debug(f"已删除文件: {path}")
+                await self._cleanup_empty_parents(path)
+            except OSError as e:
+                l.warning(f"删除文件失败 {path}: {e}")
 
-        stat = await aiofiles.os.stat(path)
-        return stat.st_size
-
-    async def file_exists(self, path: str) -> bool:
+    async def exists(self, path: str) -> bool:
         """
         检查文件是否存在
 
@@ -257,84 +175,147 @@ class LocalStorageService:
         """
         return await aiofiles.os.path.exists(path)
 
-    # ==================== 文件删除和移动 ====================
-
-    async def delete_file(self, path: str) -> None:
+    async def get_size(self, path: str) -> int:
         """
-        删除文件（物理删除）
-
-        删除文件后会尝试清理因此变空的父目录。
+        获取文件大小
 
         :param path: 完整文件路径
+        :return: 文件大小（字节）
+        :raises StorageFileNotFoundError: 文件不存在时抛出
         """
-        if await self.file_exists(path):
-            try:
-                await aiofiles.os.remove(path)
-                l.debug(f"已删除文件: {path}")
-                await self._cleanup_empty_parents(path)
-            except OSError as e:
-                l.warning(f"删除文件失败 {path}: {e}")
+        if not await self.exists(path):
+            raise StorageFileNotFoundError(f"文件不存在: {path}")
+        stat = await aiofiles.os.stat(path)
+        return stat.st_size
 
-    async def _cleanup_empty_parents(self, file_path: str) -> None:
+    async def create_empty(self, path: str) -> None:
         """
-        从被删文件的父目录开始，向上逐级删除空目录
+        创建空白文件
 
-        在以下情况停止：
-
-        - 到达存储根目录（_base_path）
-        - 遇到非空目录
-        - 遇到 .trash 目录
-        - 删除失败（权限、并发等）
-
-        :param file_path: 被删文件的完整路径
+        :param path: 完整文件路径
+        :raises FileWriteError: 创建失败时抛出
         """
-        current = Path(file_path).parent
+        try:
+            async with aiofiles.open(path, 'wb'):
+                pass
+        except OSError as e:
+            raise FileWriteError(f"创建空文件失败 {path}: {e}")
 
-        while current != self._base_path and str(current).startswith(str(self._base_path)):
-            if current.name == '.trash':
-                break
+    def get_relative_path(self, full_path: str) -> str:
+        """
+        获取相对于存储根目录的相对路径
 
-            try:
-                entries = await aiofiles.os.listdir(str(current))
-                if entries:
-                    break
+        :param full_path: 完整路径
+        :return: 相对路径
+        :raises InvalidPathError: 路径不在存储根目录下时抛出
+        """
+        if not self.validate_path(full_path):
+            raise InvalidPathError(f"路径不在存储根目录下: {full_path}")
+        resolved = Path(full_path).resolve()
+        return str(resolved.relative_to(self._base_path))
 
-                await aiofiles.os.rmdir(str(current))
-                l.debug(f"已清理空目录: {current}")
-                current = current.parent
-            except OSError as e:
-                l.debug(f"清理空目录失败（忽略）: {current}: {e}")
-                break
+    # ==================== 分片上传生命周期 ====================
+
+    async def init_upload(
+        self,
+        path: str,
+        total_size: int,
+        chunk_size: int,
+        content_type: str = 'application/octet-stream',
+    ) -> UploadContext:
+        """Local 不需要特殊初始化"""
+        return UploadContext(
+            path=path,
+            total_size=total_size,
+            chunk_size=chunk_size,
+        )
+
+    async def upload_chunk(
+        self,
+        ctx: UploadContext,
+        chunk_index: int,
+        content: bytes,
+    ) -> ChunkResult:
+        """Local：在 offset 处写入分片"""
+        offset = chunk_index * ctx.chunk_size
+        try:
+            is_file_exists = await self.exists(ctx.path)
+            mode = 'r+b' if is_file_exists else 'wb'
+            async with aiofiles.open(ctx.path, mode) as f:
+                await f.seek(offset)
+                await f.write(content)
+            return ChunkResult(bytes_written=len(content))
+        except OSError as e:
+            raise FileWriteError(f"写入文件分片失败 {ctx.path}: {e}")
+
+    async def complete_upload(self, ctx: UploadContext) -> None:
+        """Local：文件已在最终位置，无需额外操作"""
+
+    async def abort_upload(self, ctx: UploadContext) -> None:
+        """Local：删除已部分写入的文件"""
+        await self.delete(ctx.path)
+
+    # ==================== 下载 ====================
+
+    async def get_download_result(self, path: str, filename: str) -> DownloadResult:
+        """Local：返回本地文件路径"""
+        return DownloadResult(
+            kind=DownloadKind.FILE_PATH,
+            file_path=path,
+            filename=filename,
+        )
+
+    async def get_source_link_result(self, path: str, filename: str) -> DownloadResult:
+        """
+        外链下载
+
+        根据 policy.is_private 和 policy.base_url 决定：
+        - 公有 + 有 base_url → 302 重定向到 base_url/relative_path
+        - 私有或无 base_url → 代理输出文件内容
+        """
+        is_private = self._policy.is_private
+        base_url = self._policy.base_url
+
+        if not is_private and base_url:
+            relative_path = self.get_relative_path(path)
+            redirect_url = f"{base_url}/{relative_path}"
+            return DownloadResult(
+                kind=DownloadKind.REDIRECT_URL,
+                redirect_url=redirect_url,
+                filename=filename,
+            )
+
+        return DownloadResult(
+            kind=DownloadKind.FILE_PATH,
+            file_path=path,
+            filename=filename,
+        )
+
+    # ==================== 回收站 ====================
 
     async def move_to_trash(
         self,
         source_path: str,
         user_id: UUID,
-        object_id: UUID,
-    ) -> str:
+        entry_id: UUID,
+    ) -> str | None:
         """
-        将文件移动到回收站（软删除）
-
-        回收站中的文件名格式: {object_uuid}_{original_filename}
+        将文件移动到回收站
 
         :param source_path: 源文件完整路径
         :param user_id: 用户UUID
-        :param object_id: 对象UUID（用于生成唯一的回收站文件名）
+        :param entry_id: 文件条目UUID
         :return: 回收站中的文件路径
         :raises StorageFileNotFoundError: 源文件不存在时抛出
         """
-        if not await self.file_exists(source_path):
+        if not await self.exists(source_path):
             raise StorageFileNotFoundError(f"源文件不存在: {source_path}")
 
-        # 确保回收站目录存在
         trash_dir = await self.ensure_trash_directory(user_id)
-
-        # 使用 object_id 作为回收站文件名前缀，避免冲突
         source_filename = Path(source_path).name
-        trash_filename = f"{object_id}_{source_filename}"
+        trash_filename = f"{entry_id}_{source_filename}"
         trash_path = trash_dir / trash_filename
 
-        # 移动文件
         try:
             await aiofiles.os.rename(source_path, str(trash_path))
             l.info(f"文件已移动到回收站: {source_path} -> {trash_path}")
@@ -343,11 +324,7 @@ class LocalStorageService:
         except OSError as e:
             raise StorageException(f"移动文件到回收站失败: {e}")
 
-    async def restore_from_trash(
-        self,
-        trash_path: str,
-        restore_path: str,
-    ) -> None:
+    async def restore_from_trash(self, trash_path: str, restore_path: str) -> None:
         """
         从回收站恢复文件
 
@@ -355,10 +332,9 @@ class LocalStorageService:
         :param restore_path: 恢复目标路径
         :raises StorageFileNotFoundError: 回收站文件不存在时抛出
         """
-        if not await self.file_exists(trash_path):
+        if not await self.exists(trash_path):
             raise StorageFileNotFoundError(f"回收站文件不存在: {trash_path}")
 
-        # 确保目标目录存在
         restore_dir = Path(restore_path).parent
         await aiofiles.os.makedirs(str(restore_dir), exist_ok=True)
 
@@ -408,26 +384,26 @@ class LocalStorageService:
         except (ValueError, OSError):
             return False
 
-    def get_relative_path(self, full_path: str) -> str:
-        """
-        获取相对于存储根目录的相对路径
+    # ==================== 内部方法 ====================
 
-        :param full_path: 完整路径
-        :return: 相对路径
-        :raises InvalidPathError: 路径不在存储根目录下时抛出
-        """
-        if not self.validate_path(full_path):
-            raise InvalidPathError(f"路径不在存储根目录下: {full_path}")
+    async def _cleanup_empty_parents(self, file_path: str) -> None:
+        """从被删文件的父目录开始，向上逐级删除空目录"""
+        current = Path(file_path).parent
 
-        resolved = Path(full_path).resolve()
-        return str(resolved.relative_to(self._base_path))
+        while current != self._base_path and str(current).startswith(str(self._base_path)):
+            if current.name == '.trash':
+                break
+            try:
+                entries = await aiofiles.os.listdir(str(current))
+                if entries:
+                    break
+                await aiofiles.os.rmdir(str(current))
+                l.debug(f"已清理空目录: {current}")
+                current = current.parent
+            except OSError as e:
+                l.debug(f"清理空目录失败（忽略）: {current}: {e}")
+                break
 
-    # ==================== StorageHandler 协议别名 ====================
 
-    write = write_file
-    read = read_file
-    delete = delete_file
-    exists = file_exists
-    create_empty = create_empty_file
-    generate_path = generate_file_path
-    write_chunk = write_file_chunk
+# 向后兼容别名（Phase 5 删除）
+LocalStorageService = LocalStorageDriver
