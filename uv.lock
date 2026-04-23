@@ -425,7 +425,7 @@ wheels = [
 ]
 
 [[package]]
-name = "disknext-server"
+name = "disknext"
 version = "0.0.1"
 source = { virtual = "." }
 dependencies = [
@@ -444,6 +444,7 @@ dependencies = [
     { name = "itsdangerous" },
     { name = "loguru" },
     { name = "orjson" },
+    { name = "pillow" },
     { name = "pydantic-extra-types", extra = ["phonenumbers"] },
     { name = "pyjwt" },
     { name = "pyotp" },
@@ -487,6 +488,7 @@ requires-dist = [
     { name = "itsdangerous", specifier = ">=2.2.0" },
     { name = "loguru", specifier = ">=0.7.3" },
     { name = "orjson", specifier = ">=3.11.7" },
+    { name = "pillow", specifier = ">=11.0.0" },
     { name = "pydantic-extra-types", extras = ["phonenumbers"], specifier = ">=2.11.1" },
     { name = "pyjwt", specifier = ">=2.10.1" },
     { name = "pyotp", specifier = ">=2.9.0" },

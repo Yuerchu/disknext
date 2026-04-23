@@ -9,7 +9,7 @@ from sqlmodel_ext import rel
 from middleware.auth import auth_required
 from middleware.dependencies import SessionDep
 from sqlmodels import ResponseBase
-from sqlmodels.user import User
+from sqlmodels.user import AvatarType, User
 from sqlmodels.share import (
     Share, ShareCreateRequest, CreateShareResponse, ShareResponse,
     ShareDetailResponse, ShareOwnerInfo, ShareObjectItem,
@@ -93,8 +93,9 @@ async def router_share_get(
         score=share.score,
         created_at=share.created_at,
         owner=ShareOwnerInfo(
+            user_id=user.id if user else None,
             nickname=user.nickname if user else None,
-            avatar=user.avatar if user else "default",
+            avatar=user.avatar if user else AvatarType.DEFAULT,
         ),
         object=ShareObjectItem(
             id=obj.id,

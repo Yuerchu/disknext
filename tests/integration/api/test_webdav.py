@@ -9,7 +9,7 @@ from httpx import AsyncClient
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from sqlmodels import Group, GroupClaims, Entry, EntryType, User
-from sqlmodels.user import UserStatus
+from sqlmodels.user import AvatarType, UserStatus
 from utils import Password
 from utils.JWT import create_access_token
 
@@ -48,7 +48,7 @@ async def no_webdav_headers(initialized_db: AsyncSession) -> dict[str, str]:
         storage=0,
         score=0,
         group_id=group.id,
-        avatar="default",
+        avatar=AvatarType.DEFAULT,
         password_hash=Password.hash("nowebdav123"),
     )
     initialized_db.add(user)

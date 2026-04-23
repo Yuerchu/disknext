@@ -3,7 +3,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, TypeVar
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, EmailStr
+from pydantic import EmailStr
 from pydantic_extra_types.phone_numbers import PhoneNumber
 from sqlalchemy import update as sql_update
 from sqlmodel_ext.field_types.dialects.postgresql import Array
@@ -19,6 +19,7 @@ from .auth_identity import AuthProviderType
 from .scope import ScopeValueEnum
 from .color import ChromaticColor, NeutralColor, ThemeColorsBase
 from .model_base import ResponseBase
+from .token import AccessTokenBase, RefreshTokenBase, TokenResponse
 from utils import JWT
 
 T = TypeVar("T", bound="User")
@@ -121,27 +122,6 @@ class JWTPayload(SQLModelBase):
     """用户组权限快照"""
 
 
-class AccessTokenBase(BaseModel):
-    """访问令牌响应 DTO"""
-
-    access_expires: datetime
-    """访问令牌过期时间"""
-
-    access_token: str
-    """访问令牌"""
-
-class RefreshTokenBase(BaseModel):
-    """刷新令牌响应DTO"""
-
-    refresh_expires: datetime
-    """刷新令牌过期时间"""
-
-    refresh_token: str
-    """刷新令牌"""
-
-
-class TokenResponse(ResponseBase, AccessTokenBase, RefreshTokenBase):
-    """令牌响应 DTO"""
 
 
 class UserResponse(ResponseBase):
@@ -196,8 +176,8 @@ class UserPublic(UserBase):
     storage: int
     """已用存储空间（字节）"""
 
-    avatar: Str255 | None = None
-    """头像地址"""
+    avatar: AvatarType = AvatarType.DEFAULT
+    """头像类型"""
 
     group_expires: datetime | None = None
     """用户组过期时间"""

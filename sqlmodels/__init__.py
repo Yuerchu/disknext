@@ -13,13 +13,15 @@ from .scope import (
     USER_DEFAULT_SCOPES,
     WEBDAV_SCOPES,
 )
+from .token import (
+    AccessTokenBase,
+    RefreshTokenBase,
+    TokenResponse,
+)
 from .user import (
     JWTPayload,
     MagicLinkRequest,
     UnifiedAuthRequest,
-    AccessTokenBase,
-    RefreshTokenBase,
-    TokenResponse,
     User,
     UserBase,
     UserStorageResponse,

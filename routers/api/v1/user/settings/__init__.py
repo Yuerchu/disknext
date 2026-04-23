@@ -14,6 +14,7 @@ from sqlmodels import (
     PolicySummary,
 )
 from sqlmodels.color import ThemeColorsBase
+from sqlmodels.user import AvatarType
 from sqlmodels.user_authn import UserAuthn
 from utils import Password, http_exceptions
 from utils.conf import appmeta
@@ -204,7 +205,7 @@ async def router_user_settings_avatar(
         http_exceptions.raise_bad_request(str(e))
 
     # 更新用户头像字段
-    user.avatar = "file"
+    user.avatar = AvatarType.FILE
     user = await user.save(session)
 
 
@@ -235,10 +236,10 @@ async def router_user_settings_avatar_gravatar(
     if not user.email:
         http_exceptions.raise_bad_request("Gravatar 需要邮箱，请先绑定邮箱")
 
-    if user.avatar == "file":
+    if user.avatar == AvatarType.FILE:
         await delete_avatar_files(session, user.id)
 
-    user.avatar = "gravatar"
+    user.avatar = AvatarType.GRAVATAR
     user = await user.save(session)
 
 
@@ -262,10 +263,10 @@ async def router_user_settings_avatar_delete(
     """
     from utils.avatar import delete_avatar_files
 
-    if user.avatar == "file":
+    if user.avatar == AvatarType.FILE:
         await delete_avatar_files(session, user.id)
 
-    user.avatar = "default"
+    user.avatar = AvatarType.DEFAULT
     user = await user.save(session)
 
 

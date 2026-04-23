@@ -9,6 +9,7 @@ from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str64, Str128, Str255
 
 from .model_base import ResponseBase
 from .file import EntryType
+from .user import AvatarType
 
 if TYPE_CHECKING:
     from .user import User
@@ -171,11 +172,14 @@ class ShareResponse(SQLModelBase):
 class ShareOwnerInfo(SQLModelBase):
     """分享者公开信息 DTO"""
 
+    user_id: UUID | None = None
+    """用户 UUID（用于拼接头像端点，用户已删除时为 None）"""
+
     nickname: Str255 | None
     """昵称"""
 
-    avatar: Str255
-    """头像"""
+    avatar: AvatarType = AvatarType.DEFAULT
+    """头像类型"""
 
 
 class ShareObjectItem(SQLModelBase):

@@ -8,7 +8,7 @@ from uuid import UUID
 
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from sqlmodels.user import User, UserStatus
+from sqlmodels.user import AvatarType, User, UserStatus
 from utils.password.pwd import Password
 
 
@@ -51,7 +51,7 @@ class UserFactory:
             storage=kwargs.get("storage", 0),
             score=kwargs.get("score", 100),
             group_id=group_id,
-            avatar=kwargs.get("avatar", "default"),
+            avatar=kwargs.get("avatar", AvatarType.DEFAULT),
             group_expires=kwargs.get("group_expires"),
             language=kwargs.get("language", "zh-CN"),
             timezone=kwargs.get("timezone", 8),
@@ -96,7 +96,7 @@ class UserFactory:
             storage=0,
             score=9999,
             group_id=admin_group_id,
-            avatar="default",
+            avatar=AvatarType.DEFAULT,
             password_hash=Password.hash(password),
         )
 
@@ -132,7 +132,7 @@ class UserFactory:
             storage=0,
             score=0,
             group_id=group_id,
-            avatar="default",
+            avatar=AvatarType.DEFAULT,
             password_hash=Password.hash("banned_password"),
         )
 
@@ -170,7 +170,7 @@ class UserFactory:
             storage=storage_bytes,
             score=100,
             group_id=group_id,
-            avatar="default",
+            avatar=AvatarType.DEFAULT,
             password_hash=Password.hash("password123"),
         )
 
