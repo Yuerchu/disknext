@@ -567,8 +567,7 @@ class S3StorageDriver(StorageDriver):
             if response.status not in (200, 201):
                 body = await response.text()
                 raise S3APIError(
-                    f"流式上传失败: {self._bucket_name}/{key}, "
-                    f"状态: {response.status}, {body}"
+                    f"流式上传失败: {self._bucket_name}/{key}, 状态: {response.status}, {body}"
                 )
             l.debug(f"S3 流式上传成功: {self._bucket_name}/{key}, 大小: {content_length}")
 
@@ -588,8 +587,7 @@ class S3StorageDriver(StorageDriver):
             if response.status != 200:
                 body = await response.text()
                 raise S3MultipartUploadError(
-                    f"创建分片上传失败: {self._bucket_name}/{key}, "
-                    f"状态: {response.status}, {body}"
+                    f"创建分片上传失败: {self._bucket_name}/{key}, 状态: {response.status}, {body}"
                 )
 
             body = await response.text()

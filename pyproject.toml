@@ -1,5 +1,5 @@
 [project]
-name = "DiskNext-Server"
+name = "disknext"
 version = "0.0.1"
 description = "Add your description here"
 readme = "README.md"
@@ -36,6 +36,7 @@ dependencies = [
     "a2wsgi>=1.10.0",
     "email-validator>=2.3.0",
     "pydantic-extra-types[phonenumbers]>=2.11.1",
+    "basedpyright>=1.39.3",
 ]
 
 [project.optional-dependencies]

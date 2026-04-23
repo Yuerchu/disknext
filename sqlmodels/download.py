@@ -4,7 +4,7 @@ from uuid import UUID
 
 from sqlmodel import Field, Relationship, UniqueConstraint, Index
 
-from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, TableBaseMixin, Str64, Str255
+from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, TableBaseMixin, Str64, Str255, HttpUrl
 
 if TYPE_CHECKING:
     from .user import User
@@ -58,11 +58,20 @@ class DownloadAria2File(SQLModelBase, TableBaseMixin):
     download: "Download" = Relationship(back_populates="aria2_files")
     """关联的下载任务"""
 
+class Aria2TestRequest(SQLModelBase):
+    """Aria2 测试请求 DTO"""
+
+    rpc_url: HttpUrl = Field(max_length=255)
+    """RPC 地址"""
+
+    secret: str | None = None
+    """RPC 密钥"""
+
 
 # ==================== 主模型 ====================
 
 class DownloadBase(SQLModelBase):
-    pass
+    """离线下载任务基础模型"""
 
 class Download(DownloadBase, UUIDTableBaseMixin):
     """离线下载任务模型"""
@@ -81,16 +90,16 @@ class Download(DownloadBase, UUIDTableBaseMixin):
     source: str
     """来源URL或标识"""
 
-    total_size: int = Field(default=0)
+    total_size: int = Field(ge=0)
     """总大小（字节）"""
 
-    downloaded_size: int = Field(default=0)
+    downloaded_size: int = Field(ge=0)
     """已下载大小（字节）"""
 
     g_id: str | None = Field(default=None, index=True)
     """Aria2 GID"""
 
-    speed: int = Field(default=0)
+    speed: int = Field(ge=0)
     """下载速度（bytes/s）"""
 
     parent: Str255 | None = None
@@ -102,26 +111,26 @@ class Download(DownloadBase, UUIDTableBaseMixin):
     dst: str
     """目标存储路径"""
 
-    # Aria2 信息字段（原 DownloadAria2Info 表）
+    # Aria2 信息字段
     info_hash: Annotated[str | None, Field(max_length=40)] = None
     """InfoHash（BT种子）"""
 
-    piece_length: int = 0
+    piece_length: int = Field(ge=0)
     """分片大小"""
 
-    num_pieces: int = 0
+    num_pieces: int = Field(ge=0)
     """分片数量"""
 
-    num_seeders: int = 0
+    num_seeders: int = Field(ge=0)
     """做种人数"""
 
-    connections: int = 0
+    connections: int = Field(ge=0)
     """连接数"""
 
-    upload_speed: int = 0
+    upload_speed: int = Field(ge=0)
     """上传速度（bytes/s）"""
 
-    upload_length: int = 0
+    upload_length: int = Field(ge=0)
     """已上传大小（字节）"""
 
     error_code: Str64 | None = None

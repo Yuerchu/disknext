@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger as l
 from sqlalchemy import and_, func
 from sqlalchemy.sql.elements import ColumnElement
-from sqlmodel_ext import rel
+from sqlmodel_ext import rel, cond
 
 from middleware.auth import admin_required
 from middleware.dependencies import SessionDep, ServerConfigDep, TableViewRequestDep, UserFilterParamsDep
@@ -29,13 +29,13 @@ def _build_user_filter_condition(filter_params: UserFilterParams) -> ColumnEleme
     conditions: list[ColumnElement[bool]] = []
 
     if filter_params.group_id is not None:
-        conditions.append(User.group_id == filter_params.group_id)
+        conditions.append(cond(User.group_id == filter_params.group_id))
     if filter_params.email_contains is not None:
-        conditions.append(User.email.ilike(f"%{filter_params.email_contains}%"))
+        conditions.append(cond(User.email.ilike(f"%{filter_params.email_contains}%")))
     if filter_params.nickname_contains is not None:
-        conditions.append(User.nickname.ilike(f"%{filter_params.nickname_contains}%"))
+        conditions.append(cond(User.nickname.ilike(f"%{filter_params.nickname_contains}%")))
     if filter_params.status is not None:
-        conditions.append(User.status == filter_params.status)
+        conditions.append(cond(User.status == filter_params.status))
 
     if not conditions:
         return None
@@ -62,7 +62,7 @@ async def router_admin_get_users(
     :return: 分页用户列表
     """
     condition = _build_user_filter_condition(filter_params)
-    result = await User.get_with_count(session, condition, table_view=table_view, load=User.group)
+    result = await User.get_with_count(session, condition, table_view=table_view, load=rel(User.group))
     return ListResponse(
         items=[
             UserPublic.model_validate(
@@ -136,10 +136,9 @@ async def router_admin_create_user(
         email=request.email,
         nickname=request.nickname,
         group_id=request.group_id,
-        status=request.status,
         password_hash=Password.hash(request.password) if request.password else None,
     )
-    user = await user.save(session)
+    user = await user.save(session, load=rel(User.group))
 
     user = await User.get(session, User.id == user.id, load=rel(User.group))
     return UserPublic.model_validate(

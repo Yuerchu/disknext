@@ -11,6 +11,7 @@ from uuid import UUID
 from fastapi import APIRouter, Query, Request, Response
 from fastapi.responses import JSONResponse
 from loguru import logger as l
+from sqlmodel_ext import cond
 
 from middleware.dependencies import SessionDep
 from sqlmodels import Entry, PhysicalFile, Policy, User, WopiFileInfo
@@ -38,7 +39,7 @@ async def check_file_info(
 
     返回 WOPI 规范的 PascalCase JSON。
     """
-    # 验证令牌
+    # 验证令牌 [TODO] 丢到依赖注入里去验证
     payload = verify_wopi_token(access_token)
     if not payload or payload.file_id != file_id:
         http_exceptions.raise_unauthorized("WOPI token 无效或文件不匹配")
@@ -46,7 +47,7 @@ async def check_file_info(
     # 获取文件
     file_obj: Entry | None = await Entry.get(
         session,
-        Entry.id == file_id,
+        cond(Entry.id == file_id),
     )
     if not file_obj or not file_obj.is_file:
         http_exceptions.raise_not_found("文件不存在")
@@ -104,7 +105,7 @@ async def get_file(
         http_exceptions.raise_internal_error("文件存储路径丢失")
 
     # 获取策略
-    policy: Policy | None = await Policy.get(session, Policy.id == file_obj.policy_id)
+    policy: Policy | None = await Policy.get(session, cond(Policy.id == file_obj.policy_id))
     if not policy:
         http_exceptions.raise_internal_error("存储策略不存在")
 

@@ -54,6 +54,7 @@ from .download import (
     DownloadAria2File,
     DownloadStatus,
     DownloadType,
+    Aria2TestRequest,
 )
 from .node import (
     Node,

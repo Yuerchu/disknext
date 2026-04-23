@@ -11,6 +11,7 @@ from uuid import UUID
 
 from loguru import logger as l
 from wsgidav.dc.base_dc import BaseDomainController
+from sqlmodel_ext import rel, cond
 
 from routers.dav.provider import EventLoopRef, _get_session
 from utils.redis.webdav_auth_cache import WebDAVAuthCache
@@ -39,7 +40,7 @@ async def _authenticate(
 
     # 2. 缓存未命中，查库验证
     async with _get_session() as session:
-        user = await User.get(session, User.email == email, load=User.group)
+        user = await User.get(session, cond(User.email == email), load=rel(User.group))
         if not user:
             return None
         if user.status != UserStatus.ACTIVE:
@@ -49,7 +50,7 @@ async def _authenticate(
 
         account = await WebDAV.get(
             session,
-            (WebDAV.name == account_name) & (WebDAV.user_id == user.id),
+            cond(WebDAV.name == account_name) & cond(WebDAV.user_id == user.id),
         )
         if not account:
             return None
@@ -59,7 +60,10 @@ async def _authenticate(
             return None
 
         user_id: UUID = user.id
-        webdav_id: int = account.id
+        webdav_id: int | None = account.id
+        
+        if not webdav_id:
+            raise ValueError("WebDAV 账户 ID 不能为空")
 
     # 3. 写入缓存
     await WebDAVAuthCache.set(email, account_name, password, user_id, webdav_id)

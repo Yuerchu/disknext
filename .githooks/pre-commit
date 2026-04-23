@@ -1,0 +1,32 @@
+#!/bin/sh
+# basedpyright pre-commit hook
+# 对暂存的 .py 文件运行 basedpyright 类型检查
+
+# 获取所有暂存的 .py 文件（排除已删除的），换行转空格以避免 PowerShell 逐行执行
+STAGED_PY_FILES=$(git diff --cached --name-only --diff-filter=d -- '*.py' | tr '\n' ' ')
+
+if [ -z "$STAGED_PY_FILES" ]; then
+    exit 0
+fi
+
+echo "Running basedpyright on staged Python files..."
+
+# 项目 .venv 中的 basedpyright（Windows 需要 powershell 包装）
+PYRIGHT=".venv/Scripts/basedpyright.exe"
+
+if [ -f "$PYRIGHT" ]; then
+    powershell -Command "& '.\.venv\Scripts\basedpyright.exe' --level error $STAGED_PY_FILES"
+else
+    # 回退：使用 uv tool run
+    uv tool run basedpyright --level error $STAGED_PY_FILES
+fi
+EXIT_CODE=$?
+
+if [ $EXIT_CODE -ne 0 ]; then
+    echo ""
+    echo "basedpyright found errors. Commit aborted."
+    echo "Fix the errors above or use 'git commit --no-verify' to skip."
+    exit 1
+fi
+
+exit 0

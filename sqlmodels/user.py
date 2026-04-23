@@ -19,6 +19,7 @@ from .auth_identity import AuthProviderType
 from .scope import ScopeValueEnum
 from .color import ChromaticColor, NeutralColor, ThemeColorsBase
 from .model_base import ResponseBase
+from utils import JWT
 
 T = TypeVar("T", bound="User")
 
@@ -553,7 +554,6 @@ class User(UserBase, UUIDTableBaseMixin):
         :param session: 数据库会话
         :return: TokenResponse
         """
-        from utils import JWT
 
         # 构建权限快照（选项字段已合并到 Group 表）
         group_claims = GroupClaims.from_group(self.group)

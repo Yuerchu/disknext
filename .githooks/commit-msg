@@ -1,0 +1,65 @@
+#!/bin/sh
+#
+# commit-msg hook: 验证提交信息是否符合 Conventional Commits 1.0.0 规范
+# https://www.conventionalcommits.org/en/v1.0.0/
+#
+# 格式: <type>[optional scope][!]: <description>
+#
+# 允许的 type: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert
+
+commit_msg_file="$1"
+
+# 读取提交信息，忽略注释行和空行
+commit_msg=$(sed '/^#/d' "$commit_msg_file" | head -1 | tr -d '\r')
+
+# 空消息由 git 自身处理，不在此检查
+if [ -z "$commit_msg" ]; then
+    exit 0
+fi
+
+# 放行 merge commit 和 revert commit（git 自动生成的消息）
+if echo "$commit_msg" | grep -qE "^Merge |^Revert \""; then
+    exit 0
+fi
+
+# Conventional Commits 正则:
+#   type       = feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert
+#   scope      = (任意非空内容)，可选
+#   !          = 可选，标记 BREAKING CHANGE
+#   :          = 必须
+#   空格       = 冒号后必须跟一个空格
+#   description= 至少一个非空字符
+pattern="^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?(!)?: .+"
+
+if ! echo "$commit_msg" | grep -qE "$pattern"; then
+    echo ""
+    echo "ERROR: 提交信息不符合 Conventional Commits 规范。"
+    echo ""
+    echo "正确格式: <type>[optional scope]: <description>"
+    echo ""
+    echo "允许的 type:"
+    echo "  feat      新功能"
+    echo "  fix       修复 Bug"
+    echo "  docs      文档变更"
+    echo "  style     代码风格（不影响功能）"
+    echo "  refactor  重构（非新功能、非修复）"
+    echo "  perf      性能优化"
+    echo "  test      测试相关"
+    echo "  build     构建系统或依赖变更"
+    echo "  ci        CI 配置变更"
+    echo "  chore     其他杂项"
+    echo "  revert    回退"
+    echo ""
+    echo "示例:"
+    echo "  feat: add user authentication"
+    echo "  fix(proxy): handle nil response body"
+    echo "  docs: update API documentation"
+    echo "  feat!: drop support for Go 1.20"
+    echo ""
+    echo "你的提交信息:"
+    echo "  $commit_msg"
+    echo ""
+    exit 1
+fi
+
+exit 0

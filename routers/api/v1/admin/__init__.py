@@ -8,16 +8,12 @@ from middleware.dependencies import SessionDep, ServerConfigDep
 from sqlmodels import (
     User, ResponseBase,
     Entry, EntryType, Share, AdminSummaryResponse, MetricsSummary, LicenseInfo, VersionInfo,
+    Aria2TestRequest
 )
 from sqlmodel_ext import SQLModelBase
 from sqlmodels.server_config import ServerConfig, ServerConfigUpdateRequest
 from utils import http_exceptions
 from utils.conf import appmeta
-
-try:
-    from ee.service import get_cached_license
-except ImportError:
-    get_cached_license = None
 
 from .file import admin_file_router
 from .file_app import admin_file_app_router
@@ -27,16 +23,6 @@ from .share import admin_share_router
 from .task import admin_task_router
 from .user import admin_user_router
 from .theme import admin_theme_router
-
-
-class Aria2TestRequest(SQLModelBase):
-    """Aria2 测试请求 DTO"""
-
-    rpc_url: str
-    """RPC 地址"""
-
-    secret: str | None = None
-    """RPC 密钥"""
 
 # 管理员根目录 /api/admin
 admin_router = APIRouter(

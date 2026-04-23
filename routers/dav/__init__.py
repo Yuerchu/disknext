@@ -3,6 +3,8 @@ WebDAV 协议入口
 
 使用 WsgiDAV + a2wsgi 提供 WebDAV 协议支持。
 WsgiDAV 在 a2wsgi 的线程池中运行，不阻塞 FastAPI 事件循环。
+
+[TODO] 后续此模块将拆分到单独的容器中
 """
 from a2wsgi import WSGIMiddleware
 from wsgidav.wsgidav_app import WsgiDAVApp

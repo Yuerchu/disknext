@@ -19,6 +19,7 @@ from wsgidav.dav_error import (
     HTTP_NOT_FOUND,
 )
 from wsgidav.dav_provider import DAVCollection, DAVNonCollection, DAVProvider
+from sqlmodel_ext import cond, rel
 
 from utils.storage import create_storage_driver
 from sqlmodels.database_connection import DatabaseManager
@@ -79,13 +80,13 @@ async def _get_children(user_id: UUID, parent_id: UUID) -> list[Entry]:
 async def _get_object_by_id(file_id: UUID) -> Entry | None:
     """根据ID获取对象"""
     async with _get_session() as session:
-        return await Entry.get(session, Entry.id == file_id, load=Entry.physical_file)
+        return await Entry.get(session, cond(Entry.id == file_id), load=rel(Entry.physical_file))
 
 
 async def _get_user(user_id: UUID) -> User | None:
     """获取用户（含 group 关系）"""
     async with _get_session() as session:
-        return await User.get(session, User.id == user_id, load=User.group)
+        return await User.get(session, cond(User.id == user_id), load=rel(User.group))
 
 
 async def _get_policy(policy_id: UUID) -> Policy | None:
