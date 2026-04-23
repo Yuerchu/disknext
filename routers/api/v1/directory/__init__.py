@@ -3,6 +3,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel.ext.asyncio.session import AsyncSession
+from sqlmodel_ext import cond, rel
 
 from middleware.auth import auth_required
 from middleware.dependencies import SessionDep
@@ -16,7 +17,6 @@ from sqlmodels import (
     Policy,
     PolicyResponse,
     User,
-    ResponseBase,
 )
 from utils import http_exceptions
 
@@ -40,37 +40,32 @@ async def _get_directory_response(
     :return: DirectoryResponse
     """
     children = await Entry.get_children(session, user_id, folder.id)
-    # 直接按 policy_id 查 Policy，避免触发 lazy='raise_on_sql'
     policy = await Policy.get(session, Policy.id == folder.policy_id)
     if not policy:
         raise HTTPException(status_code=500, detail="目录对应的存储策略不存在")
 
-    objects = [
-        EntryResponse(
-            id=child.id,
-            name=child.name,
-            thumb=False,
-            size=child.size,
-            type=EntryType.FOLDER if child.is_folder else EntryType.FILE,
-            created_at=child.created_at,
-            updated_at=child.updated_at,
-            source_enabled=False,
-        )
-        for child in children
-    ]
-
-    policy_response = PolicyResponse(
-        id=policy.id,
-        name=policy.name,
-        type=policy.type,
-        max_size=policy.max_size,
-    )
-
     return DirectoryResponse(
         id=folder.id,
         parent=folder.parent_id,
-        objects=objects,
-        policy=policy_response,
+        objects=[
+            EntryResponse(
+                id=child.id,
+                name=child.name,
+                thumb=False,
+                size=child.size,
+                type=EntryType.FOLDER if child.is_folder else EntryType.FILE,
+                created_at=child.created_at,
+                updated_at=child.updated_at,
+                source_enabled=False,
+            )
+            for child in children
+        ],
+        policy=PolicyResponse(
+            id=policy.id,
+            name=policy.name,
+            type=policy.type,
+            max_size=policy.max_size,
+        ),
     )
 
 
@@ -195,8 +190,8 @@ async def router_directory_create(
     if request.policy_id:
         group = await Group.get(
             session,
-            Group.id == user.group_id,
-            load=Group.policies,
+            cond(Group.id == user.group_id),
+            load=rel(Group.policies),
         )
         if not group or request.policy_id not in {p.id for p in group.policies}:
             raise HTTPException(status_code=403, detail="当前用户组无权使用该存储策略")

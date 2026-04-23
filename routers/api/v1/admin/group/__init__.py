@@ -2,11 +2,12 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger as l
+from sqlmodel_ext import cond, rel
 
 from middleware.auth import admin_required
 from middleware.dependencies import SessionDep, TableViewRequestDep
 from sqlmodels import (
-    User, ResponseBase, UserPublic, ListResponse,
+    User, UserPublic, ListResponse,
     Group )
 from sqlmodels.group import (
     GroupCreateRequest, GroupUpdateRequest, GroupDetailResponse, )
@@ -63,10 +64,10 @@ async def router_admin_get_group(
     :param group_id: 用户组UUID
     :return: 用户组详情
     """
-    group = await Group.get_exist_one(session, group_id, load=Group.policies)
+    group = await Group.get_exist_one(session, group_id, load=rel(Group.policies))
 
     policies = group.policies
-    user_count = await User.count(session, User.group_id == group_id)
+    user_count = await User.count(session, cond(User.group_id == group_id))
     return GroupDetailResponse.from_group(group, user_count, policies)
 
 
@@ -92,7 +93,7 @@ async def router_admin_get_group_members(
     # 验证组存在
     await Group.get_exist_one(session, group_id)
 
-    result = await User.get_with_count(session, User.group_id == group_id, table_view=table_view)
+    result = await User.get_with_count(session, cond(User.group_id == group_id), table_view=table_view)
 
     return ListResponse(
         items=[u.to_public() for u in result.items],
@@ -192,9 +193,9 @@ async def router_admin_update_group(
 
     # 更新策略关联
     if request.policy_ids is not None:
-        from sqlmodel import delete
-        await session.execute(
-            delete(GroupPolicyLink).where(GroupPolicyLink.group_id == group_id)
+        await GroupPolicyLink.delete(
+            session,
+            condition=cond(GroupPolicyLink.group_id == group_id)
         )
         for policy_id in request.policy_ids:
             link = GroupPolicyLink(group_id=group_id, policy_id=policy_id)

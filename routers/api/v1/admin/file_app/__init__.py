@@ -9,6 +9,7 @@ import aiohttp
 from fastapi import APIRouter, Depends, status
 from loguru import logger as l
 from sqlalchemy import select
+from sqlmodel_ext import cond, rel
 
 from middleware.auth import admin_required
 from middleware.dependencies import SessionDep, TableViewRequestDep
@@ -59,12 +60,11 @@ async def list_file_apps(
         extensions = await FileAppExtension.get(
             session,
             FileAppExtension.app_id == app.id,
-            fetch_mode="all",
         )
-        group_links_result = await session.exec(
-            select(FileAppGroupLink).where(FileAppGroupLink.app_id == app.id)
+        group_links = await FileAppGroupLink.get(
+            session,
+            cond(FileAppGroupLink.app_id == app.id)
         )
-        group_links: list[FileAppGroupLink] = list(group_links_result.all())
         apps.append(FileAppResponse.from_app(app, extensions, group_links))
 
     return FileAppListResponse(apps=apps, total=result.count)
@@ -158,10 +158,10 @@ async def get_file_app(
         FileAppExtension.app_id == app.id,
         fetch_mode="all",
     )
-    group_links_result = await session.exec(
-        select(FileAppGroupLink).where(FileAppGroupLink.app_id == app.id)
+    group_links = await FileAppGroupLink.get(
+        session,
+        cond(FileAppGroupLink.app_id == app.id),
     )
-    group_links: list[FileAppGroupLink] = list(group_links_result.all())
 
     return FileAppResponse.from_app(app, extensions, group_links)
 
@@ -201,13 +201,12 @@ async def update_file_app(
 
     extensions = await FileAppExtension.get(
         session,
-        FileAppExtension.app_id == app.id,
-        fetch_mode="all",
+        cond(FileAppExtension.app_id == app.id),
     )
-    group_links_result = await session.exec(
-        select(FileAppGroupLink).where(FileAppGroupLink.app_id == app.id)
+    group_links = await FileAppGroupLink.get(
+        session,
+        cond(FileAppGroupLink.app_id == app.id),
     )
-    group_links: list[FileAppGroupLink] = list(group_links_result.all())
 
     l.info(f"更新文件应用: {app.name} ({app.app_key})")
 
@@ -293,10 +292,10 @@ async def update_extensions(
     for ext_record in new_extensions:
         await session.refresh(ext_record)
 
-    group_links_result = await session.exec(
-        select(FileAppGroupLink).where(FileAppGroupLink.app_id == app_id)
+    group_links = await FileAppGroupLink.get(
+        session,
+        cond(FileAppGroupLink.app_id == app_id),
     )
-    group_links: list[FileAppGroupLink] = list(group_links_result.all())
 
     l.info(f"更新文件应用 {app.app_key} 的扩展名: {request.extensions}")
 
@@ -325,10 +324,10 @@ async def update_group_access(
     app = await FileApp.get_exist_one(session, app_id)
 
     # 删除旧的用户组关联
-    old_links_result = await session.exec(
-        select(FileAppGroupLink).where(FileAppGroupLink.app_id == app_id)
+    old_links = await FileAppGroupLink.get(
+        session,
+        cond(FileAppGroupLink.app_id == app_id),
     )
-    old_links: list[FileAppGroupLink] = list(old_links_result.all())
     for old_link in old_links:
         await session.delete(old_link)
 
@@ -414,10 +413,9 @@ async def discover_wopi(
         return WopiDiscoveryResponse(app_names=app_names)
 
     # 全量替换扩展名
-    old_extensions: list[FileAppExtension] = await FileAppExtension.get(
+    old_extensions = await FileAppExtension.get(
         session,
-        FileAppExtension.app_id == app_id,
-        fetch_mode="all",
+        cond(FileAppExtension.app_id == app_id),
     )
     for old_ext in old_extensions:
         await FileAppExtension.delete(session, old_ext, commit=False)

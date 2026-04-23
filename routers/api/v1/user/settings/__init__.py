@@ -1,22 +1,21 @@
 from typing import Annotated
-from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 import sqlmodels
 from middleware.auth import auth_required
-from middleware.dependencies import SessionDep, ServerConfigDep
+from middleware.dependencies import SessionDep
 from sqlmodels import (
     BUILTIN_DEFAULT_COLORS, ThemePreset, UserThemeUpdateRequest,
     SettingOption, UserSettingUpdateRequest,
-    AuthProviderType, ChangePasswordRequest,
+    ChangePasswordRequest,
     AuthnDetailResponse, AuthnRenameRequest,
     PolicySummary,
 )
 from sqlmodels.color import ThemeColorsBase
 from sqlmodels.user_authn import UserAuthn
-from utils import JWT, Password, http_exceptions
+from utils import Password, http_exceptions
 from utils.conf import appmeta
 from utils.password.pwd import PasswordStatus, TwoFactorResponse, TwoFactorVerifyRequest
 from .file_viewers import file_viewers_router

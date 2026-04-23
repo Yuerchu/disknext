@@ -8,6 +8,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, status
 from sqlalchemy import and_
+from sqlmodel_ext import cond, rel
 
 from middleware.auth import auth_required
 from middleware.dependencies import SessionDep
@@ -61,8 +62,8 @@ async def set_default_viewer(
     ext_record: FileAppExtension | None = await FileAppExtension.get(
         session,
         and_(
-            FileAppExtension.app_id == app.id,
-            FileAppExtension.extension == normalized_ext,
+            cond(FileAppExtension.app_id == app.id) &
+            cond(FileAppExtension.extension == normalized_ext),
         ),
     )
     if not ext_record:
@@ -72,14 +73,14 @@ async def set_default_viewer(
     existing: UserFileAppDefault | None = await UserFileAppDefault.get(
         session,
         and_(
-            UserFileAppDefault.user_id == user.id,
-            UserFileAppDefault.extension == normalized_ext,
+            cond(UserFileAppDefault.user_id == user.id),
+            cond(UserFileAppDefault.extension == normalized_ext),
         ),
     )
 
     if existing:
         existing.app_id = request.app_id
-        existing = await existing.save(session, load=UserFileAppDefault.app)
+        existing = await existing.save(session, load=rel(UserFileAppDefault.app))
         return existing.to_response()
     else:
         new_default = UserFileAppDefault(
@@ -87,7 +88,7 @@ async def set_default_viewer(
             extension=normalized_ext,
             app_id=request.app_id,
         )
-        new_default = await new_default.save(session, load=UserFileAppDefault.app)
+        new_default = await new_default.save(session, load=rel(UserFileAppDefault.app))
         return new_default.to_response()
 
 
@@ -107,9 +108,9 @@ async def list_default_viewers(
     """
     defaults: list[UserFileAppDefault] = await UserFileAppDefault.get(
         session,
-        UserFileAppDefault.user_id == user.id,
+        cond(UserFileAppDefault.user_id == user.id),
         fetch_mode="all",
-        load=UserFileAppDefault.app,
+        load=rel(UserFileAppDefault.app),
     )
     return [d.to_response() for d in defaults]
 
@@ -136,8 +137,8 @@ async def delete_default_viewer(
     existing: UserFileAppDefault | None = await UserFileAppDefault.get(
         session,
         and_(
-            UserFileAppDefault.id == default_id,
-            UserFileAppDefault.user_id == user.id,
+            cond(UserFileAppDefault.id == default_id),
+            cond(UserFileAppDefault.user_id == user.id),
         ),
     )
     if not existing:

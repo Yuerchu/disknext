@@ -2,6 +2,8 @@ import hashlib
 import json
 from typing import Annotated, Literal
 from uuid import UUID, uuid4
+import aiofiles.os
+from datetime import datetime
 
 import jwt
 import orjson
@@ -9,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse, RedirectResponse
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from loguru import logger
+from sqlalchemy import func, select, and_, or_
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel_ext import rel, cond
 from webauthn import (
@@ -613,8 +616,6 @@ async def router_user_avatar(
 
     缓存：Cache-Control: public, max-age=3600
     """
-    import aiofiles.os
-
     from utils.avatar import (
         get_avatar_file_path,
         get_avatar_settings,
@@ -676,21 +677,14 @@ async def router_user_me(
     :return: ResponseBase containing user information.
     :rtype: ResponseBase
     """
-    # 重新加载用户并预取 tags 关系（sqlmodel_ext 默认 lazy='raise_on_sql'）
-    user = await sqlmodels.User.get(
-        session,
-        sqlmodels.User.id == user.id,
-        load=sqlmodels.User.tags,
-    )
-
     # 加载 group
-    group = await sqlmodels.Group.get(
+    group = await Group.get_exist_one(
         session,
-        sqlmodels.Group.id == user.group_id,
+        user.group_id,
     )
 
     # 构建 GroupResponse
-    group_response = group.to_response() if group else None
+    group_response = group.to_response()
 
     return sqlmodels.UserResponse(
         id=user.id,
@@ -719,10 +713,6 @@ async def router_user_storage(
     group = await sqlmodels.Group.get(session, sqlmodels.Group.id == user.group_id)
     if not group:
         raise HTTPException(status_code=404, detail="用户组不存在")
-
-    # 查询用户所有未过期容量包的 size 总和
-    from datetime import datetime
-    from sqlalchemy import func, select, and_, or_
 
     now = datetime.now()
     stmt = select(func.coalesce(func.sum(sqlmodels.StoragePack.size), 0)).where(

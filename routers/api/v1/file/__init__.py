@@ -18,7 +18,7 @@ import whatthepatch
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from starlette.responses import Response
 from loguru import logger as l
-from sqlmodel_ext import SQLModelBase
+from sqlmodel_ext import SQLModelBase, cond, rel
 from whatthepatch.exceptions import HunkApplyException
 
 from middleware.auth import auth_required, verify_download_token
@@ -534,8 +534,9 @@ async def download_file(
     # 获取文件对象（排除已删除的），同时预加载 physical_file 关系
     file_obj = await Entry.get(
         session,
-        (Entry.id == file_id) & (Entry.deleted_at == None),
-        load=Entry.physical_file,
+        cond(Entry.id == file_id) &
+        cond(Entry.deleted_at == None),
+        load=rel(Entry.physical_file),
     )
     if not file_obj or file_obj.owner_id != owner_id:
         raise HTTPException(status_code=404, detail="文件不存在")
@@ -703,9 +704,8 @@ async def create_wopi_session(
     from sqlalchemy import and_, select
     ext_records: list[FileAppExtension] = await FileAppExtension.get(
         session,
-        FileAppExtension.extension == ext,
-        fetch_mode="all",
-        load=FileAppExtension.app,
+        cond(FileAppExtension.extension == ext),
+        load=rel(FileAppExtension.app),
     )
 
     wopi_app: FileApp | None = None
@@ -717,8 +717,8 @@ async def create_wopi_session(
             if app.is_restricted:
                 stmt = select(FileAppGroupLink).where(
                     and_(
-                        FileAppGroupLink.app_id == app.id,
-                        FileAppGroupLink.group_id == user.group_id,
+                        cond(FileAppGroupLink.app_id == app.id),
+                        cond(FileAppGroupLink.group_id == user.group_id),
                     )
                 )
                 result = await session.exec(stmt)
@@ -775,8 +775,9 @@ async def _validate_source_link(
     """
     file_obj = await Entry.get(
         session,
-        (Entry.id == file_id) & (Entry.deleted_at == None),
-        load=Entry.physical_file,
+        cond(Entry.id == file_id) &
+        cond(Entry.deleted_at == None),
+        load=rel(Entry.physical_file),
     )
     if not file_obj:
         http_exceptions.raise_not_found("文件不存在")
@@ -797,7 +798,7 @@ async def _validate_source_link(
     # SourceLink 必须存在（只有主动创建过外链的文件才能通过外链访问）
     link: SourceLink | None = await SourceLink.get(
         session,
-        SourceLink.object_id == file_id,
+        cond(SourceLink.file_id == file_id),
     )
     if not link:
         http_exceptions.raise_not_found("外链不存在")
@@ -918,8 +919,9 @@ async def file_content(
     """
     file_obj = await Entry.get(
         session,
-        (Entry.id == file_id) & (Entry.deleted_at == None),
-        load=Entry.physical_file,
+        cond(Entry.id == file_id) &
+        cond(Entry.deleted_at == None),
+        load=rel(Entry.physical_file),
     )
     if not file_obj or file_obj.owner_id != user.id:
         http_exceptions.raise_not_found("文件不存在")
@@ -982,8 +984,9 @@ async def patch_file_content(
     """
     file_obj = await Entry.get(
         session,
-        (Entry.id == file_id) & (Entry.deleted_at == None),
-        load=Entry.physical_file,
+        cond(Entry.id == file_id) &
+        cond(Entry.deleted_at == None),
+        load=rel(Entry.physical_file),
     )
     if not file_obj or file_obj.owner_id != user.id:
         http_exceptions.raise_not_found("文件不存在")
@@ -1121,12 +1124,13 @@ async def file_source(
     # 查找已有 SourceLink
     link: SourceLink | None = await SourceLink.get(
         session,
-        (SourceLink.object_id == file_id) & (SourceLink.name == file_obj.name),
+        cond(SourceLink.file_id == file_id) &
+        cond(SourceLink.name == file_obj.name),
     )
     if not link:
         link = SourceLink(
             name=file_obj.name,
-            object_id=file_id,
+            file_id=file_id,
         )
         link = await link.save(session)
 

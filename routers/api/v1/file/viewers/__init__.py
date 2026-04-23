@@ -4,12 +4,9 @@
 提供按文件扩展名查询可用查看器的功能，包含用户组访问控制过滤。
 """
 from typing import Annotated
-from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import and_
-
-from sqlalchemy import select
+from sqlmodel_ext import cond, rel
 
 from middleware.auth import auth_required
 from middleware.dependencies import SessionDep
@@ -57,11 +54,8 @@ async def get_viewers(
     # 查询匹配扩展名的应用（已启用的）
     ext_records: list[FileAppExtension] = await FileAppExtension.get(
         session,
-        and_(
-            FileAppExtension.extension == normalized_ext,
-        ),
-        fetch_mode="all",
-        load=FileAppExtension.app,
+        cond(FileAppExtension.extension == normalized_ext),
+        load=rel(FileAppExtension.app),
     )
 
     # 过滤和收集可用应用
@@ -74,12 +68,10 @@ async def get_viewers(
             continue
 
         if app.is_restricted:
-            # 检查用户组权限（FileAppGroupLink 是纯关联表，使用 session 查询）
-            stmt = select(FileAppGroupLink).where(
-                and_(
-                    FileAppGroupLink.app_id == app.id,
-                    FileAppGroupLink.group_id == user_group_id,
-                )
+            stmt = FileAppGroupLink.get(
+                session,
+                cond(FileAppGroupLink.app_id == app.id) &
+                cond(FileAppGroupLink.group_id == user_group_id),
             )
             result = await session.exec(stmt)
             group_link = result.first()
@@ -94,10 +86,8 @@ async def get_viewers(
     # 查询用户默认偏好
     user_default: UserFileAppDefault | None = await UserFileAppDefault.get(
         session,
-        and_(
-            UserFileAppDefault.user_id == user.id,
-            UserFileAppDefault.extension == normalized_ext,
-        ),
+        cond(UserFileAppDefault.user_id == user.id) &
+        cond(UserFileAppDefault.extension == normalized_ext),
     )
 
     return FileViewersResponse(

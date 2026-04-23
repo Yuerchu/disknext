@@ -43,7 +43,7 @@ class FileAppType(StrEnum):
 
 # ==================== Link 表 ====================
 
-class FileAppGroupLink(SQLModelBase, table=True):
+class FileAppGroupLink(SQLModelBase, UUIDTableBaseMixin):
     """应用-用户组访问控制关联表"""
 
     app_id: UUID = Field(foreign_key="fileapp.id", primary_key=True, ondelete="CASCADE")

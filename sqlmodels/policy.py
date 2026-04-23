@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from .group import Group
 
 
-class GroupPolicyLink(SQLModelBase, table=True):
+class GroupPolicyLink(SQLModelBase, UUIDTableBaseMixin):
     """用户组与存储策略的多对多关联表"""
 
     group_id: UUID = Field(

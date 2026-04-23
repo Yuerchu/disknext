@@ -7,7 +7,6 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
-from loguru import logger as l
 
 from middleware.auth import auth_required
 from middleware.dependencies import SessionDep, ServerConfigDep, TableViewRequestDep

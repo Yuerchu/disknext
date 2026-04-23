@@ -3,6 +3,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger as l
+from sqlmodel_ext import rel
 
 from middleware.auth import admin_required
 from middleware.dependencies import SessionDep, TableViewRequestDep
@@ -80,7 +81,7 @@ async def router_admin_get_share_list(
     :return: 分页分享列表
     """
     condition = Share.user_id == user_id if user_id else None
-    result = await Share.get_with_count(session, condition, table_view=table_view, load=Share.user)
+    result = await Share.get_with_count(session, condition, table_view=table_view, load=rel(Share.user))
 
     items: list[AdminShareListItem] = []
     for s in result.items:
@@ -108,7 +109,7 @@ async def router_admin_get_share(
     :param share_id: 分享ID
     :return: 分享详情
     """
-    share = await Share.get(session, Share.id == share_id, load=Share.object)
+    share = await Share.get(session, Share.id == share_id, load=rel(Share.entry))
     if not share:
         raise HTTPException(status_code=404, detail="分享不存在")
 

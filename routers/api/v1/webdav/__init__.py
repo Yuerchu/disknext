@@ -3,6 +3,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends
 from loguru import logger as l
+from sqlmodel_ext import cond
 
 from middleware.auth import auth_required
 from middleware.dependencies import SessionDep
@@ -70,13 +71,13 @@ async def list_accounts(
 @webdav_router.post(
     path='/accounts',
     summary='创建账号',
-    status_code=201,
+    status_code=204,
 )
 async def create_account(
     session: SessionDep,
     user: Annotated[User, Depends(auth_required)],
     request: WebDAVCreateRequest,
-) -> WebDAVAccountResponse:
+) -> None:
     """
     创建 WebDAV 账户
 
@@ -93,7 +94,8 @@ async def create_account(
     # 验证账户名唯一
     existing = await WebDAV.get(
         session,
-        (WebDAV.name == request.name) & (WebDAV.user_id == user_id),
+        cond(WebDAV.name == request.name) &
+        cond(WebDAV.user_id == user_id),
     )
     if existing:
         http_exceptions.raise_conflict("账户名已存在")
@@ -115,19 +117,19 @@ async def create_account(
     account = await account.save(session)
 
     l.info(f"用户 {user_id} 创建 WebDAV 账户: {account.name}")
-    return _to_response(account)
 
 
 @webdav_router.patch(
     path='/accounts/{account_id}',
     summary='更新账号',
+    status_code=204,
 )
 async def update_account(
     session: SessionDep,
     user: Annotated[User, Depends(auth_required)],
     account_id: int,
     request: WebDAVUpdateRequest,
-) -> WebDAVAccountResponse:
+) -> None:
     """
     更新 WebDAV 账户
 
@@ -143,7 +145,8 @@ async def update_account(
 
     account = await WebDAV.get(
         session,
-        (WebDAV.id == account_id) & (WebDAV.user_id == user_id),
+        cond(WebDAV.id == account_id) &
+        cond(WebDAV.user_id == user_id),
     )
     if not account:
         http_exceptions.raise_not_found("WebDAV 账户不存在")
@@ -154,19 +157,17 @@ async def update_account(
         if not root_obj or not root_obj.is_folder:
             http_exceptions.raise_bad_request("根目录路径不存在或不是目录")
 
-    # 密码哈希后原地替换，update() 会通过 model_dump(exclude_unset=True) 只取已设置字段
-    is_password_changed = request.password is not None
-    if is_password_changed:
-        request.password = Password.hash(request.password)
+    if request.password:
+        hashed_password = Password.hash(request.password)
+        account.password = hashed_password
 
     account = await account.update(session, request)
 
     # 密码变更时清除认证缓存
-    if is_password_changed:
+    if request.password:
         await WebDAVAuthCache.invalidate_account(user_id, account.name)
 
     l.info(f"用户 {user_id} 更新 WebDAV 账户: {account.name}")
-    return _to_response(account)
 
 
 @webdav_router.delete(
@@ -193,7 +194,8 @@ async def delete_account(
 
     account = await WebDAV.get(
         session,
-        (WebDAV.id == account_id) & (WebDAV.user_id == user_id),
+        cond(WebDAV.id == account_id) &
+        cond(WebDAV.user_id == user_id),
     )
     if not account:
         http_exceptions.raise_not_found("WebDAV 账户不存在")

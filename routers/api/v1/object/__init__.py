@@ -27,7 +27,6 @@ from sqlmodels import (
     EntryType,
     PhysicalFile,
     Policy,
-    PolicyType,
     Task,
     TaskProps,
     TaskStatus,
@@ -390,7 +389,7 @@ async def router_object_copy(
 
 
 @object_router.patch(
-    path='/{object_id}',
+    path='/{file_id}',
     summary='更新对象',
     description='更新对象属性（如重命名）。',
     status_code=204,
@@ -398,7 +397,7 @@ async def router_object_copy(
 async def router_object_update(
     session: SessionDep,
     user: Annotated[User, Depends(auth_required)],
-    object_id: UUID,
+    file_id: UUID,
     request: EntryUpdateRequest,
 ) -> None:
     """
@@ -413,7 +412,7 @@ async def router_object_update(
 
     :param session: 数据库会话
     :param user: 当前登录用户
-    :param object_id: 对象UUID（路径参数）
+    :param file_id: 对象UUID（路径参数）
     :param request: 更新请求
     :return: 更新结果
     """
@@ -423,7 +422,7 @@ async def router_object_update(
     # 验证对象存在（排除已删除的）
     obj = await Entry.get(
         session,
-        (Entry.id == object_id) & (Entry.deleted_at == None)
+        (Entry.id == file_id) & (Entry.deleted_at == None)
     )
     if not obj:
         raise HTTPException(status_code=404, detail="对象不存在")
@@ -470,26 +469,26 @@ async def router_object_update(
 
 
 @object_router.get(
-    path='/{object_id}',
+    path='/{file_id}',
     summary='获取对象基本属性',
     description='获取对象的基本属性信息（名称、类型、大小、创建/修改时间等）。',
 )
 async def router_object_property(
     session: SessionDep,
     user: Annotated[User, Depends(auth_required)],
-    object_id: UUID,
+    file_id: UUID,
 ) -> EntryPropertyResponse:
     """
     获取对象基本属性端点
 
     :param session: 数据库会话
     :param user: 当前登录用户
-    :param object_id: 对象UUID
+    :param file_id: 对象UUID
     :return: 对象基本属性
     """
     obj = await Entry.get(
         session,
-        (Entry.id == object_id) & (Entry.deleted_at == None)
+        (Entry.id == file_id) & (Entry.deleted_at == None)
     )
     if not obj:
         raise HTTPException(status_code=404, detail="对象不存在")
@@ -510,26 +509,26 @@ async def router_object_property(
 
 
 @object_router.get(
-    path='/{object_id}/detail',
+    path='/{file_id}/detail',
     summary='获取对象详细属性',
     description='获取对象的详细属性信息，包括元数据、分享统计、存储信息等。',
 )
 async def router_object_property_detail(
     session: SessionDep,
     user: Annotated[User, Depends(auth_required)],
-    object_id: UUID,
+    file_id: UUID,
 ) -> EntryPropertyDetailResponse:
     """
     获取对象详细属性端点
 
     :param session: 数据库会话
     :param user: 当前登录用户
-    :param object_id: 对象UUID
+    :param file_id: 对象UUID
     :return: 对象详细属性
     """
     obj = await Entry.get(
         session,
-        (Entry.id == object_id) & (Entry.deleted_at == None),
+        (Entry.id == file_id) & (Entry.deleted_at == None),
         load=Entry.metadata_entries,
     )
     if not obj:
@@ -546,8 +545,7 @@ async def router_object_property_detail(
     from sqlmodels import Share
     shares = await Share.get(
         session,
-        Share.object_id == obj.id,
-        fetch_mode="all"
+        Share.file_id == obj.id,
     )
     share_count = len(shares)
     total_views = sum(s.views for s in shares)
@@ -592,14 +590,14 @@ async def router_object_property_detail(
 
 
 @object_router.patch(
-    path='/{object_id}/policy',
+    path='/{file_id}/policy',
     summary='切换对象存储策略',
 )
 async def router_object_switch_policy(
     session: SessionDep,
     background_tasks: BackgroundTasks,
     user: Annotated[User, Depends(auth_required)],
-    object_id: UUID,
+    file_id: UUID,
     request: EntrySwitchPolicyRequest,
 ) -> TaskSummaryBase:
     """
@@ -621,7 +619,7 @@ async def router_object_switch_policy(
     # 查找对象
     obj = await Entry.get(
         session,
-        (Entry.id == object_id) & (Entry.deleted_at == None)
+        (Entry.id == file_id) & (Entry.deleted_at == None)
     )
     if not obj:
         http_exceptions.raise_not_found("对象不存在")
@@ -670,7 +668,7 @@ async def router_object_switch_policy(
         task_id=task_id,
         source_policy_id=src_policy_id,
         dest_policy_id=dest_policy_id,
-        object_id=obj_id,
+        file_id=obj_id,
     )
     task_props = await task_props.save(session)
 
@@ -727,14 +725,14 @@ async def router_object_switch_policy(
 # ==================== 元数据端点 ====================
 
 @object_router.get(
-    path='/{object_id}/metadata',
+    path='/{file_id}/metadata',
     summary='获取对象元数据',
     description='获取对象的元数据键值对，可按命名空间过滤。',
 )
 async def router_get_object_metadata(
     session: SessionDep,
     user: Annotated[User, Depends(auth_required)],
-    object_id: UUID,
+    file_id: UUID,
     ns: str | None = None,
 ) -> MetadataResponse:
     """
@@ -751,7 +749,7 @@ async def router_get_object_metadata(
     """
     obj = await Entry.get(
         session,
-        (Entry.id == object_id) & (Entry.deleted_at == None),
+        (Entry.id == file_id) & (Entry.deleted_at == None),
         load=Entry.metadata_entries,
     )
     if not obj:
@@ -781,7 +779,7 @@ async def router_get_object_metadata(
 
 
 @object_router.patch(
-    path='/{object_id}/metadata',
+    path='/{file_id}/metadata',
     summary='批量更新对象元数据',
     description='批量设置或删除对象的元数据条目。仅允许修改 custom: 命名空间。',
     status_code=204,
@@ -789,7 +787,7 @@ async def router_get_object_metadata(
 async def router_patch_object_metadata(
     session: SessionDep,
     user: Annotated[User, Depends(auth_required)],
-    object_id: UUID,
+    file_id: UUID,
     request: MetadataPatchRequest,
 ) -> None:
     """
@@ -807,7 +805,7 @@ async def router_patch_object_metadata(
     """
     obj = await Entry.get(
         session,
-        (Entry.id == object_id) & (Entry.deleted_at == None),
+        (Entry.id == file_id) & (Entry.deleted_at == None),
     )
     if not obj:
         raise HTTPException(status_code=404, detail="对象不存在")
@@ -828,7 +826,7 @@ async def router_patch_object_metadata(
             # 删除元数据条目
             existing = await EntryMetadata.get(
                 session,
-                (EntryMetadata.object_id == object_id) & (EntryMetadata.name == patch.key),
+                (EntryMetadata.file_id == file_id) & (EntryMetadata.name == patch.key),
             )
             if existing:
                 await EntryMetadata.delete(session, instances=existing)
@@ -836,18 +834,18 @@ async def router_patch_object_metadata(
             # 设置/更新元数据条目
             existing = await EntryMetadata.get(
                 session,
-                (EntryMetadata.object_id == object_id) & (EntryMetadata.name == patch.key),
+                (EntryMetadata.file_id == file_id) & (EntryMetadata.name == patch.key),
             )
             if existing:
                 existing.value = patch.value
                 existing = await existing.save(session)
             else:
                 entry = EntryMetadata(
-                    object_id=object_id,
+                    file_id=file_id,
                     name=patch.key,
                     value=patch.value,
                     is_public=True,
                 )
                 entry = await entry.save(session)
 
-    l.info(f"用户 {user.id} 更新了对象 {object_id} 的 {len(request.patches)} 条元数据")
+    l.info(f"用户 {user.id} 更新了对象 {file_id} 的 {len(request.patches)} 条元数据")

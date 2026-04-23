@@ -3,6 +3,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger as l
+from sqlmodel_ext import rel
 
 from middleware.auth import admin_required
 from middleware.dependencies import SessionDep, TableViewRequestDep
@@ -84,7 +85,7 @@ async def router_admin_get_task_list(
             condition = condition & c
     else:
         condition = None
-    result = await Task.get_with_count(session, condition, table_view=table_view, load=Task.user)
+    result = await Task.get_with_count(session, condition, table_view=table_view, load=rel(Task.user))
 
     items: list[TaskSummary] = []
     for t in result.items:
@@ -111,7 +112,7 @@ async def router_admin_get_task(
     :param task_id: 任务ID
     :return: 任务详情
     """
-    task = await Task.get(session, Task.id == task_id, load=Task.props)
+    task = await Task.get(session, Task.id == task_id, load=rel(Task.props))
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
 

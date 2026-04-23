@@ -4,6 +4,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query, HTTPException
 from loguru import logger as l
+from sqlmodel_ext import rel
 
 from middleware.auth import auth_required
 from middleware.dependencies import SessionDep
@@ -45,7 +46,7 @@ async def router_share_get(
     4. 返回分享详情（含文件树和分享者信息）
     """
     # 1. 查询分享（预加载 user 和 object）
-    share = await Share.get_exist_one(session, id, load=[Share.user, Share.object])
+    share = await Share.get_exist_one(session, id, load=[rel(Share.user), rel(Share.entry)])
 
     # 2. 检查过期
     now = datetime.now()
@@ -120,10 +121,10 @@ async def router_share_get(
 def router_share_download(id: str) -> ResponseBase:
     """
     Create a file download session by ID.
-    
+
     Args:
         id (str): The ID of the file to be downloaded.
-    
+
     Returns:
         dict: A dictionary containing download session information.
     """
@@ -137,10 +138,10 @@ def router_share_download(id: str) -> ResponseBase:
 def router_share_preview(id: str) -> ResponseBase:
     """
     Preview shared file by ID.
-    
+
     Args:
         id (str): The ID of the file to be previewed.
-    
+
     Returns:
         dict: A dictionary containing preview information.
     """
@@ -154,10 +155,10 @@ def router_share_preview(id: str) -> ResponseBase:
 def router_share_content(id: str) -> ResponseBase:
     """
     Get text file content by ID.
-    
+
     Args:
         id (str): The ID of the text file.
-    
+
     Returns:
         str: The content of the text file.
     """
@@ -168,14 +169,14 @@ def router_share_content(id: str) -> ResponseBase:
     summary='获取目录列文件',
     description='Get directory listing by ID and path.',
 )
-def router_share_list(id: str, path: str = '') -> ResponseBase:
+def router_get_share_list(id: str, path: str = '') -> ResponseBase:
     """
     Get directory listing by ID and path.
-    
+
     Args:
         id (str): The ID of the directory.
         path (str): The path within the directory.
-    
+
     Returns:
         dict: A dictionary containing directory listing information.
     """
@@ -208,10 +209,10 @@ def router_share_search(
 def router_share_archive(id: str) -> ResponseBase:
     """
     Archive and download shared content by ID.
-    
+
     Args:
         id (str): The ID of the content to be archived.
-    
+
     Returns:
         dict: A dictionary containing archive download information.
     """
@@ -225,10 +226,10 @@ def router_share_archive(id: str) -> ResponseBase:
 def router_share_readme(id: str) -> ResponseBase:
     """
     Get README text file content by ID.
-    
+
     Args:
         id (str): The ID of the README file.
-    
+
     Returns:
         str: The content of the README file.
     """
@@ -242,11 +243,11 @@ def router_share_readme(id: str) -> ResponseBase:
 def router_share_thumb(id: str, file: str) -> ResponseBase:
     """
     Get thumbnail image by ID and file name.
-    
+
     Args:
         id (str): The ID of the shared content.
         file (str): The name of the file for which to get the thumbnail.
-    
+
     Returns:
         str: A Base64 encoded string of the thumbnail image.
     """
@@ -260,10 +261,10 @@ def router_share_thumb(id: str, file: str) -> ResponseBase:
 def router_share_report(id: str) -> ResponseBase:
     """
     Report shared content by ID.
-    
+
     Args:
         id (str): The ID of the shared content to report.
-    
+
     Returns:
         dict: A dictionary containing report submission information.
     """
@@ -277,11 +278,11 @@ def router_share_report(id: str) -> ResponseBase:
 def router_share_search_public(keywords: str, type: str = 'all') -> ResponseBase:
     """
     Search public shares by keywords and type.
-    
+
     Args:
         keywords (str): The keywords to search for.
         type (str): The type of search (e.g., all, file, folder).
-    
+
     Returns:
         dict: A dictionary containing search results for public shares.
     """
@@ -438,10 +439,10 @@ async def router_share_list(
 def router_share_save(id: str) -> ResponseBase:
     """
     Save another user's share by ID.
-    
+
     Args:
         id (str): The ID of the share to be saved.
-    
+
     Returns:
         ResponseBase: A model containing the response data for the saved share.
     """
@@ -456,10 +457,10 @@ def router_share_save(id: str) -> ResponseBase:
 def router_share_update(id: str) -> ResponseBase:
     """
     Update share information by ID.
-    
+
     Args:
         id (str): The ID of the share to be updated.
-    
+
     Returns:
         ResponseBase: A model containing the response data for the updated share.
     """

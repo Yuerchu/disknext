@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from loguru import logger as l
 from sqlmodel.ext.asyncio.session import AsyncSession
+from sqlmodel import update as sql_update
 
 from middleware.auth import admin_required
 from middleware.dependencies import SessionDep, TableViewRequestDep
@@ -225,7 +226,6 @@ async def router_admin_delete_file(
                     l.warning(f"删除物理文件失败: {e}")
 
     # 更新用户存储量（使用 SQL UPDATE 直接更新，无需加载实例）
-    from sqlmodel import update as sql_update
     stmt = sql_update(User).where(User.id == owner_id).values(
         storage=max(0, User.storage - file_size)
     )
