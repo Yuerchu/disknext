@@ -107,8 +107,8 @@ class PhysicalFile(PhysicalFileBase, UUIDTableBaseMixin):
         """
         self.decrement_reference()
         if not self.can_be_deleted:
-            await self.save(session, commit=commit)
-            l.debug(f"物理文件仍有 {self.reference_count} 个引用: {self.storage_path}")
+            refreshed = await self.save(session, commit=commit)
+            l.debug(f"物理文件仍有 {refreshed.reference_count} 个引用: {refreshed.storage_path}")
             return False
 
         # 物理删除

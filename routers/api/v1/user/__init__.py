@@ -211,22 +211,21 @@ async def _auto_register_oauth_user(
         scopes=default_group.default_scopes,
         **oauth_fields,
     )
-    new_user_id = new_user.id
     new_user = await new_user.save(session)
 
     # 创建用户根目录
     default_policy = await sqlmodels.Policy.get(session, sqlmodels.Policy.name == "本地存储")
     if default_policy:
-        await sqlmodels.Entry(
+        _ = await sqlmodels.Entry(
             name="/",
             type=sqlmodels.EntryType.FOLDER,
-            owner_id=new_user_id,
+            owner_id=new_user.id,
             parent_id=None,
             policy_id=default_policy.id,
         ).save(session)
 
     # 重新加载用户（含 group 关系）
-    user: User = await User.get_exist_one(session, new_user_id, load=rel(User.group))
+    user: User = await User.get_exist_one(session, new_user.id, load=rel(User.group))
     logger.info(f"OAuth 自动注册用户: provider={provider.value}, openid={openid}")
     return user
 
@@ -319,7 +318,9 @@ async def _login_magic_link(
     if not is_first_use:
         http_exceptions.raise_unauthorized("Magic Link 已被使用")
 
-    user: User = await User.get_exist_one(session, User.email == email, load=rel(User.group))
+    user: User | None = await User.get(session, User.email == email, load=rel(User.group))
+    if user is None:
+        http_exceptions.raise_not_found("用户不存在")
     if user.status != UserStatus.ACTIVE:
         http_exceptions.raise_forbidden("账户已被禁用")
 
@@ -491,7 +492,6 @@ async def router_user_register(
         password_hash=hashed_password,
         scopes=default_group.default_scopes,
     )
-    new_user_id = new_user.id
     new_user = await new_user.save(session)
 
     # 8. 创建用户根目录（使用用户组关联的第一个存储策略）
@@ -501,10 +501,10 @@ async def router_user_register(
         http_exceptions.raise_internal_error()
     default_policy = default_group.policies[0]
 
-    await sqlmodels.Entry(
+    _ = await sqlmodels.Entry(
         name="/",
         type=sqlmodels.EntryType.FOLDER,
-        owner_id=new_user_id,
+        owner_id=new_user.id,
         parent_id=None,
         policy_id=default_policy.id,
     ).save(session)

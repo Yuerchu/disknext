@@ -5,7 +5,6 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, EmailStr
 from pydantic_extra_types.phone_numbers import PhoneNumber
-from sqlalchemy import BinaryExpression, ClauseElement, and_
 from sqlalchemy import update as sql_update
 from sqlmodel_ext.field_types.dialects.postgresql import Array
 from sqlalchemy.sql.functions import func
@@ -614,57 +613,3 @@ class User(UserBase, UUIDTableBaseMixin):
 
         l.debug(f"用户 {self.id} 存储配额变更: {'+' if delta > 0 else ''}{delta} bytes")
 
-    @classmethod
-    async def get_with_count(
-            cls: type[T],
-            session: AsyncSession,
-            condition: BinaryExpression | ClauseElement | None = None,
-            *,
-            filter_params: 'UserFilterParams | None' = None,
-            join: type[T] | tuple[type[T], ClauseElement] | None = None,
-            options: list | None = None,
-            load: RelationshipInfo | None = None,
-            order_by: list[ClauseElement] | None = None,
-            filter: BinaryExpression | ClauseElement | None = None,
-            table_view: TableViewRequest | None = None,
-    ) -> 'ListResponse[T]':
-        """
-        获取分页用户列表及总数，支持用户过滤参数
-
-        :param filter_params: UserFilterParams 过滤参数对象（用户组、用户名、昵称、状态等）
-        :param 其他参数: 继承自 UUIDTableBaseMixin.get_with_count()
-        """
-        # 构建过滤条件
-        merged_condition = condition
-        if filter_params is not None:
-            filter_conditions: list[BinaryExpression] = []
-
-            if filter_params.group_id is not None:
-                filter_conditions.append(cls.group_id == filter_params.group_id)
-
-            if filter_params.email_contains is not None:
-                filter_conditions.append(cls.email.ilike(f"%{filter_params.email_contains}%"))
-
-            if filter_params.nickname_contains is not None:
-                filter_conditions.append(cls.nickname.ilike(f"%{filter_params.nickname_contains}%"))
-
-            if filter_params.status is not None:
-                filter_conditions.append(cls.status == filter_params.status)
-
-            if filter_conditions:
-                combined_filter = and_(*filter_conditions)
-                if merged_condition is not None:
-                    merged_condition = and_(merged_condition, combined_filter)
-                else:
-                    merged_condition = combined_filter
-
-        return await super().get_with_count(
-            session,
-            merged_condition,
-            join=join,
-            options=options,
-            load=load,
-            order_by=order_by,
-            filter=filter,
-            table_view=table_view,
-        )

@@ -1047,7 +1047,7 @@ class Entry(EntryBase, UUIDTableBaseMixin):
         # 5. 更新 Entry
         self.policy_id = dest_policy.id
         self.physical_file_id = new_physical.id
-        await self.save(session)
+        self = await self.save(session)
 
         # 6. 旧 PhysicalFile 引用计数 -1
         old_physical.decrement_reference()

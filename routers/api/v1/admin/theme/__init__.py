@@ -145,7 +145,7 @@ async def router_admin_theme_delete(
     """
     preset = await ThemePreset.get_exist_one(session, preset_id)
 
-    await preset.delete(session)
+    await ThemePreset.delete(session, preset)
     l.info(f"管理员删除了主题预设: {preset.name}")
 
 

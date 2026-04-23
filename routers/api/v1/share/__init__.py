@@ -109,7 +109,7 @@ async def router_share_get(
 
     # 8. 递增浏览次数（最后执行，避免 MissingGreenlet）
     share.views += 1
-    await share.save(session, refresh=False)
+    share = await share.save(session, refresh=False)
 
     return response
 

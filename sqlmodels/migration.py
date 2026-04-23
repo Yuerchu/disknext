@@ -56,13 +56,13 @@ async def _ensure_mail_templates() -> None:
             type=MailTemplateType.ACTIVATION,
             content=_DEFAULT_MAIL_ACTIVATION_TEMPLATE,
         )
-        await activation_template.save(session)
+        activation_template = await activation_template.save(session)
 
         reset_template = MailTemplate(
             type=MailTemplateType.RESET_PASSWORD,
             content=_DEFAULT_MAIL_RESET_PWD_TEMPLATE,
         )
-        await reset_template.save(session)
+        reset_template = await reset_template.save(session)
         log.info("默认邮件模板已创建")
 
 
@@ -101,13 +101,12 @@ async def init_default_group() -> None:
                 advance_delete=True,
                 default_scopes=ADMIN_SCOPES,
             )
-            admin_group_id = admin_group.id
             admin_group = await admin_group.save(session)
 
             # 关联默认存储策略
             if default_policy_id:
                 session.add(GroupPolicyLink(
-                    group_id=admin_group_id,
+                    group_id=admin_group.id,
                     policy_id=default_policy_id,
                 ))
                 await session.commit()
@@ -122,13 +121,12 @@ async def init_default_group() -> None:
                 share_download=True,
                 default_scopes=USER_DEFAULT_SCOPES,
             )
-            member_group_id = member_group.id
             member_group = await member_group.save(session)
 
             # 关联默认存储策略
             if default_policy_id:
                 session.add(GroupPolicyLink(
-                    group_id=member_group_id,
+                    group_id=member_group.id,
                     policy_id=default_policy_id,
                 ))
                 await session.commit()
@@ -136,7 +134,7 @@ async def init_default_group() -> None:
             # 更新 ServerConfig 的 default_group_id
             config = await ServerConfig.get(session, col(ServerConfig.id) == 1)
             if config:
-                config.default_group_id = member_group_id
+                config.default_group_id = member_group.id
                 config = await config.save(session)
 
         # 未找到初始游客组时，则创建
@@ -147,7 +145,6 @@ async def init_default_group() -> None:
                 web_dav_enabled=False,
                 share_download=True,
             )
-            guest_group_id = guest_group.id
             guest_group = await guest_group.save(session)
 
             # 游客组不关联存储策略（无法上传）
@@ -191,20 +188,19 @@ async def init_default_user() -> None:
                 group_id=admin_group.id,
                 password_hash=Password.hash(admin_password),
             )
-            admin_user_id = admin_user.id
             admin_user = await admin_user.save(session)
 
             # 记录默认管理员 ID 到 ServerConfig
             config = await ServerConfig.get(session, col(ServerConfig.id) == 1)
             if config:
-                config.default_admin_id = admin_user_id
+                config.default_admin_id = admin_user.id
                 config = await config.save(session)
 
             # 为管理员创建根目录
-            await Entry(
+            _ = await Entry(
                 name="/",
                 type=EntryType.FOLDER,
-                owner_id=admin_user_id,
+                owner_id=admin_user.id,
                 parent_id=None,
                 policy_id=default_policy_id,
             ).save(session)

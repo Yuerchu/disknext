@@ -196,13 +196,11 @@ async def router_directory_create(
         if not group or request.policy_id not in {p.id for p in group.policies}:
             raise HTTPException(status_code=403, detail="当前用户组无权使用该存储策略")
 
-    parent_id = parent.id  # 在 save 前保存
-
     new_folder = Entry(
         name=name,
         type=EntryType.FOLDER,
         owner_id=user_id,
-        parent_id=parent_id,
+        parent_id=parent.id,
         policy_id=policy_id,
     )
     new_folder = await new_folder.save(session)

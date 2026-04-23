@@ -2,7 +2,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger as l
-from sqlalchemy import func
+from sqlalchemy import and_, func
+from sqlalchemy.sql.elements import ColumnElement
 
 from middleware.auth import admin_required
 from middleware.dependencies import SessionDep, ServerConfigDep, TableViewRequestDep, UserFilterParamsDep
@@ -12,7 +13,7 @@ from sqlmodels import (
     Group, Entry, EntryType,
 )
 from sqlmodels.user import (
-    UserAdminCreateRequest, UserAdminUpdateRequest, UserCalibrateResponse, UserStatus,
+    UserAdminCreateRequest, UserAdminUpdateRequest, UserCalibrateResponse, UserFilterParams, UserStatus,
 )
 from utils import Password, http_exceptions
 
@@ -20,6 +21,24 @@ admin_user_router = APIRouter(
     prefix="/user",
     tags=["admin", "admin_user"],
 )
+
+
+def _build_user_filter_condition(filter_params: UserFilterParams) -> ColumnElement[bool] | None:
+    """将 UserFilterParams 转为 SQLAlchemy WHERE 条件"""
+    conditions: list[ColumnElement[bool]] = []
+
+    if filter_params.group_id is not None:
+        conditions.append(User.group_id == filter_params.group_id)
+    if filter_params.email_contains is not None:
+        conditions.append(User.email.ilike(f"%{filter_params.email_contains}%"))
+    if filter_params.nickname_contains is not None:
+        conditions.append(User.nickname.ilike(f"%{filter_params.nickname_contains}%"))
+    if filter_params.status is not None:
+        conditions.append(User.status == filter_params.status)
+
+    if not conditions:
+        return None
+    return and_(*conditions)
 
 
 @admin_user_router.get(
@@ -41,7 +60,8 @@ async def router_admin_get_users(
     :param filter_params: 用户筛选参数（用户组、用户名、昵称、状态）
     :return: 分页用户列表
     """
-    result = await User.get_with_count(session, filter_params=filter_params, table_view=table_view, load=User.group)
+    condition = _build_user_filter_condition(filter_params)
+    result = await User.get_with_count(session, condition, table_view=table_view, load=User.group)
     return ListResponse(
         items=[user.to_public() for user in result.items],
         count=result.count,
