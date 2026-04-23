@@ -133,7 +133,7 @@ async def test_admin_create_user_requires_auth(async_client: AsyncClient):
     """测试创建用户需要认证"""
     response = await async_client.post(
         "/api/v1/admin/user/",
-        json={"email": "newadminuser@test.local", "password": "pass123"}
+        json={"email": "newadminuser@example.com", "password": "pass123"}
     )
     assert response.status_code == 401
 
@@ -147,7 +147,7 @@ async def test_admin_create_user_requires_admin(
     response = await async_client.post(
         "/api/v1/admin/user/",
         headers=auth_headers,
-        json={"email": "newadminuser@test.local", "password": "pass123"}
+        json={"email": "newadminuser@example.com", "password": "pass123"}
     )
     assert response.status_code == 403
 

@@ -42,7 +42,7 @@ async def no_webdav_headers(initialized_db: AsyncSession) -> dict[str, str]:
 
     user = User(
         id=uuid4(),
-        email="nowebdav@test.local",
+        email="nowebdav@example.com",
         nickname="无WebDAV用户",
         status=UserStatus.ACTIVE,
         storage=0,

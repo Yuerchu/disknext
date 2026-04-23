@@ -64,6 +64,12 @@ class TestDiskNextURIParse:
         assert uri.query["name"] == "report"
         assert uri.query["type"] == "file"
 
+    def test_parse_semicolon_kept_in_path(self):
+        """分号应保留在路径里"""
+        uri = DiskNextURI.parse("disknext://my/docs;v1/readme.md")
+        assert uri.namespace == FileSystemNamespace.MY
+        assert uri.path == "/docs;v1/readme.md"
+
     def test_parse_invalid_scheme(self):
         """测试无效的协议前缀"""
         with pytest.raises(ValueError, match="disknext://"):
@@ -144,6 +150,20 @@ class TestDiskNextURIToString:
         uri = DiskNextURI.parse(original)
         result = uri.to_string()
         assert result == original
+
+    def test_to_string_quotes_path(self):
+        """路径中的空格应编码为合法 URI"""
+        uri = DiskNextURI.build(FileSystemNamespace.MY, path="/docs/a b.txt")
+        assert uri.to_string() == "disknext://my/docs/a%20b.txt"
+
+    def test_to_string_roundtrip_with_encoded_userinfo(self):
+        """userinfo 和路径中的转义字符应往返一致"""
+        original = "disknext://foo%3Abar:pass%40word@share/a%20b.txt"
+        uri = DiskNextURI.parse(original)
+        assert uri.fs_id == "foo:bar"
+        assert uri.password == "pass@word"
+        assert uri.path == "/a b.txt"
+        assert uri.to_string() == original
 
 
 class TestDiskNextURIId:

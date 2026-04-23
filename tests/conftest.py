@@ -286,7 +286,7 @@ async def test_user(db_session: AsyncSession) -> dict[str, str | UUID]:
 
     password = "test_password_123"
     user = User(
-        email="testuser@test.local",
+        email="testuser@example.com",
         nickname="测试用户",
         status=UserStatus.ACTIVE,
         storage=0,
@@ -529,6 +529,7 @@ async def minimal_setup(db_session: AsyncSession, faker: Faker) -> dict[str, obj
         storage=0,
         score=0,
         group_id=group.id,
+        password_hash="$argon2id$v=19$m=65536,t=3,p=4$stub_hash_for_test",
     )
     user = await user.save(db_session)
 

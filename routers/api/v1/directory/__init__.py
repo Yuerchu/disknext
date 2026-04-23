@@ -40,8 +40,8 @@ async def _get_directory_response(
     :return: DirectoryResponse
     """
     children = await Entry.get_children(session, user_id, folder.id)
-    policy = await Policy.get(session, Policy.id == folder.policy_id)
-    if not policy:
+    await session.refresh(folder, ['policy'])
+    if not folder.policy:
         raise HTTPException(status_code=500, detail="目录对应的存储策略不存在")
 
     return DirectoryResponse(
@@ -61,10 +61,10 @@ async def _get_directory_response(
             for child in children
         ],
         policy=PolicyResponse(
-            id=policy.id,
-            name=policy.name,
-            type=policy.type,
-            max_size=policy.max_size,
+            id=folder.policy.id,
+            name=folder.policy.name,
+            type=folder.policy.type,
+            max_size=folder.policy.max_size,
         ),
     )
 

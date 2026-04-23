@@ -97,6 +97,10 @@ from .file import (
     TrashItemResponse,
     TrashRestoreRequest,
     TrashDeleteRequest,
+    TextContentResponse,
+    PatchContentRequest,
+    PatchContentResponse,
+    SourceLinkResponse
 )
 from .file_metadata import (
     EntryMetadata,

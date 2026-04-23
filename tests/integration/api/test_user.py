@@ -54,7 +54,7 @@ async def test_user_login_nonexistent_user(async_client: AsyncClient):
         "/api/v1/user/session",
         json={
             "provider": "email_password",
-            "identifier": "nonexistent@test.local",
+            "identifier": "nonexistent@example.com",
             "credential": "anypassword",
         }
     )
@@ -87,7 +87,7 @@ async def test_user_register_success(async_client: AsyncClient):
         "/api/v1/user/",
         json={
             "provider": "email_password",
-            "identifier": "newuser@test.local",
+            "identifier": "newuser@example.com",
             "credential": "newpass123",
         }
     )
@@ -142,7 +142,7 @@ async def test_user_me_returns_user_info(
     data = response.json()
     assert "id" in data
     assert "email" in data
-    assert data["email"] == "testuser@test.local"
+    assert data["email"] == "testuser@example.com"
     assert "group" in data
     assert "tags" in data
 

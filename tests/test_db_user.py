@@ -16,8 +16,9 @@ async def test_user_curd(db_session: AsyncSession):
     created_group = await test_user_group.save(db_session)
 
     test_user = User(
-        email='test_user@test.local',
-        group_id=created_group.id
+        email='test_user@example.com',
+        group_id=created_group.id,
+        password_hash="$argon2id$v=19$m=65536,t=3,p=4$stub_hash_for_test",
     )
 
     # 测试增 Create
@@ -25,23 +26,23 @@ async def test_user_curd(db_session: AsyncSession):
 
     # 验证用户是否存在
     assert created_user.id is not None
-    assert created_user.email == 'test_user@test.local'
+    assert created_user.email == 'test_user@example.com'
     assert created_user.group_id == created_group.id
 
     # 测试查 Read
     fetched_user = await User.get(db_session, User.id == created_user.id)
 
     assert fetched_user is not None
-    assert fetched_user.email == 'test_user@test.local'
+    assert fetched_user.email == 'test_user@example.com'
     assert fetched_user.group_id == created_group.id
 
     # 测试改 Update
     from sqlmodels.user import UserBase
-    update_data = UserBase(email="updated_user@test.local")
+    update_data = UserBase(email="updated_user@example.com")
     updated_user = await fetched_user.update(db_session, update_data)
 
     assert updated_user is not None
-    assert updated_user.email == 'updated_user@test.local'
+    assert updated_user.email == 'updated_user@example.com'
 
     # 测试删除 Delete
     await User.delete(db_session, instances=updated_user)

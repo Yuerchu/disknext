@@ -44,7 +44,7 @@ async def text_file(
     local_policy: Policy,
 ) -> dict[str, str | int]:
     """创建包含 UTF-8 文本内容的测试文件"""
-    user = await User.get(initialized_db, User.email == "testuser@test.local")
+    user = await User.get(initialized_db, User.email == "testuser@example.com")
     root = await Entry.get_root(initialized_db, user.id)
 
     content = "line1\nline2\nline3\n"
@@ -92,7 +92,7 @@ async def binary_file(
     local_policy: Policy,
 ) -> dict[str, str | int]:
     """创建非 UTF-8 的二进制测试文件"""
-    user = await User.get(initialized_db, User.email == "testuser@test.local")
+    user = await User.get(initialized_db, User.email == "testuser@example.com")
     root = await Entry.get_root(initialized_db, user.id)
 
     # 包含无效 UTF-8 字节序列
@@ -207,7 +207,7 @@ class TestGetFileContent:
         local_policy: Policy,
     ) -> None:
         """CRLF 换行符被规范化为 LF"""
-        user = await User.get(initialized_db, User.email == "testuser@test.local")
+        user = await User.get(initialized_db, User.email == "testuser@example.com")
         root = await Entry.get_root(initialized_db, user.id)
 
         crlf_content = b"line1\r\nline2\r\n"

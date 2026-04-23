@@ -5,7 +5,7 @@ import pytest
 from httpx import AsyncClient
 from uuid import UUID, uuid4
 
-from sqlmodels import FileMetadata
+from sqlmodels import EntryMetadata
 
 
 # ==================== 获取元数据测试 ====================
@@ -47,9 +47,9 @@ async def test_get_metadata_with_entries(
 
     # 直接写入元数据
     entries = [
-        FileMetadata(file_id=file_id, name="exif:width", value="1920", is_public=True),
-        FileMetadata(file_id=file_id, name="exif:height", value="1080", is_public=True),
-        FileMetadata(file_id=file_id, name="sys:extract_status", value="done", is_public=False),
+        EntryMetadata(file_id=file_id, name="exif:width", value="1920", is_public=True),
+        EntryMetadata(file_id=file_id, name="exif:height", value="1080", is_public=True),
+        EntryMetadata(file_id=file_id, name="sys:extract_status", value="done", is_public=False),
     ]
     for entry in entries:
         initialized_db.add(entry)
@@ -79,8 +79,8 @@ async def test_get_metadata_ns_filter(
     file_id = test_directory_structure["file_id"]
 
     entries = [
-        FileMetadata(file_id=file_id, name="exif:width", value="1920", is_public=True),
-        FileMetadata(file_id=file_id, name="music:title", value="Test Song", is_public=True),
+        EntryMetadata(file_id=file_id, name="exif:width", value="1920", is_public=True),
+        EntryMetadata(file_id=file_id, name="music:title", value="Test Song", is_public=True),
     ]
     for entry in entries:
         initialized_db.add(entry)

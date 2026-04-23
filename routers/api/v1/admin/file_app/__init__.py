@@ -60,10 +60,12 @@ async def list_file_apps(
         extensions = await FileAppExtension.get(
             session,
             FileAppExtension.app_id == app.id,
+            fetch_mode="all",
         )
         group_links = await FileAppGroupLink.get(
             session,
-            cond(FileAppGroupLink.app_id == app.id)
+            cond(FileAppGroupLink.app_id == app.id),
+            fetch_mode="all",
         )
         apps.append(FileAppResponse.from_app(app, extensions, group_links))
 
@@ -161,6 +163,7 @@ async def get_file_app(
     group_links = await FileAppGroupLink.get(
         session,
         cond(FileAppGroupLink.app_id == app.id),
+        fetch_mode="all",
     )
 
     return FileAppResponse.from_app(app, extensions, group_links)
@@ -202,10 +205,12 @@ async def update_file_app(
     extensions = await FileAppExtension.get(
         session,
         cond(FileAppExtension.app_id == app.id),
+        fetch_mode="all",
     )
     group_links = await FileAppGroupLink.get(
         session,
         cond(FileAppGroupLink.app_id == app.id),
+        fetch_mode="all",
     )
 
     l.info(f"更新文件应用: {app.name} ({app.app_key})")
@@ -295,6 +300,7 @@ async def update_extensions(
     group_links = await FileAppGroupLink.get(
         session,
         cond(FileAppGroupLink.app_id == app_id),
+        fetch_mode="all",
     )
 
     l.info(f"更新文件应用 {app.app_key} 的扩展名: {request.extensions}")
@@ -327,6 +333,7 @@ async def update_group_access(
     old_links = await FileAppGroupLink.get(
         session,
         cond(FileAppGroupLink.app_id == app_id),
+        fetch_mode="all",
     )
     for old_link in old_links:
         await session.delete(old_link)
@@ -416,6 +423,7 @@ async def discover_wopi(
     old_extensions = await FileAppExtension.get(
         session,
         cond(FileAppExtension.app_id == app_id),
+        fetch_mode="all",
     )
     for old_ext in old_extensions:
         await FileAppExtension.delete(session, old_ext, commit=False)

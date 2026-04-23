@@ -10,6 +10,31 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:latest
+        env:
+          POSTGRES_USER: disknext
+          POSTGRES_PASSWORD: disknext_test
+          POSTGRES_DB: disknext_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U disknext"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:latest
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -20,8 +45,10 @@ jobs:
           python-version: "3.14"
 
       - name: Install dependencies
-        # --frozen 跳过锁文件重解析，避免 uv 校验 ee/_license_core 编辑源（EE 私有路径）
         run: uv sync --frozen
 
       - name: Run tests
+        env:
+          TEST_DATABASE_URL: postgresql+asyncpg://disknext:disknext_test@localhost:5432/disknext_test
+          TEST_REDIS_URL: redis://localhost:6379/15
         run: uv run pytest tests/ -v --tb=short

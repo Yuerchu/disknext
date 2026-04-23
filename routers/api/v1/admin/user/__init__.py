@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger as l
 from sqlalchemy import and_, func
 from sqlalchemy.sql.elements import ColumnElement
+from sqlmodel_ext import rel
 
 from middleware.auth import admin_required
 from middleware.dependencies import SessionDep, ServerConfigDep, TableViewRequestDep, UserFilterParamsDep
@@ -63,7 +64,14 @@ async def router_admin_get_users(
     condition = _build_user_filter_condition(filter_params)
     result = await User.get_with_count(session, condition, table_view=table_view, load=User.group)
     return ListResponse(
-        items=[user.to_public() for user in result.items],
+        items=[
+            UserPublic.model_validate(
+                user,
+                from_attributes=True,
+                update={'group_name': user.group.name if user.group else ""},
+            )
+            for user in result.items
+        ],
         count=result.count,
     )
 
@@ -85,8 +93,12 @@ async def router_admin_get_user(session: SessionDep, user_id: UUID) -> UserPubli
     Returns:
         ResponseBase: 包含用户信息的响应模型。
     """
-    user = await User.get_exist_one(session, user_id)
-    return user.to_public()
+    user = await User.get_exist_one(session, user_id, load=rel(User.group))
+    return UserPublic.model_validate(
+        user,
+        from_attributes=True,
+        update={'group_name': user.group.name if user.group else ""},
+    )
 
 
 @admin_user_router.post(
@@ -129,8 +141,12 @@ async def router_admin_create_user(
     )
     user = await user.save(session)
 
-    user = await User.get(session, User.id == user.id, load=User.group)
-    return user.to_public()
+    user = await User.get(session, User.id == user.id, load=rel(User.group))
+    return UserPublic.model_validate(
+        user,
+        from_attributes=True,
+        update={'group_name': user.group.name if user.group else ""},
+    )
 
 
 @admin_user_router.patch(

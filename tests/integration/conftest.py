@@ -160,7 +160,7 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
     # 6. 创建测试用户
     test_user = User(
         id=uuid4(),
-        email="testuser@test.local",
+        email="testuser@example.com",
         nickname="测试用户",
         status=UserStatus.ACTIVE,
         storage=0,
@@ -186,7 +186,7 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
 
     banned_user = User(
         id=uuid4(),
-        email="banneduser@test.local",
+        email="banneduser@example.com",
         nickname="封禁用户",
         status=UserStatus.ADMIN_BANNED,
         storage=0,
@@ -241,7 +241,7 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
 def test_user_info() -> dict[str, str]:
     """测试用户信息"""
     return {
-        "email": "testuser@test.local",
+        "email": "testuser@example.com",
         "password": "testpass123",
     }
 
@@ -259,7 +259,7 @@ def admin_user_info() -> dict[str, str]:
 def banned_user_info() -> dict[str, str]:
     """封禁用户信息"""
     return {
-        "email": "banneduser@test.local",
+        "email": "banneduser@example.com",
         "password": "banned123",
     }
 
@@ -274,7 +274,7 @@ def _build_group_claims(group: Group) -> GroupClaims:
 @pytest_asyncio.fixture
 async def test_user_token(initialized_db: AsyncSession) -> str:
     """生成测试用户的JWT token"""
-    user = await User.get(initialized_db, User.email == "testuser@test.local")
+    user = await User.get(initialized_db, User.email == "testuser@example.com")
     group = await Group.get(initialized_db, Group.id == user.group_id)
     group_claims = _build_group_claims(group)
 
@@ -370,7 +370,7 @@ async def test_directory_structure(initialized_db: AsyncSession) -> dict[str, UU
     """创建测试目录结构"""
 
     # 获取测试用户和根目录
-    test_user = await User.get(initialized_db, User.email == "testuser@test.local")
+    test_user = await User.get(initialized_db, User.email == "testuser@example.com")
     test_user_root = await Entry.get_root(initialized_db, test_user.id)
 
     default_policy = await Policy.get(initialized_db, Policy.name == "本地存储")

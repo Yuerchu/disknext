@@ -18,7 +18,7 @@ import whatthepatch
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from starlette.responses import Response
 from loguru import logger as l
-from sqlmodel_ext import SQLModelBase, cond, rel
+from sqlmodel_ext import cond, rel
 from whatthepatch.exceptions import HunkApplyException
 
 from middleware.auth import auth_required, verify_download_token
@@ -41,6 +41,7 @@ from sqlmodels import (
     UploadSessionResponse,
     User,
     WopiSessionResponse,
+    AccessTokenBase
 )
 
 from utils.storage import create_storage_driver, UploadContext
@@ -48,62 +49,10 @@ from utils.JWT import create_download_token, DOWNLOAD_TOKEN_TTL
 from utils.JWT.wopi_token import create_wopi_token
 from utils import http_exceptions
 from .viewers import viewers_router
+from sqlmodels import TextContentResponse, PatchContentRequest, PatchContentResponse, SourceLinkResponse
 
 
 # DTO
-
-class DownloadTokenModel(ResponseBase):
-    """下载Token响应模型"""
-
-    access_token: str
-    """JWT 令牌"""
-
-    expires_in: int
-    """过期时间（秒）"""
-
-
-class TextContentResponse(ResponseBase):
-    """文本文件内容响应"""
-
-    content: str
-    """文件文本内容（UTF-8）"""
-
-    hash: str
-    """SHA-256 hex"""
-
-    size: int
-    """文件字节大小"""
-
-
-class PatchContentRequest(SQLModelBase):
-    """增量保存请求"""
-
-    patch: str
-    """unified diff 文本"""
-
-    base_hash: str
-    """原始内容的 SHA-256 hex（64字符）"""
-
-
-class PatchContentResponse(ResponseBase):
-    """增量保存响应"""
-
-    new_hash: str
-    """新内容的 SHA-256 hex"""
-
-    new_size: int
-    """新文件字节大小"""
-
-
-class SourceLinkResponse(ResponseBase):
-    """外链响应"""
-
-    url: str
-    """外链地址（永久有效，/source/ 端点自动 302 适配存储策略）"""
-
-    downloads: int
-    """历史下载次数"""
-
 
 def _check_policy_size_limit(policy: Policy, file_size: int) -> None:
     """
@@ -118,7 +67,6 @@ def _check_policy_size_limit(policy: Policy, file_size: int) -> None:
             status_code=413,
             detail=f"文件大小超过限制 ({policy.max_size} bytes)",
         )
-
 
 # ==================== 主路由 ====================
 
@@ -482,7 +430,7 @@ async def create_download_token_endpoint(
     session: SessionDep,
     user: Annotated[User, Depends(auth_required)],
     file_id: UUID,
-) -> DownloadTokenModel:
+) -> AccessTokenBase:
     """
     创建下载令牌端点
 
@@ -505,7 +453,7 @@ async def create_download_token_endpoint(
 
     l.debug(f"创建下载令牌: file_id={file_id}, user_id={user.id}")
 
-    return DownloadTokenModel(access_token=token, expires_in=int(DOWNLOAD_TOKEN_TTL.total_seconds()))
+    return AccessTokenBase(access_token=token, access_expires=datetime.now() + DOWNLOAD_TOKEN_TTL)
 
 
 @_download_router.get(
@@ -706,6 +654,7 @@ async def create_wopi_session(
         session,
         cond(FileAppExtension.extension == ext),
         load=rel(FileAppExtension.app),
+        fetch_mode="all"
     )
 
     wopi_app: FileApp | None = None

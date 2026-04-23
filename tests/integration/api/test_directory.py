@@ -201,7 +201,7 @@ async def test_directory_create_empty_name(
     auth_headers: dict[str, str],
     test_directory_structure: dict[str, UUID]
 ):
-    """测试空目录名返回 400"""
+    """测试空目录名返回 422（Pydantic 验证 min_length=1）"""
     parent_id = test_directory_structure["root_id"]
 
     response = await async_client.post(
@@ -212,7 +212,7 @@ async def test_directory_create_empty_name(
             "name": ""
         }
     )
-    assert response.status_code == 400
+    assert response.status_code == 422
 
 
 @pytest.mark.asyncio

@@ -170,7 +170,7 @@ class TestGetViewers:
         assert "collabora" not in viewer_keys
 
         # 将用户组加入白名单
-        test_user = await User.get(initialized_db, User.email == "testuser@test.local")
+        test_user = await User.get(initialized_db, User.email == "testuser@example.com")
         link = FileAppGroupLink(
             app_id=setup_file_apps["collabora_app_id"],
             group_id=test_user.group_id,
@@ -234,7 +234,7 @@ class TestUserFileViewerDefaults:
     ) -> None:
         """列出默认查看器"""
         # 先创建一个默认
-        test_user = await User.get(initialized_db, User.email == "testuser@test.local")
+        test_user = await User.get(initialized_db, User.email == "testuser@example.com")
         await UserFileAppDefault(
             user_id=test_user.id,
             extension="pdf",
@@ -260,7 +260,7 @@ class TestUserFileViewerDefaults:
     ) -> None:
         """撤销默认查看器"""
         # 创建一个默认
-        test_user = await User.get(initialized_db, User.email == "testuser@test.local")
+        test_user = await User.get(initialized_db, User.email == "testuser@example.com")
         default = await UserFileAppDefault(
             user_id=test_user.id,
             extension="txt",
@@ -289,7 +289,7 @@ class TestUserFileViewerDefaults:
     ) -> None:
         """查看器查询应包含用户默认选择"""
         # 设置默认
-        test_user = await User.get(initialized_db, User.email == "testuser@test.local")
+        test_user = await User.get(initialized_db, User.email == "testuser@example.com")
         await UserFileAppDefault(
             user_id=test_user.id,
             extension="pdf",

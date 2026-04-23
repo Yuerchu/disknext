@@ -36,7 +36,7 @@ async def sample_group(db_session: AsyncSession) -> Group:
 async def sample_user(db_session: AsyncSession, sample_group: Group) -> User:
     """创建测试用户"""
     user = User(
-        email="fileapp_test@test.local",
+        email="fileapp_test@example.com",
         nickname="文件应用测试用户",
         status=UserStatus.ACTIVE,
         group_id=sample_group.id,

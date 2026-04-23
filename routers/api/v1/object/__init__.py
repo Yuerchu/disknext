@@ -10,6 +10,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from loguru import logger as l
+from sqlmodel import col
 
 from middleware.auth import auth_required
 from middleware.dependencies import SessionDep
@@ -167,22 +168,21 @@ async def router_object_delete(
     :return: 删除结果
     """
     user_id = user.id
-    objects_to_delete: list[Entry] = []
 
-    for obj_id in request.ids:
-        obj = await Entry.get(
-            session,
-            (Entry.id == obj_id) & (Entry.deleted_at == None)
-        )
-        if not obj or obj.owner_id != user_id:
-            continue
-
-        # 不能删除根目录
-        if obj.parent_id is None:
+    # 批量查询所有待删除对象（单次 SQL）
+    all_entries = await Entry.get(
+        session,
+        col(Entry.id).in_(request.ids) & (Entry.deleted_at == None),
+        fetch_mode="all",
+    )
+    objects_to_delete = [
+        obj for obj in all_entries
+        if obj.owner_id == user_id and obj.parent_id is not None
+    ]
+    # 记录被阻止的根目录删除尝试
+    for obj in all_entries:
+        if obj.owner_id == user_id and obj.parent_id is None:
             l.warning(f"尝试删除根目录被阻止: {obj.name}")
-            continue
-
-        objects_to_delete.append(obj)
 
     if objects_to_delete:
         deleted_count = await Entry.soft_delete_batch(session, objects_to_delete)
@@ -229,53 +229,48 @@ async def router_object_move(
     dst_id = dst.id
     dst_parent_id = dst.parent_id
 
+    # 批量查询所有源对象（单次 SQL）
+    all_srcs = await Entry.get(
+        session,
+        col(Entry.id).in_(request.src_ids) & (Entry.deleted_at == None),
+        fetch_mode="all",
+    )
+    src_list = [
+        s for s in all_srcs
+        if s.owner_id == user_id and not s.is_banned and s.parent_id is not None and s.id != dst_id
+    ]
+
+    # 预计算 dst 的祖先链（循环检测用，只遍历一次）
+    ancestor_ids: set[UUID] = set()
+    cur_id: UUID | None = dst_parent_id
+    while cur_id:
+        if cur_id in ancestor_ids:
+            break
+        ancestor_ids.add(cur_id)
+        anc = await Entry.get(session, Entry.id == cur_id)
+        cur_id = anc.parent_id if anc else None
+
+    # 一次查出目标目录下所有已有名称（重名检查）
+    existing_in_dst = await Entry.get(
+        session,
+        (Entry.owner_id == user_id) & (Entry.parent_id == dst_id) & (Entry.deleted_at == None),
+        fetch_mode="all",
+    )
+    existing_names = {e.name for e in existing_in_dst}
+
     moved_count = 0
-
-    for src_id in request.src_ids:
-        src = await Entry.get(
-            session,
-            (Entry.id == src_id) & (Entry.deleted_at == None)
-        )
-        if not src or src.owner_id != user_id:
+    for src in src_list:
+        # 循环检测：O(1) 查找
+        if src.is_folder and src.id in ancestor_ids:
             continue
 
-        if src.is_banned:
+        # 重名检查
+        if src.name in existing_names:
             continue
-
-        # 不能移动根目录
-        if src.parent_id is None:
-            continue
-
-        # 检查是否移动到自身或子目录（防止循环引用）
-        if src.id == dst_id:
-            continue
-
-        # 检查是否将目录移动到其子目录中（循环检测）
-        if src.is_folder:
-            current_parent_id = dst_parent_id
-            is_cycle = False
-            while current_parent_id:
-                if current_parent_id == src.id:
-                    is_cycle = True
-                    break
-                current = await Entry.get(session, Entry.id == current_parent_id)
-                current_parent_id = current.parent_id if current else None
-            if is_cycle:
-                continue
-
-        # 检查目标目录下是否存在同名对象（仅检查未删除的）
-        existing = await Entry.get(
-            session,
-            (Entry.owner_id == user_id) &
-            (Entry.parent_id == dst_id) &
-            (Entry.name == src.name) &
-            (Entry.deleted_at == None)
-        )
-        if existing:
-            continue  # 跳过重名对象
 
         src.parent_id = dst_id
         await src.save(session, commit=False, refresh=False)
+        existing_names.add(src.name)
         moved_count += 1
 
     # 统一提交所有更改
@@ -331,12 +326,33 @@ async def router_object_copy(
     new_ids: list[UUID] = []
     total_copied_size = 0
 
-    for src_id in request.src_ids:
-        src = await Entry.get(
-            session,
-            (Entry.id == src_id) & (Entry.deleted_at == None)
-        )
-        if not src or src.owner_id != user_id:
+    # 批量查询所有源对象（单次 SQL）
+    all_srcs = await Entry.get(
+        session,
+        col(Entry.id).in_(request.src_ids) & (Entry.deleted_at == None),
+        fetch_mode="all",
+    )
+
+    # 预计算 dst 的祖先链（循环检测用，只遍历一次）
+    ancestor_ids: set[UUID] = set()
+    cur_id: UUID | None = dst.parent_id
+    while cur_id:
+        if cur_id in ancestor_ids:
+            break
+        ancestor_ids.add(cur_id)
+        anc = await Entry.get(session, Entry.id == cur_id)
+        cur_id = anc.parent_id if anc else None
+
+    # 一次查出目标目录下所有已有名称（重名检查）
+    existing_in_dst = await Entry.get(
+        session,
+        (Entry.owner_id == user_id) & (Entry.parent_id == dst.id) & (Entry.deleted_at == None),
+        fetch_mode="all",
+    )
+    existing_names = {e.name for e in existing_in_dst}
+
+    for src in all_srcs:
+        if src.owner_id != user_id:
             continue
 
         if src.is_banned:
@@ -351,27 +367,12 @@ async def router_object_copy(
         if src.id == dst.id:
             continue
 
-        # 不能将目录复制到其子目录中
-        if src.is_folder:
-            current = dst
-            is_cycle = False
-            while current and current.parent_id:
-                if current.parent_id == src.id:
-                    is_cycle = True
-                    break
-                current = await Entry.get(session, Entry.id == current.parent_id)
-            if is_cycle:
-                continue
+        # 循环检测：O(1) 查找
+        if src.is_folder and src.id in ancestor_ids:
+            continue
 
-        # 检查目标目录下是否存在同名对象（仅检查未删除的）
-        existing = await Entry.get(
-            session,
-            (Entry.owner_id == user_id) &
-            (Entry.parent_id == dst.id) &
-            (Entry.name == src.name) &
-            (Entry.deleted_at == None)
-        )
-        if existing:
+        # 重名检查
+        if src.name in existing_names:
             # [TODO] 应当询问用户是否覆盖、跳过或创建副本
             continue
 
@@ -380,6 +381,7 @@ async def router_object_copy(
         copied_count += count
         new_ids.extend(ids)
         total_copied_size += copied_size
+        existing_names.add(src.name)
 
     # 更新用户存储配额
     if total_copied_size > 0:
@@ -526,10 +528,11 @@ async def router_object_property_detail(
     :param file_id: 对象UUID
     :return: 对象详细属性
     """
+    # 预加载 metadata、policy、physical_file 关系（单次查询 + selectinload）
     obj = await Entry.get(
         session,
         (Entry.id == file_id) & (Entry.deleted_at == None),
-        load=Entry.metadata_entries,
+        load=[Entry.metadata_entries, Entry.policy, Entry.physical_file],
     )
     if not obj:
         raise HTTPException(status_code=404, detail="对象不存在")
@@ -537,30 +540,33 @@ async def router_object_property_detail(
     if obj.owner_id != user.id:
         raise HTTPException(status_code=403, detail="无权查看此对象")
 
-    # 获取策略名称
-    policy = await Policy.get(session, Policy.id == obj.policy_id)
-    policy_name = policy.name if policy else None
+    # 策略名称（已预加载）
+    policy_name = obj.policy.name if obj.policy else None
 
-    # 获取分享统计
+    # 分享统计：用数据库聚合代替全量加载
+    from sqlalchemy import func
+    from sqlmodel import select
     from sqlmodels import Share
-    shares = await Share.get(
-        session,
-        Share.file_id == obj.id,
-    )
-    share_count = len(shares)
-    total_views = sum(s.views for s in shares)
-    total_downloads = sum(s.downloads for s in shares)
+    share_stmt = select(
+        func.count(Share.id),
+        func.coalesce(func.sum(Share.views), 0),
+        func.coalesce(func.sum(Share.downloads), 0),
+    ).where(Share.file_id == obj.id)
+    share_result = await session.exec(share_stmt)
+    share_row = share_result.one()
+    share_count: int = share_row[0]
+    total_views: int = share_row[1]
+    total_downloads: int = share_row[2]
 
-    # 获取物理文件信息（引用计数、校验和）
+    # 物理文件信息（已预加载）
     reference_count = 1
     checksum_md5: str | None = None
     checksum_sha256: str | None = None
-    if obj.physical_file_id:
-        physical_file = await PhysicalFile.get(session, PhysicalFile.id == obj.physical_file_id)
-        if physical_file:
-            reference_count = physical_file.reference_count
-            checksum_md5 = physical_file.checksum_md5
-            checksum_sha256 = physical_file.checksum_sha256
+    pf = obj.physical_file
+    if pf:
+        reference_count = pf.reference_count
+        checksum_md5 = pf.checksum_md5
+        checksum_sha256 = pf.checksum_sha256
 
     # 构建元数据字典（排除内部命名空间）
     metadata: dict[str, str] = {}
@@ -813,8 +819,8 @@ async def router_patch_object_metadata(
     if obj.owner_id != user.id:
         raise HTTPException(status_code=403, detail="无权操作此对象")
 
+    # 先验证所有命名空间（快速失败）
     for patch in request.patches:
-        # 验证命名空间
         patch_ns = patch.key.split(":")[0] if ":" in patch.key else ""
         if patch_ns not in USER_WRITABLE_NAMESPACES:
             raise HTTPException(
@@ -822,23 +828,24 @@ async def router_patch_object_metadata(
                 detail=f"不允许修改命名空间 '{patch_ns}' 的元数据，仅允许 custom: 命名空间",
             )
 
+    # 批量获取该文件的所有现有元数据（单次 SQL）
+    all_metadata = await EntryMetadata.get(
+        session,
+        EntryMetadata.file_id == file_id,
+        fetch_mode="all",
+    )
+    metadata_map: dict[str, EntryMetadata] = {m.name: m for m in all_metadata}
+
+    for patch in request.patches:
+        existing = metadata_map.get(patch.key)
+
         if patch.value is None:
-            # 删除元数据条目
-            existing = await EntryMetadata.get(
-                session,
-                (EntryMetadata.file_id == file_id) & (EntryMetadata.name == patch.key),
-            )
             if existing:
-                await EntryMetadata.delete(session, instances=existing)
+                await EntryMetadata.delete(session, instances=existing, commit=False)
         else:
-            # 设置/更新元数据条目
-            existing = await EntryMetadata.get(
-                session,
-                (EntryMetadata.file_id == file_id) & (EntryMetadata.name == patch.key),
-            )
             if existing:
                 existing.value = patch.value
-                existing = await existing.save(session)
+                await existing.save(session, commit=False, refresh=False)
             else:
                 entry = EntryMetadata(
                     file_id=file_id,
@@ -846,6 +853,7 @@ async def router_patch_object_metadata(
                     value=patch.value,
                     is_public=True,
                 )
-                entry = await entry.save(session)
+                await entry.save(session, commit=False, refresh=False)
 
+    await session.commit()
     l.info(f"用户 {user.id} 更新了对象 {file_id} 的 {len(request.patches)} 条元数据")

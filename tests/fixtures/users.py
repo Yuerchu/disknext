@@ -29,7 +29,7 @@ class UserFactory:
         参数:
             session: 数据库会话
             group_id: 用户组UUID
-            email: 用户邮箱（默认: test_user_{随机}@test.local）
+            email: 用户邮箱（默认: test_user_{随机}@example.com）
             password: 明文密码（默认: password123）
             **kwargs: 其他用户字段
 
@@ -39,7 +39,7 @@ class UserFactory:
         import uuid
 
         if email is None:
-            email = f"test_user_{uuid.uuid4().hex[:8]}@test.local"
+            email = f"test_user_{uuid.uuid4().hex[:8]}@example.com"
 
         if password is None:
             password = "password123"
@@ -115,7 +115,7 @@ class UserFactory:
         参数:
             session: 数据库会话
             group_id: 用户组UUID
-            email: 用户邮箱（默认: banned_user_{随机}@test.local）
+            email: 用户邮箱（默认: banned_user_{随机}@example.com）
 
         返回:
             User: 创建的被封禁用户实例
@@ -123,7 +123,7 @@ class UserFactory:
         import uuid
 
         if email is None:
-            email = f"banned_user_{uuid.uuid4().hex[:8]}@test.local"
+            email = f"banned_user_{uuid.uuid4().hex[:8]}@example.com"
 
         banned_user = User(
             email=email,
@@ -153,7 +153,7 @@ class UserFactory:
             session: 数据库会话
             group_id: 用户组UUID
             storage_bytes: 已使用的存储空间（字节）
-            email: 用户邮箱（默认: storage_user_{随机}@test.local）
+            email: 用户邮箱（默认: storage_user_{随机}@example.com）
 
         返回:
             User: 创建的用户实例
@@ -161,7 +161,7 @@ class UserFactory:
         import uuid
 
         if email is None:
-            email = f"storage_user_{uuid.uuid4().hex[:8]}@test.local"
+            email = f"storage_user_{uuid.uuid4().hex[:8]}@example.com"
 
         user = User(
             email=email,

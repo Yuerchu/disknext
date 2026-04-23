@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import StrEnum
-from typing import Literal, TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING, TypeVar
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, EmailStr
@@ -10,10 +10,9 @@ from sqlmodel_ext.field_types.dialects.postgresql import Array
 from sqlalchemy.sql.functions import func
 from sqlmodel import Field, Relationship
 from sqlmodel.ext.asyncio.session import AsyncSession
-from sqlmodel.main import RelationshipInfo
+from sqlmodel_ext import cond
 from sqlmodel_ext import (
-    SQLModelBase, UUIDTableBaseMixin, TableViewRequest, ListResponse,
-    NonNegativeBigInt, HttpUrl, SafeHttpUrl, Str32, Str64, Str128, Str255, Text1024,
+    SQLModelBase, UUIDTableBaseMixin, NonNegativeBigInt, SafeHttpUrl, Str32, Str64, Str128, Str255, Text1024,
 )
 
 from .auth_identity import AuthProviderType
@@ -193,13 +192,13 @@ class UserPublic(UserBase):
     nickname: Str32
     """昵称"""
 
-    storage: int = Field(ge=0)
+    storage: int
     """已用存储空间（字节）"""
 
     avatar: Str255 | None = None
     """头像地址"""
 
-    group_expires: datetime
+    group_expires: datetime | None = None
     """用户组过期时间"""
 
     group_id: UUID
@@ -239,14 +238,14 @@ class UserSettingResponse(SQLModelBase):
     timezone: int
     """时区"""
 
-    phone: PhoneNumber | None = None
-    """手机号（E.164 格式，如 +8613800138000）"""
-
     group_expires: datetime | None = None
     """用户组过期时间"""
 
     two_factor: bool = False
     """是否启用两步验证"""
+
+    phone: str | None = None
+    """手机号"""
 
     theme_preset_id: UUID | None = None
     """选用的主题预设UUID"""
@@ -329,20 +328,17 @@ class UserFilterParams(SQLModelBase):
 class UserAdminCreateRequest(SQLModelBase):
     """管理员创建用户请求 DTO"""
 
-    email: str | None = Field(default=None, max_length=50)
+    email: EmailStr = Field(max_length=50)
     """用户邮箱"""
 
     password: Str128 | None = Field(default=None, min_length=8)
-    """用户密码（明文，由服务端加密；为空则不创建邮箱密码身份）"""
+    """用户密码（明文，由服务端加密）"""
 
     nickname: str = Field(max_length=32)
     """昵称"""
 
     group_id: UUID
     """所属用户组UUID"""
-
-    status: UserStatus = UserStatus.ACTIVE
-    """用户状态"""
 
 
 class UserAdminUpdateRequest(SQLModelBase):
@@ -351,7 +347,7 @@ class UserAdminUpdateRequest(SQLModelBase):
     email: str | None = Field(default=None, max_length=50)
     """邮箱"""
 
-    nickname: str = Field(max_length=32)
+    nickname: str | None = Field(max_length=32)
     """昵称"""
 
     phone: PhoneNumber | None = None
@@ -360,13 +356,13 @@ class UserAdminUpdateRequest(SQLModelBase):
     group_id: UUID | None = None
     """用户组UUID"""
 
-    status: UserStatus = UserStatus.ACTIVE
+    status: UserStatus | None
     """用户状态"""
 
-    score: int | None = Field(default=None, ge=0)
+    score: int | None = Field(ge=0)
     """积分"""
 
-    storage: int | None = Field(default=None, ge=0)
+    storage: int | None = Field(ge=0)
     """已用存储空间（用于手动校准）"""
 
     group_expires: datetime | None = None
@@ -419,9 +415,9 @@ class User(UserBase, UUIDTableBaseMixin):
     """用户模型"""
 
     email: EmailStr = Field(max_length=50, unique=True, index=True)
-    """用户邮箱（社交登录用户可能没有邮箱）"""
+    """邮箱"""
 
-    nickname: str = Field(max_length=32)
+    nickname: str = Field(default="", max_length=32)
     """昵称"""
 
     status: UserStatus = UserStatus.ACTIVE
@@ -603,7 +599,7 @@ class User(UserBase, UUIDTableBaseMixin):
 
         stmt = (
             sql_update(User)
-            .where(User.id == self.id)
+            .where(cond(User.id == self.id))
             .values(storage=func.greatest(0, User.storage + delta))
         )
         await session.exec(stmt)

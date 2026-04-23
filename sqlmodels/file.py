@@ -1,16 +1,27 @@
 
 from datetime import datetime
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 from uuid import UUID
+import re
 
 from enum import StrEnum
 from loguru import logger as l
-from sqlmodel import Field, Relationship, CheckConstraint, Index, text
+from sqlmodel import Field, Relationship, CheckConstraint, Index, col, text
 from sqlmodel.ext.asyncio.session import AsyncSession
-
-from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, NonNegativeBigInt, PositiveBigInt, Str24, Str64, Str128, Str255, Str256
+from sqlmodel_ext import (
+    SQLModelBase, 
+    UUIDTableBaseMixin, 
+    NonNegativeBigInt, 
+    PositiveBigInt, 
+    Str64, 
+    Str128, 
+    Str255, 
+    Str256, 
+    cond
+)
 
 from .policy import PolicyType
+from .model_base import ResponseBase
 
 if TYPE_CHECKING:
     from .user import User
@@ -19,7 +30,7 @@ if TYPE_CHECKING:
     from .share import Share
     from .physical_file import PhysicalFile
     from .uri import DiskNextURI
-    from .object_metadata import EntryMetadata
+    from .file_metadata import EntryMetadata
 
 
 class EntryType(StrEnum):
@@ -51,8 +62,8 @@ class EntryBase(SQLModelBase):
     type: EntryType
     """对象类型"""
 
-    size: int | None = None
-    """文件大小（字节），目录为 None"""
+    size: NonNegativeBigInt = 0
+    """文件大小（字节）"""
 
     mime_type: str | None = Field(default=None, max_length=127)
     """MIME类型（仅文件有效）"""
@@ -215,7 +226,7 @@ class Entry(EntryBase, UUIDTableBaseMixin):
     # ==================== 文件专属字段 ====================
 
     size: NonNegativeBigInt = 0
-    """文件大小（字节），目录为 0"""
+    """文件大小（字节）"""
 
     upload_session_id: Str255 | None = Field(default=None, unique=True, index=True)
     """分块上传会话ID（仅文件有效）"""
@@ -390,11 +401,6 @@ class Entry(EntryBase, UUIDTableBaseMixin):
         if not path:
             raise ValueError("路径不能为空")
 
-        # 获取用户根目录
-        root = await cls.get_root(session, user_id)
-        if not root:
-            return None
-
         # 移除开头的斜杠并分割路径
         if path.startswith("/"):
             path = path[1:]
@@ -402,23 +408,54 @@ class Entry(EntryBase, UUIDTableBaseMixin):
 
         # 空路径 -> 返回根目录
         if not parts:
-            return root
+            return await cls.get_root(session, user_id)
 
-        # 从根目录开始遍历路径
-        current = root
-        for part in parts:
-            if not current:
+        # 动态自连接：N 段路径生成 1 条 SQL（e0=root, e1..eN=各段）
+        # 对极深路径（> 20 层）回退到逐级查询
+        if len(parts) > 20:
+            root = await cls.get_root(session, user_id)
+            if not root:
                 return None
+            current: Entry | None = root
+            for part in parts:
+                if not current:
+                    return None
+                current = await cls.get(
+                    session,
+                    (cls.owner_id == user_id) &
+                    (cls.parent_id == current.id) &
+                    (cls.name == part) &
+                    (cls.deleted_at == None)
+                )
+            return current
 
-            current = await cls.get(
-                session,
-                (cls.owner_id == user_id) &
-                (cls.parent_id == current.id) &
-                (cls.name == part) &
-                (cls.deleted_at == None)
-            )
+        # 构建自连接 SQL
+        joins = ["entry e0"]
+        conditions = [
+            "e0.owner_id = :user_id",
+            "e0.parent_id IS NULL",
+            "e0.deleted_at IS NULL",
+        ]
+        params: dict[str, str] = {"user_id": str(user_id)}
 
-        return current
+        for i, part in enumerate(parts):
+            alias = f"e{i + 1}"
+            prev = f"e{i}"
+            joins.append(f"JOIN entry {alias} ON {alias}.parent_id = {prev}.id")
+            conditions.append(f"{alias}.owner_id = :user_id")
+            conditions.append(f"{alias}.name = :part_{i}")
+            conditions.append(f"{alias}.deleted_at IS NULL")
+            params[f"part_{i}"] = part
+
+        last = f"e{len(parts)}"
+        sql = f"SELECT {last}.id FROM {' '.join(joins)} WHERE {' AND '.join(conditions)}"
+
+        result = await session.execute(text(sql), params)
+        row = result.first()
+        if not row:
+            return None
+
+        return await cls.get(session, cls.id == row[0])
 
     @classmethod
     async def get_children(cls, session, user_id: UUID, parent_id: UUID) -> list["Entry"]:
@@ -432,7 +469,9 @@ class Entry(EntryBase, UUIDTableBaseMixin):
         """
         return await cls.get(
             session,
-            (cls.owner_id == user_id) & (cls.parent_id == parent_id) & (cls.deleted_at == None),
+            cond(cls.owner_id == user_id) & 
+            cond(cls.parent_id == parent_id) & 
+            cond(cls.deleted_at == None),
             fetch_mode="all"
         )
 
@@ -558,18 +597,30 @@ class Entry(EntryBase, UUIDTableBaseMixin):
         """
         从当前对象沿 parent_id 向上遍历到根目录，返回完整路径
 
+        使用递归 CTE 一次查询获取所有祖先节点名称。
+
         :param session: 数据库会话
         :return: 完整路径，如 "/docs/images/photo.jpg"
         """
-        parts: list[str] = []
-        current: Entry | None = self
+        if self.parent_id is None:
+            return "/"
 
-        while current and current.parent_id is not None:
-            parts.append(current.name)
-            current = await Entry.get(session, Entry.id == current.parent_id)
+        cte_sql = text('''
+            WITH RECURSIVE ancestors AS (
+                SELECT id, name, parent_id, 0 AS depth
+                FROM entry WHERE id = :start_id
 
-        # 反转顺序（从根到当前）
-        parts.reverse()
+                UNION ALL
+
+                SELECT e.id, e.name, e.parent_id, a.depth + 1
+                FROM entry e
+                JOIN ancestors a ON e.id = a.parent_id
+                WHERE e.parent_id IS NOT NULL
+            )
+            SELECT name FROM ancestors ORDER BY depth DESC
+        ''')
+        result = await session.execute(cte_sql, {'start_id': str(self.id)})
+        parts = [row[0] for row in result.all()]
         return "/" + "/".join(parts)
 
     # ==================== 软删除 ====================
@@ -643,19 +694,29 @@ class Entry(EntryBase, UUIDTableBaseMixin):
             base = name
             ext = ""
 
+        # 单次 LIKE 查询找出所有已存在的编号变体
+        like_pattern = f"{base} (%){ext}"
+        existing_variants = await cls.get(
+            session,
+            (cls.owner_id == user_id) &
+            (cls.parent_id == parent_id) &
+            (cls.name.like(like_pattern)) &
+            (cls.deleted_at == None),
+            fetch_mode="all",
+        )
+
+        # 正则提取已用编号
+        used_numbers: set[int] = set()
+        pattern_re = re.compile(rf'^{re.escape(base)} \((\d+)\){re.escape(ext)}$')
+        for e in existing_variants:
+            m = pattern_re.match(e.name)
+            if m:
+                used_numbers.add(int(m.group(1)))
+
         counter = 1
-        while True:
-            new_name = f"{base} ({counter}){ext}"
-            existing = await cls.get(
-                session,
-                (cls.owner_id == user_id) &
-                (cls.parent_id == parent_id) &
-                (cls.name == new_name) &
-                (cls.deleted_at == None)
-            )
-            if not existing:
-                return new_name
+        while counter in used_numbers:
             counter += 1
+        return f"{base} ({counter}){ext}"
 
     @classmethod
     async def restore_batch(
@@ -790,30 +851,52 @@ class Entry(EntryBase, UUIDTableBaseMixin):
                 session, user_id
             )
 
-            # 处理 PhysicalFile 引用计数
+            # 批量获取所有 PhysicalFile（单次 SQL）
+            pf_ids = list({pf_id for _, _, pf_id in file_entries})
+            pf_map: dict[UUID, PhysicalFile] = {}
+            if pf_ids:
+                pf_list = await PhysicalFile.get(
+                    session, col(PhysicalFile.id).in_(pf_ids), fetch_mode="all",
+                )
+                pf_map = {pf.id: pf for pf in pf_list}
+
+            # 处理引用计数，收集可删除的 PhysicalFile
+            deletable_pfs: list[PhysicalFile] = []
             for obj_id, obj_name, physical_file_id in file_entries:
-                physical_file = await PhysicalFile.get(session, PhysicalFile.id == physical_file_id)
+                physical_file = pf_map.get(physical_file_id)
                 if not physical_file:
                     continue
 
                 physical_file.decrement_reference()
 
                 if physical_file.can_be_deleted:
-                    # 物理删除文件
-                    policy = await Policy.get(session, Policy.id == physical_file.policy_id)
-                    if policy:
-                        try:
-                            driver = create_storage_driver(policy)
-                            await driver.delete(physical_file.storage_path)
-                            l.debug(f"物理文件已删除: {obj_name}")
-                        except Exception as e:
-                            l.warning(f"物理删除文件失败: {obj_name}, 错误: {e}")
-
-                    await PhysicalFile.delete(session, physical_file, commit=False)
-                    l.debug(f"物理文件记录已删除: {physical_file.storage_path}")
+                    deletable_pfs.append(physical_file)
                 else:
                     physical_file = await physical_file.save(session, commit=False)
                     l.debug(f"物理文件仍有 {physical_file.reference_count} 个引用: {physical_file.storage_path}")
+
+            # 批量获取可删除文件的 Policy（单次 SQL）
+            policy_ids = list({pf.policy_id for pf in deletable_pfs})
+            policy_map: dict[UUID, Policy] = {}
+            if policy_ids:
+                policy_list = await Policy.get(
+                    session, col(Policy.id).in_(policy_ids), fetch_mode="all",
+                )
+                policy_map = {p.id: p for p in policy_list}
+
+            # 物理删除文件
+            for physical_file in deletable_pfs:
+                policy = policy_map.get(physical_file.policy_id)
+                if policy:
+                    try:
+                        driver = create_storage_driver(policy)
+                        await driver.delete(physical_file.storage_path)
+                        l.debug(f"物理文件已删除: {physical_file.storage_path}")
+                    except Exception as e:
+                        l.warning(f"物理删除文件失败: {physical_file.storage_path}, 错误: {e}")
+
+                await PhysicalFile.delete(session, physical_file, commit=False)
+                l.debug(f"物理文件记录已删除: {physical_file.storage_path}")
 
             # 更新用户存储配额
             if total_file_size > 0:
@@ -876,29 +959,52 @@ class Entry(EntryBase, UUIDTableBaseMixin):
                     elif child.is_folder:
                         queue.append(child.id)
 
-        # 阶段二：批量处理 PhysicalFile 引用
+        # 阶段二：批量获取所有 PhysicalFile（单次 SQL）
+        pf_ids = list({pf_id for _, _, pf_id in file_entries})
+        pf_map: dict[UUID, PhysicalFile] = {}
+        if pf_ids:
+            pf_list = await PhysicalFile.get(
+                session, col(PhysicalFile.id).in_(pf_ids), fetch_mode="all",
+            )
+            pf_map = {pf.id: pf for pf in pf_list}
+
+        # 处理引用计数，收集可删除的 PhysicalFile
+        deletable_pfs: list[PhysicalFile] = []
         for obj_id, obj_name, physical_file_id in file_entries:
-            physical_file = await PhysicalFile.get(session, PhysicalFile.id == physical_file_id)
+            physical_file = pf_map.get(physical_file_id)
             if not physical_file:
                 continue
 
             physical_file.decrement_reference()
 
             if physical_file.can_be_deleted:
-                policy = await Policy.get(session, Policy.id == physical_file.policy_id)
-                if policy:
-                    try:
-                        driver = create_storage_driver(policy)
-                        await driver.delete(physical_file.storage_path)
-                        l.debug(f"物理文件已删除: {obj_name}")
-                    except Exception as e:
-                        l.warning(f"物理删除文件失败: {obj_name}, 错误: {e}")
-
-                await PhysicalFile.delete(session, physical_file, commit=False)
-                l.debug(f"物理文件记录已删除: {physical_file.storage_path}")
+                deletable_pfs.append(physical_file)
             else:
                 physical_file = await physical_file.save(session, commit=False)
                 l.debug(f"物理文件仍有 {physical_file.reference_count} 个引用: {physical_file.storage_path}")
+
+        # 批量获取可删除文件的 Policy（单次 SQL）
+        policy_ids = list({pf.policy_id for pf in deletable_pfs})
+        policy_map: dict[UUID, 'Policy'] = {}
+        if policy_ids:
+            policy_list = await Policy.get(
+                session, col(Policy.id).in_(policy_ids), fetch_mode="all",
+            )
+            policy_map = {p.id: p for p in policy_list}
+
+        # 物理删除文件
+        for physical_file in deletable_pfs:
+            policy = policy_map.get(physical_file.policy_id)
+            if policy:
+                try:
+                    driver = create_storage_driver(policy)
+                    await driver.delete(physical_file.storage_path)
+                    l.debug(f"物理文件已删除: {physical_file.storage_path}")
+                except Exception as e:
+                    l.warning(f"物理删除文件失败: {physical_file.storage_path}, 错误: {e}")
+
+            await PhysicalFile.delete(session, physical_file, commit=False)
+            l.debug(f"物理文件记录已删除: {physical_file.storage_path}")
 
         # 阶段三：更新用户存储配额
         if total_file_size > 0:
@@ -912,6 +1018,36 @@ class Entry(EntryBase, UUIDTableBaseMixin):
         return total_count
 
     # ==================== 复制 ====================
+
+    async def _collect_physical_file_ids(
+        self,
+        session: AsyncSession,
+        user_id: UUID,
+    ) -> set[UUID]:
+        """
+        BFS 收集子树中所有文件的 physical_file_id
+
+        :param session: 数据库会话
+        :param user_id: 用户UUID
+        :return: physical_file_id 集合
+        """
+        pf_ids: set[UUID] = set()
+
+        if self.is_file and self.physical_file_id:
+            pf_ids.add(self.physical_file_id)
+
+        if self.is_folder:
+            queue: list[UUID] = [self.id]
+            while queue:
+                parent_id = queue.pop(0)
+                children = await Entry.get_children(session, user_id, parent_id)
+                for child in children:
+                    if child.is_file and child.physical_file_id:
+                        pf_ids.add(child.physical_file_id)
+                    elif child.is_folder:
+                        queue.append(child.id)
+
+        return pf_ids
 
     async def copy_recursive(
         self,
@@ -930,17 +1066,27 @@ class Entry(EntryBase, UUIDTableBaseMixin):
         :param user_id: 用户UUID
         :return: (复制数量, 新对象UUID列表, 复制的总文件大小)
         """
-        return await self._copy_recursive_impl(session, dst_parent_id, user_id)
+        from .physical_file import PhysicalFile
+
+        # 批量预取所有 PhysicalFile（单次 SQL）
+        pf_ids = await self._collect_physical_file_ids(session, user_id)
+        pf_map: dict[UUID, PhysicalFile] = {}
+        if pf_ids:
+            pf_list = await PhysicalFile.get(
+                session, col(PhysicalFile.id).in_(list(pf_ids)), fetch_mode="all",
+            )
+            pf_map = {pf.id: pf for pf in pf_list}
+
+        return await self._copy_recursive_impl(session, dst_parent_id, user_id, pf_map)
 
     async def _copy_recursive_impl(
         self,
         session: AsyncSession,
         dst_parent_id: UUID,
         user_id: UUID,
+        pf_map: 'dict[UUID, PhysicalFile]',
     ) -> tuple[int, list[UUID], int]:
         """递归复制内部实现"""
-        from .physical_file import PhysicalFile
-
         copied_count = 0
         new_ids: list[UUID] = []
         total_copied_size = 0
@@ -966,7 +1112,7 @@ class Entry(EntryBase, UUIDTableBaseMixin):
 
         # 如果是文件，增加物理文件引用计数
         if src_is_file and src_physical_file_id:
-            physical_file = await PhysicalFile.get(session, PhysicalFile.id == src_physical_file_id)
+            physical_file = pf_map.get(src_physical_file_id)
             if physical_file:
                 physical_file.increment_reference()
                 physical_file = await physical_file.save(session)
@@ -981,7 +1127,7 @@ class Entry(EntryBase, UUIDTableBaseMixin):
             children = await Entry.get_children(session, user_id, src_id)
             for child in children:
                 child_count, child_ids, child_size = await child._copy_recursive_impl(
-                    session, new_obj.id, user_id
+                    session, new_obj.id, user_id, pf_map
                 )
                 copied_count += child_count
                 new_ids.extend(child_ids)
@@ -1411,3 +1557,46 @@ class TrashDeleteRequest(SQLModelBase):
 
     is_empty_all: bool = False
     """是否清空整个回收站（为 True 时忽略 ids）"""
+
+
+class TextContentResponse(ResponseBase):
+    """文本文件内容响应"""
+
+    content: str
+    """文件文本内容（UTF-8）"""
+
+    hash: str
+    """SHA-256 hex"""
+
+    size: int
+    """文件字节大小"""
+
+
+class PatchContentRequest(SQLModelBase):
+    """增量保存请求"""
+
+    patch: str
+    """unified diff 文本"""
+
+    base_hash: str
+    """原始内容的 SHA-256 hex（64字符）"""
+
+
+class PatchContentResponse(ResponseBase):
+    """增量保存响应"""
+
+    new_hash: str
+    """新内容的 SHA-256 hex"""
+
+    new_size: int
+    """新文件字节大小"""
+
+
+class SourceLinkResponse(ResponseBase):
+    """外链响应"""
+
+    url: str
+    """外链地址（永久有效，/source/ 端点自动 302 适配存储策略）"""
+
+    downloads: int
+    """历史下载次数"""

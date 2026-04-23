@@ -9,6 +9,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 from loguru import logger as l
+from sqlmodel import col
 
 from middleware.auth import auth_required
 from middleware.dependencies import SessionDep
@@ -77,15 +78,13 @@ async def router_trash_restore(
     5. 清除 deleted_at 和 deleted_original_parent_id
     """
     user_id = user.id
-    objects_to_restore: list[Entry] = []
 
-    for obj_id in request.ids:
-        obj = await Entry.get(
-            session,
-            (Entry.id == obj_id) & (Entry.owner_id == user_id) & (Entry.deleted_at != None)
-        )
-        if obj:
-            objects_to_restore.append(obj)
+    # 批量查询所有待恢复对象（单次 SQL）
+    objects_to_restore = await Entry.get(
+        session,
+        col(Entry.id).in_(request.ids) & (Entry.owner_id == user_id) & (Entry.deleted_at != None),
+        fetch_mode="all",
+    )
 
     if objects_to_restore:
         restored_count = await Entry.restore_batch(session, objects_to_restore, user_id)
@@ -127,15 +126,12 @@ async def router_trash_delete(
             l.info(f"用户 {user_id} 清空回收站，共删除 {deleted_count} 个对象")
         return
 
-    objects_to_delete: list[Entry] = []
-
-    for obj_id in request.ids:
-        obj = await Entry.get(
-            session,
-            (Entry.id == obj_id) & (Entry.owner_id == user_id) & (Entry.deleted_at != None)
-        )
-        if obj:
-            objects_to_delete.append(obj)
+    # 批量查询所有待删除对象（单次 SQL）
+    objects_to_delete = await Entry.get(
+        session,
+        col(Entry.id).in_(request.ids) & (Entry.owner_id == user_id) & (Entry.deleted_at != None),
+        fetch_mode="all",
+    )
 
     if objects_to_delete:
         deleted_count = await Entry.permanently_delete_batch(session, objects_to_delete, user_id)

@@ -1,12 +1,14 @@
-
 from enum import StrEnum
-from urllib.parse import urlparse, parse_qs, urlencode, quote, unquote
+from typing import Any, Self
+
+from yarl import URL
 
 from sqlmodel_ext import SQLModelBase
 
 
 class FileSystemNamespace(StrEnum):
     """文件系统命名空间"""
+
     MY = "my"
     """用户个人空间"""
 
@@ -26,6 +28,10 @@ class DiskNextURI(SQLModelBase):
     fs_id 可省略：
     - my/trash 命名空间省略时默认当前用户
     - share 命名空间必须提供 fs_id（Share.code）
+
+    路径中的 URI 保留字符（``?``, ``#``, ``@`` 等）由 yarl 自动
+    percent-encode/decode，``path`` 字段始终存储解码后的人类可读路径。
+    文件名的合法性校验（``/``, ``\\`` 等）由 Entry 模型的数据库约束负责。
     """
 
     fs_id: str | None = None
@@ -35,7 +41,7 @@ class DiskNextURI(SQLModelBase):
     """命名空间"""
 
     path: str = "/"
-    """路径"""
+    """路径（已解码，人类可读）"""
 
     password: str | None = None
     """访问密码（用于有密码的分享）"""
@@ -43,87 +49,82 @@ class DiskNextURI(SQLModelBase):
     query: dict[str, str] | None = None
     """查询参数"""
 
-    # === 属性 ===
+    @staticmethod
+    def _normalize_path(path: str) -> str:
+        """规范化路径，保证至少为根路径且以 / 开头"""
+        if not path:
+            return "/"
+        if not path.startswith("/"):
+            return "/" + path
+        return path
+
+    def _to_url(self) -> URL:
+        """构造 yarl.URL 实例"""
+        kwargs: dict[str, Any] = {
+            'scheme': "disknext",
+            'host': self.namespace.value,
+            'path': self.path,
+        }
+        if self.fs_id is not None:
+            kwargs['user'] = self.fs_id
+        if self.password is not None:
+            kwargs['password'] = self.password
+        if self.query:
+            kwargs['query'] = self.query
+        return URL.build(**kwargs)
 
     @property
     def path_parts(self) -> list[str]:
         """路径分割为列表（过滤空串）"""
-        return [p for p in self.path.split("/") if p]
+        return [part for part in self.path.split("/") if part]
 
     @property
     def is_root(self) -> bool:
         """是否指向根目录"""
         return self.path.strip("/") == ""
 
-    # === 核心方法 ===
-
     def id(self, default_id: str | None = None) -> str | None:
         """
         获取 fs_id，省略时返回 default_id
 
-        参考 Cloudreve URI.ID(defaultUid) 方法
-
-        :param default_id: 默认值（通常为当前用户 ID）
+        :param default_id: 默认值，通常为当前用户 ID
         :return: fs_id 或 default_id
         """
         return self.fs_id if self.fs_id else default_id
 
-    # === 类方法 ===
-
     @classmethod
-    def parse(cls, uri: str) -> "DiskNextURI":
+    def parse(cls, uri: str) -> Self:
         """
         解析 URI 字符串
-
-        实现方式：替换 disknext:// 为 http:// 后用 urllib.parse.urlparse 解析
-        - hostname → namespace
-        - username → fs_id
-        - password → password
-        - path → path
-        - query → query dict
 
         :param uri: URI 字符串，如 "disknext://my/docs/readme.md"
         :return: DiskNextURI 实例
         :raises ValueError: URI 格式无效
         """
-        if not uri.startswith("disknext://"):
+        url = URL(uri)
+
+        if url.scheme != "disknext":
             raise ValueError(f"URI 必须以 disknext:// 开头: {uri}")
 
-        # 替换协议为 http:// 以利用 urllib.parse 解析
-        http_uri = "http://" + uri[len("disknext://"):]
-        parsed = urlparse(http_uri)
-
-        # 解析 namespace
-        hostname = parsed.hostname
-        if not hostname:
+        raw_namespace: str | None = url.host
+        if not raw_namespace:
             raise ValueError(f"URI 缺少命名空间: {uri}")
 
+        namespace: FileSystemNamespace
         try:
-            namespace = FileSystemNamespace(hostname)
-        except ValueError:
-            raise ValueError(f"无效的命名空间 '{hostname}'，有效值: {[e.value for e in FileSystemNamespace]}")
-
-        # 解析 fs_id 和 password
-        fs_id = unquote(parsed.username) if parsed.username else None
-        password = unquote(parsed.password) if parsed.password else None
-
-        # 解析 path
-        path = unquote(parsed.path) if parsed.path else "/"
-        if not path:
-            path = "/"
-
-        # 解析 query
-        query: dict[str, str] | None = None
-        if parsed.query:
-            raw_query = parse_qs(parsed.query, keep_blank_values=True)
-            query = {k: v[0] for k, v in raw_query.items()}
+            namespace = FileSystemNamespace(raw_namespace)
+        except ValueError as exc:
+            valid_namespaces: list[str] = [item.value for item in FileSystemNamespace]
+            raise ValueError(
+                f"无效的命名空间 '{raw_namespace}'，有效值: {valid_namespaces}"
+            ) from exc
 
         return cls(
-            fs_id=fs_id,
+            fs_id=url.user,
             namespace=namespace,
-            path=path,
-            password=password,
-            query=query,
+            path=cls._normalize_path(url.path),
+            password=url.password,
+            query=dict(url.query) if url.query_string else None,
         )
 
     @classmethod
@@ -133,7 +134,7 @@ class DiskNextURI(SQLModelBase):
         path: str = "/",
         fs_id: str | None = None,
         password: str | None = None,
-    ) -> "DiskNextURI":
+    ) -> Self:
         """
         构建 URI 实例
 
@@ -143,18 +144,12 @@ class DiskNextURI(SQLModelBase):
         :param password: 访问密码
         :return: DiskNextURI 实例
         """
-        # 确保 path 以 / 开头
-        if not path.startswith("/"):
-            path = "/" + path
-
         return cls(
             fs_id=fs_id,
             namespace=namespace,
-            path=path,
+            path=cls._normalize_path(path),
             password=password,
         )
-
-    # === 实例方法 ===
 
     def to_string(self) -> str:
         """
@@ -162,80 +157,59 @@ class DiskNextURI(SQLModelBase):
 
         :return: URI 字符串，如 "disknext://my/docs/readme.md"
         """
-        result = "disknext://"
+        return str(self._to_url())
 
-        # fs_id 和 password
-        if self.fs_id:
-            result += quote(self.fs_id, safe="")
-            if self.password:
-                result += ":" + quote(self.password, safe="")
-            result += "@"
-
-        # namespace
-        result += self.namespace.value
-
-        # path
-        result += self.path
-
-        # query
-        if self.query:
-            result += "?" + urlencode(self.query)
-
-        return result
-
-    def join(self, *elements: str) -> "DiskNextURI":
+    def join(self, *elements: str) -> Self:
         """
         拼接路径元素，返回新 URI
 
         :param elements: 路径元素
         :return: 新的 DiskNextURI 实例
         """
-        base = self.path.rstrip("/")
+        path_parts: list[str] = self.path_parts.copy()
         for element in elements:
-            element = element.strip("/")
-            if element:
-                base += "/" + element
+            normalized_element: str = element.strip("/")
+            if normalized_element:
+                path_parts.append(normalized_element)
 
-        if not base:
-            base = "/"
-
-        return DiskNextURI(
+        joined_path: str = "/" + "/".join(path_parts) if path_parts else "/"
+        return self.__class__(
             fs_id=self.fs_id,
             namespace=self.namespace,
-            path=base,
+            path=joined_path,
             password=self.password,
-            query=self.query,
+            query=self.query.copy() if self.query else None,
         )
 
-    def dir_uri(self) -> "DiskNextURI":
+    def dir_uri(self) -> Self:
         """
         返回父目录的 URI
 
         :return: 父目录的 DiskNextURI 实例
         """
-        parts = self.path_parts
+        parts: list[str] = self.path_parts
         if not parts:
-            # 已经是根目录
             return self.root()
 
-        parent_path = "/" + "/".join(parts[:-1])
-        if not parent_path.endswith("/"):
+        parent_parts: list[str] = parts[:-1]
+        parent_path: str = "/" + "/".join(parent_parts) if parent_parts else "/"
+        if parent_path != "/":
             parent_path += "/"
 
-        return DiskNextURI(
+        return self.__class__(
             fs_id=self.fs_id,
             namespace=self.namespace,
             path=parent_path,
             password=self.password,
         )
 
-    def root(self) -> "DiskNextURI":
+    def root(self) -> Self:
         """
-        返回根目录的 URI（保留 namespace 和 fs_id）
+        返回根目录 URI，保留 namespace 和 fs_id
 
         :return: 根目录的 DiskNextURI 实例
         """
-        return DiskNextURI(
+        return self.__class__(
             fs_id=self.fs_id,
             namespace=self.namespace,
             path="/",
@@ -244,11 +218,11 @@ class DiskNextURI(SQLModelBase):
 
     def name(self) -> str:
         """
-        返回路径的最后一段（文件名或目录名）
+        返回路径最后一段
 
         :return: 文件名或目录名，根目录返回空字符串
         """
-        parts = self.path_parts
+        parts: list[str] = self.path_parts
         return parts[-1] if parts else ""
 
     def __str__(self) -> str:

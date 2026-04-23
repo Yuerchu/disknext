@@ -102,11 +102,12 @@ async def init_default_group() -> None:
                 default_scopes=ADMIN_SCOPES,
             )
             admin_group = await admin_group.save(session)
+            admin_group_id = admin_group.id  # commit 后对象过期，先保存 id
 
             # 关联默认存储策略
             if default_policy_id:
                 session.add(GroupPolicyLink(
-                    group_id=admin_group.id,
+                    group_id=admin_group_id,
                     policy_id=default_policy_id,
                 ))
                 await session.commit()
@@ -122,11 +123,12 @@ async def init_default_group() -> None:
                 default_scopes=USER_DEFAULT_SCOPES,
             )
             member_group = await member_group.save(session)
+            member_group_id = member_group.id  # commit 后对象过期，先保存 id
 
             # 关联默认存储策略
             if default_policy_id:
                 session.add(GroupPolicyLink(
-                    group_id=member_group.id,
+                    group_id=member_group_id,
                     policy_id=default_policy_id,
                 ))
                 await session.commit()
@@ -134,7 +136,7 @@ async def init_default_group() -> None:
             # 更新 ServerConfig 的 default_group_id
             config = await ServerConfig.get(session, col(ServerConfig.id) == 1)
             if config:
-                config.default_group_id = member_group.id
+                config.default_group_id = member_group_id
                 config = await config.save(session)
 
         # 未找到初始游客组时，则创建
@@ -189,18 +191,19 @@ async def init_default_user() -> None:
                 password_hash=Password.hash(admin_password),
             )
             admin_user = await admin_user.save(session)
+            admin_user_id = admin_user.id
 
             # 记录默认管理员 ID 到 ServerConfig
             config = await ServerConfig.get(session, col(ServerConfig.id) == 1)
             if config:
-                config.default_admin_id = admin_user.id
+                config.default_admin_id = admin_user_id
                 config = await config.save(session)
 
             # 为管理员创建根目录
             _ = await Entry(
                 name="/",
                 type=EntryType.FOLDER,
-                owner_id=admin_user.id,
+                owner_id=admin_user_id,
                 parent_id=None,
                 policy_id=default_policy_id,
             ).save(session)

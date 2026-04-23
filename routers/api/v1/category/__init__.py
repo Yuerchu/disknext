@@ -22,6 +22,7 @@ from sqlmodels import (
 category_router = APIRouter(
     prefix="/category",
     tags=["category"],
+    deprecated=True,  # [TODO] 使用 /search?category=xxx 替代
 )
 
 

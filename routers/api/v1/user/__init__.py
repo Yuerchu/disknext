@@ -677,14 +677,11 @@ async def router_user_me(
     :return: ResponseBase containing user information.
     :rtype: ResponseBase
     """
-    # 加载 group
-    group = await Group.get_exist_one(
-        session,
-        user.group_id,
-    )
+    # group 已由 auth_required 预加载
+    group_response = user.group.to_response()
 
-    # 构建 GroupResponse
-    group_response = group.to_response()
+    # 显式加载 tags 关系
+    await session.refresh(user, ['tags'])
 
     return sqlmodels.UserResponse(
         id=user.id,

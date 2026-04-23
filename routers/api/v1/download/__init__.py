@@ -6,12 +6,12 @@ from utils import http_exceptions
 
 download_router = APIRouter(
     prefix="/download",
-    tags=["download"]
+    tags=["下载 download"]
 )
 
 aria2_router = APIRouter(
     prefix="/aria2",
-    tags=["aria2"]
+    tags=["下载 aria2"]
 )
 
 download_router.include_router(aria2_router)

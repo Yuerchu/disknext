@@ -93,10 +93,20 @@ async def router_admin_get_group_members(
     # 验证组存在
     await Group.get_exist_one(session, group_id)
 
-    result = await User.get_with_count(session, cond(User.group_id == group_id), table_view=table_view)
+    result = await User.get_with_count(
+        session, cond(User.group_id == group_id), table_view=table_view,
+        load=rel(User.group),
+    )
 
     return ListResponse(
-        items=[u.to_public() for u in result.items],
+        items=[
+            UserPublic.model_validate(
+                u,
+                from_attributes=True,
+                update={'group_name': u.group.name if u.group else ""},
+            )
+            for u in result.items
+        ],
         count=result.count,
     )
 

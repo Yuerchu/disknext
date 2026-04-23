@@ -8,17 +8,17 @@ from utils import http_exceptions
 
 callback_router = APIRouter(
     prefix='/callback',
-    tags=["callback"],
+    tags=["回调 callback"],
 )
 
 oauth_router = APIRouter(
     prefix='/callback/oauth',
-    tags=["callback", "oauth"],
+    tags=["回调 callback", "鉴权 oauth"],
 )
 
 upload_router = APIRouter(
     prefix='/callback/upload',
-    tags=["callback", "upload"],
+    tags=["回调 callback", "上传 upload"],
 )
 
 callback_router.include_router(oauth_router)

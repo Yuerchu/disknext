@@ -81,13 +81,15 @@ async def router_admin_get_share_list(
     :return: 分页分享列表
     """
     condition = Share.user_id == user_id if user_id else None
-    result = await Share.get_with_count(session, condition, table_view=table_view, load=rel(Share.user))
+    result = await Share.get_with_count(
+        session, condition, table_view=table_view,
+        load=[rel(Share.user), rel(Share.entry)],
+    )
 
+    # user 和 entry 已预加载，直接访问
     items: list[AdminShareListItem] = []
     for s in result.items:
-        user = await s.awaitable_attrs.user
-        obj = await s.awaitable_attrs.object
-        items.append(AdminShareListItem.from_share(s, user, obj))
+        items.append(AdminShareListItem.from_share(s, s.user, s.entry))
 
     return ListResponse(items=items, count=result.count)
 

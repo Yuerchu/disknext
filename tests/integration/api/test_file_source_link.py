@@ -53,7 +53,7 @@ async def source_file(
     source_policy: Policy,
 ) -> dict[str, str | int]:
     """创建一个文本测试文件，关联到启用外链的存储策略"""
-    user = await User.get(initialized_db, User.email == "testuser@test.local")
+    user = await User.get(initialized_db, User.email == "testuser@example.com")
     root = await Entry.get_root(initialized_db, user.id)
 
     content = "A" * 50
@@ -440,7 +440,7 @@ class TestPatchMaxSizePolicy:
         size_limited_policy: Policy,
     ) -> dict[str, str | int]:
         """创建一个 50 字节的文本文件（策略限制 100 字节）"""
-        user = await User.get(initialized_db, User.email == "testuser@test.local")
+        user = await User.get(initialized_db, User.email == "testuser@example.com")
         root = await Entry.get_root(initialized_db, user.id)
 
         content = "A" * 50

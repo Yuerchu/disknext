@@ -7,6 +7,7 @@ from fastapi.responses import Response
 from loguru import logger as l
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import update as sql_update
+from sqlmodel_ext import rel, cond
 
 from middleware.auth import admin_required
 from middleware.dependencies import SessionDep, TableViewRequestDep
@@ -25,6 +26,8 @@ async def _set_ban_recursive(
     """
     递归设置封禁状态，返回受影响对象数量。
 
+    BFS 收集所有后代 ID，然后批量 UPDATE。
+
     :param session: 数据库会话
     :param obj: 要封禁/解禁的对象
     :param ban: True=封禁, False=解禁
@@ -32,33 +35,35 @@ async def _set_ban_recursive(
     :param reason: 封禁原因
     :return: 受影响的对象数量
     """
-    # [TODO] 效率太低了
-    count = 0
+    from sqlmodel import col
 
-    # 如果是文件夹，先递归处理子对象
+    # BFS 收集所有后代 ID（包含自身）
+    all_ids: list[UUID] = [obj.id]
     if obj.is_folder:
-        children = await Entry.get(
-            session,
-            Entry.parent_id == obj.id,
-            fetch_mode="all",
-        )
-        for child in children:
-            count += await _set_ban_recursive(session, child, ban, admin_id, reason)
+        queue: list[UUID] = [obj.id]
+        while queue:
+            parent_id = queue.pop(0)
+            children = await Entry.get(
+                session, Entry.parent_id == parent_id, fetch_mode="all",
+            )
+            for child in children:
+                all_ids.append(child.id)
+                if child.is_folder:
+                    queue.append(child.id)
 
-    # 设置当前对象
-    obj.is_banned = ban
+    # 批量 UPDATE
     if ban:
-        obj.banned_at = datetime.now()
-        obj.banned_by = admin_id
-        obj.ban_reason = reason
+        now = datetime.now()
+        stmt = sql_update(Entry).where(col(Entry.id).in_(all_ids)).values(
+            is_banned=True, banned_at=now, banned_by=admin_id, ban_reason=reason,
+        )
     else:
-        obj.banned_at = None
-        obj.banned_by = None
-        obj.ban_reason = None
-
-    obj = await obj.save(session)
-    count += 1
-    return count
+        stmt = sql_update(Entry).where(col(Entry.id).in_(all_ids)).values(
+            is_banned=False, banned_at=None, banned_by=None, ban_reason=None,
+        )
+    await session.execute(stmt)
+    await session.commit()
+    return len(all_ids)
 
 
 admin_file_router = APIRouter(
@@ -104,14 +109,15 @@ async def router_admin_get_file_list(
             condition = condition & c
     else:
         condition = conditions[0]
-    result = await Entry.get_with_count(session, condition, table_view=table_view, load=Entry.owner)
+    result = await Entry.get_with_count(
+        session, condition, table_view=table_view,
+        load=[rel(Entry.owner), rel(Entry.policy)],
+    )
 
-    # 构建响应
+    # 构建响应（owner 和 policy 已预加载，直接访问）
     items: list[AdminFileResponse] = []
     for f in result.items:
-        owner = await f.awaitable_attrs.owner
-        policy = await f.awaitable_attrs.policy
-        items.append(AdminFileResponse.from_object(f, owner, policy))
+        items.append(AdminFileResponse.from_object(f, f.owner, f.policy))
 
     return ListResponse(items=items, count=result.count)
 
@@ -226,7 +232,7 @@ async def router_admin_delete_file(
                     l.warning(f"删除物理文件失败: {e}")
 
     # 更新用户存储量（使用 SQL UPDATE 直接更新，无需加载实例）
-    stmt = sql_update(User).where(User.id == owner_id).values(
+    stmt = sql_update(User).where(cond(User.id == owner_id)).values(
         storage=max(0, User.storage - file_size)
     )
     await session.exec(stmt)

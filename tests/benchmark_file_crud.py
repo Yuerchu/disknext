@@ -75,7 +75,7 @@ async def create_test_data(session: AsyncSession, depth: int, breadth: int) -> t
     await session.flush()
 
     user = User(
-        email="bench@test.local",
+        email="bench@example.com",
         nickname="bench",
         group_id=group.id,
     )

@@ -401,7 +401,6 @@ from .base import BaseClass
 | `service/` | 业务服务层 |
 | `utils/` | 工具函数和通用组件 |
 | `tests/` | 测试目录 |
-| `ee/` | 企业版功能（许可证保护） |
 
 ---
 

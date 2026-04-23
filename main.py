@@ -15,28 +15,6 @@ from utils.conf import appmeta
 from utils.http.http_exceptions import raise_internal_error
 from utils.lifespan import lifespan
 
-# 尝试加载企业版功能
-_has_ee: bool = False
-try:
-    from ee import init_ee
-    from ee.license import LicenseError
-    from ee.routers import ee_router
-
-    _has_ee = True
-
-    async def _init_ee() -> None:
-        """启动时验证许可证，路由由 license_valid_required 依赖保护"""
-        try:
-            await init_ee()
-        except LicenseError as exc:
-            l.critical(f"许可证验证失败: {exc}")
-            raise SystemExit(1) from exc
-
-    lifespan.add_startup(_init_ee)
-except ImportError as exc:
-    ee_router = None
-    l.info(f"以 Community 版本运行 (原因: {exc})")
-
 STATICS_DIR: Path = (Path(__file__).parent / "statics").resolve()
 """前端静态文件目录（由 Docker 构建时复制）"""
 
@@ -67,11 +45,12 @@ app = FastAPI(
     license_info=appmeta.license_info,
     lifespan=lifespan.lifespan,
     debug=appmeta.debug,
-    #openapi_url="/openapi.json" if appmeta.debug else None,
+    openapi_url="/openapi.json" if appmeta.debug else None,
 )
 # 添加跨域 CORS 中间件,仅在调试模式下启用,以允许所有来源访问 API
 if appmeta.debug:
     from fastapi.middleware.cors import CORSMiddleware
+    from sqlmodel_ext import RelationLoadCheckMiddleware
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -79,6 +58,7 @@ if appmeta.debug:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.add_middleware(RelationLoadCheckMiddleware)
 
 @app.exception_handler(Exception)
 async def handle_unexpected_exceptions(
@@ -95,8 +75,6 @@ async def handle_unexpected_exceptions(
 
 # 挂载路由
 app.include_router(router)
-if _has_ee:
-    app.include_router(ee_router, prefix="/api/v1")
 
 # 挂载 WebDAV 协议端点（优先于 SPA catch-all）
 app.mount("/dav", dav_app)

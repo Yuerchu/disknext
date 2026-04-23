@@ -24,13 +24,13 @@ async def test_user_factory(db_session: AsyncSession):
     user = await UserFactory.create(
         db_session,
         group_id=group.id,
-        email="testuser@test.local",
+        email="testuser@example.com",
         password="password123"
     )
 
     # 验证
     assert user.id is not None
-    assert user.email == "testuser@test.local"
+    assert user.email == "testuser@example.com"
     assert user.group_id == group.id
     from sqlmodels.user import UserStatus
     assert user.status == UserStatus.ACTIVE
@@ -103,7 +103,7 @@ async def test_conftest_fixtures(
     """测试 conftest.py 中的 fixtures"""
     # 验证 test_user fixture
     assert test_user["id"] is not None
-    assert test_user["email"] == "testuser@test.local"
+    assert test_user["email"] == "testuser@example.com"
     assert test_user["token"] is not None
 
     # 验证 auth_headers fixture

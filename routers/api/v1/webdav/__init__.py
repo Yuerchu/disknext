@@ -71,13 +71,13 @@ async def list_accounts(
 @webdav_router.post(
     path='/accounts',
     summary='创建账号',
-    status_code=204,
+    status_code=201,
 )
 async def create_account(
     session: SessionDep,
     user: Annotated[User, Depends(auth_required)],
     request: WebDAVCreateRequest,
-) -> None:
+) -> WebDAVAccountResponse:
     """
     创建 WebDAV 账户
 
@@ -117,19 +117,19 @@ async def create_account(
     account = await account.save(session)
 
     l.info(f"用户 {user_id} 创建 WebDAV 账户: {account.name}")
+    return _to_response(account)
 
 
 @webdav_router.patch(
     path='/accounts/{account_id}',
     summary='更新账号',
-    status_code=204,
 )
 async def update_account(
     session: SessionDep,
     user: Annotated[User, Depends(auth_required)],
     account_id: int,
     request: WebDAVUpdateRequest,
-) -> None:
+) -> WebDAVAccountResponse:
     """
     更新 WebDAV 账户
 
@@ -168,6 +168,7 @@ async def update_account(
         await WebDAVAuthCache.invalidate_account(user_id, account.name)
 
     l.info(f"用户 {user_id} 更新 WebDAV 账户: {account.name}")
+    return _to_response(account)
 
 
 @webdav_router.delete(

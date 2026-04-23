@@ -56,6 +56,7 @@ async def get_viewers(
         session,
         cond(FileAppExtension.extension == normalized_ext),
         load=rel(FileAppExtension.app),
+        fetch_mode="all",
     )
 
     # 过滤和收集可用应用
@@ -68,13 +69,11 @@ async def get_viewers(
             continue
 
         if app.is_restricted:
-            stmt = FileAppGroupLink.get(
+            group_link = await FileAppGroupLink.get(
                 session,
                 cond(FileAppGroupLink.app_id == app.id) &
                 cond(FileAppGroupLink.group_id == user_group_id),
             )
-            result = await session.exec(stmt)
-            group_link = result.first()
             if not group_link:
                 continue
 

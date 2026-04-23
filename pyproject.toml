@@ -43,13 +43,6 @@ build = [
     "cython>=3.0.11",
     "setuptools>=75.0.0",
 ]
-ee = [
-    "disknext-license",
-    "maturin>=1.8",
-]
-
-[tool.uv.sources]
-disknext-license = { path = "ee/_license_core", editable = true }
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
