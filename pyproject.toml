@@ -37,6 +37,7 @@ dependencies = [
     "email-validator>=2.3.0",
     "pydantic-extra-types[phonenumbers]>=2.11.1",
     "basedpyright>=1.39.3",
+    "pillow>=11.0.0",
 ]
 
 [project.optional-dependencies]

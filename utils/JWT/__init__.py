@@ -5,7 +5,7 @@ from uuid import UUID, uuid4
 import jwt
 from fastapi.security import OAuth2PasswordBearer
 
-from sqlmodels import AccessTokenBase, RefreshTokenBase
+from sqlmodels.token import AccessTokenBase, RefreshTokenBase
 from utils.conf import appmeta
 
 if TYPE_CHECKING:

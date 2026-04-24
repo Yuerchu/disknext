@@ -29,7 +29,7 @@ from middleware.dependencies import SessionDep, ServerConfigDep, require_captcha
 from sqlmodels.auth_identity import AuthProviderType
 from sqlmodels.group import Group
 from sqlmodels.server_config import ServerConfig
-from sqlmodels.user import User, UserStatus
+from sqlmodels.user import AvatarType, User, UserStatus
 from sqlmodels.user_authn import UserAuthn
 from utils import JWT, Password, http_exceptions
 from utils.conf import appmeta
@@ -129,7 +129,6 @@ async def _login_oauth(
         user_info_resp = await oauth_client.get_user_info(token_resp)
         openid = str(user_info_resp.user_data.id)
         nickname = user_info_resp.user_data.name or user_info_resp.user_data.login
-        avatar_url = user_info_resp.user_data.avatar_url
         email = user_info_resp.user_data.email
     elif provider == AuthProviderType.QQ:
         from utils.oauth import QQOAuth
@@ -146,7 +145,6 @@ async def _login_oauth(
         )
         openid = openid_resp.openid
         nickname = user_info_resp.user_data.nickname
-        avatar_url = user_info_resp.user_data.figureurl_qq_2 or user_info_resp.user_data.figureurl_2
         email = None
     else:
         http_exceptions.raise_bad_request(f"不支持的 OAuth 提供者: {provider.value}")
@@ -171,7 +169,6 @@ async def _login_oauth(
         provider=provider,
         openid=openid,
         nickname=nickname,
-        avatar_url=avatar_url,
         email=email,
     )
     return user
@@ -184,7 +181,6 @@ async def _auto_register_oauth_user(
         provider: AuthProviderType,
         openid: str,
         nickname: str | None,
-        avatar_url: str | None,
         email: str | None,
 ) -> User:
     """OAuth 自动注册用户"""
@@ -206,7 +202,7 @@ async def _auto_register_oauth_user(
     new_user = User(
         email=email,
         nickname=nickname,
-        avatar=avatar_url or "default",
+        avatar=AvatarType.DEFAULT,
         group_id=default_group_id,
         scopes=default_group.default_scopes,
         **oauth_fields,
@@ -629,7 +625,7 @@ async def router_user_avatar(
 
     avatar_path, _, size_l, size_m, size_s = await get_avatar_settings(session)
 
-    if user.avatar == "file":
+    if user.avatar == AvatarType.FILE:
         size_label = resolve_avatar_size(size, size_l, size_m, size_s)
         file_path = get_avatar_file_path(avatar_path, user.id, size_label)
 
@@ -644,7 +640,7 @@ async def router_user_avatar(
             headers={"Cache-Control": "public, max-age=3600"},
         )
 
-    elif user.avatar == "gravatar":
+    elif user.avatar == AvatarType.GRAVATAR:
         server = config.gravatar_server
         email = user.email or str(user.id)
         url = gravatar_url(email, size, server)

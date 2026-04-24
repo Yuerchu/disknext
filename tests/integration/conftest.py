@@ -20,7 +20,7 @@ from sqlalchemy.orm import sessionmaker
 from main import app
 from sqlmodels import Group, GroupClaims, Entry, EntryType, Policy, PolicyType, ServerConfig, User
 from sqlmodels.policy import GroupPolicyLink
-from sqlmodels.user import UserStatus
+from sqlmodels.user import AvatarType, UserStatus
 from utils import Password
 from utils.JWT import create_access_token
 import utils.conf.appmeta as appmeta
@@ -166,7 +166,7 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
         storage=0,
         score=0,
         group_id=default_group.id,
-        avatar="default",
+        avatar=AvatarType.DEFAULT,
         password_hash=Password.hash("testpass123"),
     )
     test_session.add(test_user)
@@ -179,7 +179,7 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
         storage=0,
         score=0,
         group_id=admin_group.id,
-        avatar="default",
+        avatar=AvatarType.DEFAULT,
         password_hash=Password.hash("adminpass123"),
     )
     test_session.add(admin_user)
@@ -192,7 +192,7 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
         storage=0,
         score=0,
         group_id=default_group.id,
-        avatar="default",
+        avatar=AvatarType.DEFAULT,
         password_hash=Password.hash("banned123"),
     )
     test_session.add(banned_user)
