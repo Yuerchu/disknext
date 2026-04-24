@@ -117,6 +117,7 @@ from sqlmodels.file import Entry, EntryType
 from sqlmodels.policy import Policy, PolicyType
 from sqlmodels.user import User, UserStatus
 import utils.conf.appmeta as appmeta
+from sqlmodels.scope import ADMIN_SCOPES
 from utils.JWT import create_access_token
 from utils.password.pwd import Password
 
@@ -362,6 +363,7 @@ async def admin_user(db_session: AsyncSession) -> dict[str, str | UUID]:
         score=9999,
         group_id=admin_group.id,
         password_hash=Password.hash(password),
+        scopes=ADMIN_SCOPES,
     )
     admin = await admin.save(db_session)
 

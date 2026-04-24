@@ -22,14 +22,12 @@ def require_scope(required_scope: str):
     """
     静态 scope 检查依赖工厂。
 
-    管理员（group.admin=True）直接通过，不检查 scopes。
-    普通用户从 User.scopes 构建 ScopeSet 并匹配。
+    从 User.scopes 构建 ScopeSet 并匹配，不对任何角色做特殊豁免。
+    管理员需持有对应的 ``admin.*:*`` 通配符 scope 才能通过。
 
-    :param required_scope: 需要的 scope，如 ``files:read:own``
+    :param required_scope: 需要的 scope，如 ``admin.files:read:all``
     """
     async def _checker(user: Annotated[User, Depends(auth_required)]) -> User:
-        if user.group.admin:
-            return user
         scope_set = ScopeSet.from_strings(user.scopes or [])
         if not scope_set.has(required_scope):
             http_exceptions.raise_forbidden(f"缺少权限: {required_scope}")

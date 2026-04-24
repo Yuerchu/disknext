@@ -11,7 +11,7 @@ from loguru import logger as l
 from sqlalchemy import select
 from sqlmodel_ext import cond, rel
 
-from middleware.auth import admin_required
+from middleware.scope import require_scope
 from middleware.dependencies import SessionDep, TableViewRequestDep
 from utils.wopi import parse_wopi_discovery_xml
 from sqlmodels import (
@@ -33,13 +33,13 @@ from utils import http_exceptions
 admin_file_app_router = APIRouter(
     prefix="/file_app",
     tags=["admin", "file_app"],
-    dependencies=[Depends(admin_required)],
 )
 
 
 @admin_file_app_router.get(
     path='/',
     summary='列出所有文件应用',
+    dependencies=[Depends(require_scope("admin.file_apps:read:all"))],
 )
 async def list_file_apps(
     session: SessionDep,
@@ -76,6 +76,7 @@ async def list_file_apps(
     path='/',
     summary='创建文件应用',
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_scope("admin.file_apps:create:all"))],
 )
 async def create_file_app(
     session: SessionDep,
@@ -140,6 +141,7 @@ async def create_file_app(
 @admin_file_app_router.get(
     path='/{app_id}',
     summary='获取文件应用详情',
+    dependencies=[Depends(require_scope("admin.file_apps:read:all"))],
 )
 async def get_file_app(
     session: SessionDep,
@@ -172,6 +174,7 @@ async def get_file_app(
 @admin_file_app_router.patch(
     path='/{app_id}',
     summary='更新文件应用',
+    dependencies=[Depends(require_scope("admin.file_apps:write:all"))],
 )
 async def update_file_app(
     session: SessionDep,
@@ -222,6 +225,7 @@ async def update_file_app(
     path='/{app_id}',
     summary='删除文件应用',
     status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_scope("admin.file_apps:delete:all"))],
 )
 async def delete_file_app(
     session: SessionDep,
@@ -245,6 +249,7 @@ async def delete_file_app(
 @admin_file_app_router.put(
     path='/{app_id}/extensions',
     summary='全量替换扩展名列表',
+    dependencies=[Depends(require_scope("admin.file_apps:write:all"))],
 )
 async def update_extensions(
     session: SessionDep,
@@ -311,6 +316,7 @@ async def update_extensions(
 @admin_file_app_router.put(
     path='/{app_id}/groups',
     summary='全量替换允许的用户组',
+    dependencies=[Depends(require_scope("admin.file_apps:write:all"))],
 )
 async def update_group_access(
     session: SessionDep,
@@ -362,6 +368,7 @@ async def update_group_access(
 @admin_file_app_router.post(
     path='/{app_id}/discover',
     summary='执行 WOPI Discovery',
+    dependencies=[Depends(require_scope("admin.file_apps:write:all"))],
 )
 async def discover_wopi(
     session: SessionDep,

@@ -6,7 +6,7 @@ from sqlalchemy import and_, func
 from sqlalchemy.sql.elements import ColumnElement
 from sqlmodel_ext import rel, cond
 
-from middleware.auth import admin_required
+from middleware.scope import require_scope
 from middleware.dependencies import SessionDep, ServerConfigDep, TableViewRequestDep, UserFilterParamsDep
 from utils.redis.user_ban_store import UserBanStore
 from sqlmodels import (
@@ -46,7 +46,7 @@ def _build_user_filter_condition(filter_params: UserFilterParams) -> ColumnEleme
     path='/',
     summary='获取用户列表',
     description='Get user list',
-    dependencies=[Depends(admin_required)],
+    dependencies=[Depends(require_scope("admin.users:read:all"))],
 )
 async def router_admin_get_users(
     session: SessionDep,
@@ -80,7 +80,7 @@ async def router_admin_get_users(
     path='/{user_id}',
     summary='获取用户信息',
     description='Get user information by ID',
-    dependencies=[Depends(admin_required)],
+    dependencies=[Depends(require_scope("admin.users:read:all"))],
 )
 async def router_admin_get_user(session: SessionDep, user_id: UUID) -> UserPublic:
     """
@@ -105,7 +105,7 @@ async def router_admin_get_user(session: SessionDep, user_id: UUID) -> UserPubli
     path='/',
     summary='创建用户',
     description='Create a new user',
-    dependencies=[Depends(admin_required)],
+    dependencies=[Depends(require_scope("admin.users:create:all"))],
 )
 async def router_admin_create_user(
     session: SessionDep,
@@ -152,7 +152,7 @@ async def router_admin_create_user(
     path='/{user_id}',
     summary='更新用户信息',
     description='Update user information by ID',
-    dependencies=[Depends(admin_required)],
+    dependencies=[Depends(require_scope("admin.users:write:all"))],
     status_code=204
 )
 async def router_admin_update_user(
@@ -208,7 +208,7 @@ async def router_admin_update_user(
     path='/',
     summary='删除用户（支持批量）',
     description='Delete users by ID list',
-    dependencies=[Depends(admin_required)],
+    dependencies=[Depends(require_scope("admin.users:delete:all"))],
     status_code=204,
 )
 async def router_admin_delete_users(
@@ -242,7 +242,7 @@ async def router_admin_delete_users(
     path='/calibrate/{user_id}',
     summary='校准用户存储容量',
     description='Calibrate the user storage.',
-    dependencies=[Depends(admin_required)]
+    dependencies=[Depends(require_scope("admin.users:write:all"))]
 )
 async def router_admin_calibrate_storage(
     session: SessionDep,

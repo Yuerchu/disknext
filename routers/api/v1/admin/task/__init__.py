@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger as l
 from sqlmodel_ext import rel
 
-from middleware.auth import admin_required
+from middleware.scope import require_scope
 from middleware.dependencies import SessionDep, TableViewRequestDep
 from sqlmodels import (
     ListResponse,
@@ -56,7 +56,7 @@ admin_task_router = APIRouter(
     path='/',
     summary='获取任务列表',
     description='Get task list',
-    dependencies=[Depends(admin_required)]
+    dependencies=[Depends(require_scope("admin.tasks:read:all"))]
 )
 async def router_admin_get_task_list(
     session: SessionDep,
@@ -99,7 +99,7 @@ async def router_admin_get_task_list(
     path='/{task_id}',
     summary='获取任务详情',
     description='Get task detail by ID',
-    dependencies=[Depends(admin_required)]
+    dependencies=[Depends(require_scope("admin.tasks:read:all"))]
 )
 async def router_admin_get_task(
     session: SessionDep,
@@ -137,7 +137,7 @@ async def router_admin_get_task(
     path='/{task_id}',
     summary='删除任务',
     description='Delete task by ID',
-    dependencies=[Depends(admin_required)],
+    dependencies=[Depends(require_scope("admin.tasks:delete:all"))],
     status_code=204,
 )
 async def router_admin_delete_task(

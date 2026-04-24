@@ -3,8 +3,8 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
 from loguru import logger as l
 
-from middleware.auth import admin_required
 from middleware.dependencies import SessionDep, ServerConfigDep
+from middleware.scope import require_scope
 from sqlmodels import (
     User, ResponseBase,
     Entry, EntryType, Share, AdminSummaryResponse, MetricsSummary, LicenseInfo, VersionInfo,
@@ -48,7 +48,7 @@ admin_aria2_router = APIRouter(
 @admin_router.get(
     path='/',
     summary='自己是否为管理员',
-    dependencies=[Depends(admin_required)],
+    dependencies=[Depends(require_scope("admin.dashboard:read:all"))],
     status_code=status.HTTP_204_NO_CONTENT
 )
 async def is_admin() -> None:
@@ -66,7 +66,7 @@ async def is_admin() -> None:
     path='/summary',
     summary='获取站点概况',
     description='Get site summary information',
-    dependencies=[Depends(admin_required)],
+    dependencies=[Depends(require_scope("admin.dashboard:read:all"))],
 )
 async def router_admin_get_summary(
     session: SessionDep,
@@ -182,7 +182,7 @@ async def router_admin_get_summary(
     path='/news',
     summary='获取社区新闻',
     description='Get community news',
-    dependencies=[Depends(admin_required)],
+    dependencies=[Depends(require_scope("admin.dashboard:read:all"))],
 )
 def router_admin_get_news() -> ResponseBase:
     """
@@ -196,7 +196,7 @@ def router_admin_get_news() -> ResponseBase:
 @admin_router.patch(
     path='/settings',
     summary='更新设置',
-    dependencies=[Depends(admin_required)],
+    dependencies=[Depends(require_scope("admin.settings:write:all"))],
     status_code=204,
 )
 async def router_admin_update_settings(
@@ -220,7 +220,7 @@ async def router_admin_update_settings(
 @admin_router.get(
     path='/settings',
     summary='获取设置',
-    dependencies=[Depends(admin_required)],
+    dependencies=[Depends(require_scope("admin.settings:read:all"))],
 )
 async def router_admin_get_settings(
     config: ServerConfigDep,
@@ -234,7 +234,7 @@ async def router_admin_get_settings(
     path='/test',
     summary='测试 Aria2 连接',
     description='Test Aria2 RPC connection',
-    dependencies=[Depends(admin_required)],
+    dependencies=[Depends(require_scope("admin.settings:write:all"))],
     status_code=204,
 )
 async def router_admin_aira2_test(

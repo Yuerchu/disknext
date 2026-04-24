@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger as l
 from sqlmodel_ext import rel
 
-from middleware.auth import admin_required
+from middleware.scope import require_scope
 from middleware.dependencies import SessionDep, TableViewRequestDep
 from sqlmodels import (
     ListResponse,
@@ -65,7 +65,7 @@ admin_share_router = APIRouter(
     path='/',
     summary='获取分享列表',
     description='Get share list',
-    dependencies=[Depends(admin_required)]
+    dependencies=[Depends(require_scope("admin.shares:read:all"))]
 )
 async def router_admin_get_share_list(
     session: SessionDep,
@@ -98,7 +98,7 @@ async def router_admin_get_share_list(
     path='/{share_id}',
     summary='获取分享详情',
     description='Get share detail by ID',
-    dependencies=[Depends(admin_required)]
+    dependencies=[Depends(require_scope("admin.shares:read:all"))]
 )
 async def router_admin_get_share(
     session: SessionDep,
@@ -144,7 +144,7 @@ async def router_admin_get_share(
     path='/{share_id}',
     summary='删除分享',
     description='Delete share by ID',
-    dependencies=[Depends(admin_required)],
+    dependencies=[Depends(require_scope("admin.shares:delete:all"))],
     status_code=204,
 )
 async def router_admin_delete_share(

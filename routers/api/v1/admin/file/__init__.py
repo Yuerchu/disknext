@@ -9,10 +9,10 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import update as sql_update
 from sqlmodel_ext import rel, cond
 
-from middleware.auth import admin_required
 from middleware.dependencies import SessionDep, TableViewRequestDep
+from middleware.scope import require_scope
 from sqlmodels import (
-    JWTPayload, Policy, User, ListResponse,
+    Policy, User, ListResponse,
     Entry, EntryType, AdminFileResponse, FileBanRequest, )
 from utils.storage import create_storage_driver
 
@@ -75,7 +75,7 @@ admin_file_router = APIRouter(
     path='/',
     summary='获取文件列表',
     description='Get file list',
-    dependencies=[Depends(admin_required)],
+    dependencies=[Depends(require_scope("admin.files:read:all"))],
 )
 async def router_admin_get_file_list(
     session: SessionDep,
@@ -126,7 +126,7 @@ async def router_admin_get_file_list(
     path='/{file_id}/preview',
     summary='预览文件',
     description='Preview file by ID',
-    dependencies=[Depends(admin_required)],
+    dependencies=[Depends(require_scope("admin.files:read:all"))],
 )
 async def router_admin_preview_file(
     session: SessionDep,
@@ -170,7 +170,7 @@ async def router_admin_ban_file(
     session: SessionDep,
     file_id: UUID,
     request: FileBanRequest,
-    claims: Annotated[JWTPayload, Depends(admin_required)],
+    user: Annotated[User, Depends(require_scope("admin.files:write:all"))],
 ) -> None:
     """
     封禁或解禁文件/文件夹。封禁后用户无法访问该文件。
@@ -179,12 +179,12 @@ async def router_admin_ban_file(
     :param session: 数据库会话
     :param file_id: 文件UUID
     :param request: 封禁请求
-    :param claims: 当前管理员 JWT claims
+    :param user: 当前管理员用户
     :return: 封禁结果
     """
     file_obj = await Entry.get_exist_one(session, file_id)
 
-    count = await _set_ban_recursive(session, file_obj, request.ban, claims.sub, request.reason)
+    count = await _set_ban_recursive(session, file_obj, request.ban, user.id, request.reason)
 
     action = "封禁" if request.ban else "解禁"
     l.info(f"管理员{action}了对象: {file_obj.name}，共影响 {count} 个对象")
@@ -194,7 +194,7 @@ async def router_admin_ban_file(
     path='/{file_id}',
     summary='删除文件',
     description='Delete file by ID',
-    dependencies=[Depends(admin_required)],
+    dependencies=[Depends(require_scope("admin.files:delete:all"))],
     status_code=204,
 )
 async def router_admin_delete_file(

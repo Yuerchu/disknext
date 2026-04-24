@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger as l
 from sqlmodel import Field
 
-from middleware.auth import admin_required
+from middleware.scope import require_scope
 from middleware.dependencies import SessionDep, TableViewRequestDep
 from sqlmodels import (
     Policy, PolicyCreateRequest, PolicyType, PolicySummary,
@@ -166,7 +166,7 @@ class PolicyTestS3Response(SQLModelBase):
     path='/',
     summary='列出存储策略',
     description='List all storage policies',
-    dependencies=[Depends(admin_required)]
+    dependencies=[Depends(require_scope("admin.policies:read:all"))]
 )
 async def router_policy_list(
     session: SessionDep,
@@ -191,7 +191,7 @@ async def router_policy_list(
     path='/test/path',
     summary='测试本地路径可用性',
     description='Test local path availability',
-    dependencies=[Depends(admin_required)]
+    dependencies=[Depends(require_scope("admin.policies:read:all"))]
 )
 async def router_policy_test_path(
     request: PolicyTestPathRequest,
@@ -233,7 +233,7 @@ async def router_policy_test_path(
     path='/test/slave',
     summary='测试从机通信',
     description='Test slave node communication',
-    dependencies=[Depends(admin_required)],
+    dependencies=[Depends(require_scope("admin.policies:read:all"))],
     status_code=204,
 )
 async def router_policy_test_slave(
@@ -270,7 +270,7 @@ async def router_policy_test_slave(
     path='/',
     summary='创建存储策略',
     description='创建新的存储策略。对于本地存储策略，会自动创建物理目录。',
-    dependencies=[Depends(admin_required)],
+    dependencies=[Depends(require_scope("admin.policies:create:all"))],
     status_code=204,
 )
 async def router_policy_add_policy(
@@ -317,7 +317,7 @@ async def router_policy_add_policy(
     path='/cors',
     summary='创建跨域策略',
     description='Create CORS policy for S3 storage',
-    dependencies=[Depends(admin_required)]
+    dependencies=[Depends(require_scope("admin.policies:create:all"))]
 )
 async def router_policy_add_cors() -> ResponseBase:
     """
@@ -333,7 +333,7 @@ async def router_policy_add_cors() -> ResponseBase:
     path='/scf',
     summary='创建COS回调函数',
     description='Create COS callback function',
-    dependencies=[Depends(admin_required)]
+    dependencies=[Depends(require_scope("admin.policies:create:all"))]
 )
 async def router_policy_add_scf() -> ResponseBase:
     """
@@ -349,7 +349,7 @@ async def router_policy_add_scf() -> ResponseBase:
     path='/{policy_id}/oauth',
     summary='获取 OneDrive OAuth URL',
     description='Get OneDrive OAuth URL',
-    dependencies=[Depends(admin_required)]
+    dependencies=[Depends(require_scope("admin.policies:read:all"))]
 )
 async def router_policy_onddrive_oauth(
     session: SessionDep,
@@ -372,7 +372,7 @@ async def router_policy_onddrive_oauth(
     path='/{policy_id}',
     summary='获取存储策略',
     description='Get storage policy by ID',
-    dependencies=[Depends(admin_required)]
+    dependencies=[Depends(require_scope("admin.policies:read:all"))]
 )
 async def router_policy_get_policy(
     session: SessionDep,
@@ -406,7 +406,7 @@ async def router_policy_get_policy(
     path='/{policy_id}',
     summary='删除存储策略',
     description='Delete storage policy by ID',
-    dependencies=[Depends(admin_required)],
+    dependencies=[Depends(require_scope("admin.policies:delete:all"))],
     status_code=204,
 )
 async def router_policy_delete_policy(
@@ -442,7 +442,7 @@ async def router_policy_delete_policy(
     path='/{policy_id}',
     summary='更新存储策略',
     description='更新存储策略配置。策略类型创建后不可更改。',
-    dependencies=[Depends(admin_required)],
+    dependencies=[Depends(require_scope("admin.policies:write:all"))],
     status_code=204,
 )
 async def router_policy_update_policy(
@@ -484,7 +484,7 @@ async def router_policy_update_policy(
     path='/test/s3',
     summary='测试 S3 连接',
     description='测试 S3 存储端点的连通性和凭据有效性。',
-    dependencies=[Depends(admin_required)],
+    dependencies=[Depends(require_scope("admin.policies:read:all"))],
 )
 async def router_policy_test_s3(
     request: PolicyTestS3Request,

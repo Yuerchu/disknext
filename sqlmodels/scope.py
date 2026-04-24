@@ -46,6 +46,21 @@ class ScopeResource(StrEnum):
     ADMIN_FILES = "admin.files"
     """管理全站文件"""
 
+    ADMIN_SHARES = "admin.shares"
+    """管理全站分享"""
+
+    ADMIN_TASKS = "admin.tasks"
+    """管理任务"""
+
+    ADMIN_FILE_APPS = "admin.file_apps"
+    """管理文件应用"""
+
+    ADMIN_THEMES = "admin.themes"
+    """管理主题预设"""
+
+    ADMIN_DASHBOARD = "admin.dashboard"
+    """管理后台概览/统计"""
+
 
 class ScopeAction(StrEnum):
     """权限操作类型"""
@@ -243,5 +258,10 @@ ADMIN_SCOPES: list[ScopeValueEnum] = [
     ScopeValueEnum("admin.settings:*"),
     ScopeValueEnum("admin.policies:*"),
     ScopeValueEnum("admin.files:*"),
+    ScopeValueEnum("admin.shares:*"),
+    ScopeValueEnum("admin.tasks:*"),
+    ScopeValueEnum("admin.file_apps:*"),
+    ScopeValueEnum("admin.themes:*"),
+    ScopeValueEnum("admin.dashboard:*"),
 ]
 """管理员默认权限（通配符）"""

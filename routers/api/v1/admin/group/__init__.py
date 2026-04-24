@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger as l
 from sqlmodel_ext import cond, rel
 
-from middleware.auth import admin_required
+from middleware.scope import require_scope
 from middleware.dependencies import SessionDep, TableViewRequestDep
 from sqlmodels import (
     User, UserPublic, ListResponse,
@@ -22,7 +22,7 @@ admin_group_router = APIRouter(
     path='/',
     summary='获取用户组列表',
     description='Get user group list',
-    dependencies=[Depends(admin_required)],
+    dependencies=[Depends(require_scope("admin.groups:read:all"))],
 )
 async def router_admin_get_groups(
     session: SessionDep,
@@ -51,7 +51,7 @@ async def router_admin_get_groups(
     path='/{group_id}',
     summary='获取用户组信息',
     description='Get user group information by ID',
-    dependencies=[Depends(admin_required)],
+    dependencies=[Depends(require_scope("admin.groups:read:all"))],
 )
 async def router_admin_get_group(
     session: SessionDep,
@@ -75,7 +75,7 @@ async def router_admin_get_group(
     path='/list/{group_id}',
     summary='获取用户组成员列表',
     description='Get user group member list by group ID',
-    dependencies=[Depends(admin_required)],
+    dependencies=[Depends(require_scope("admin.groups:read:all"))],
 )
 async def router_admin_get_group_members(
     session: SessionDep,
@@ -115,7 +115,7 @@ async def router_admin_get_group_members(
     path='/',
     summary='创建用户组',
     description='Create a new user group',
-    dependencies=[Depends(admin_required)],
+    dependencies=[Depends(require_scope("admin.groups:create:all"))],
     status_code=204,
 )
 async def router_admin_create_group(
@@ -169,7 +169,7 @@ async def router_admin_create_group(
     path='/{group_id}',
     summary='更新用户组信息',
     description='Update user group information by ID',
-    dependencies=[Depends(admin_required)],
+    dependencies=[Depends(require_scope("admin.groups:write:all"))],
     status_code=204,
 )
 async def router_admin_update_group(
@@ -219,7 +219,7 @@ async def router_admin_update_group(
     path='/{group_id}',
     summary='删除用户组',
     description='Delete user group by ID',
-    dependencies=[Depends(admin_required)],
+    dependencies=[Depends(require_scope("admin.groups:delete:all"))],
     status_code=204,
 )
 async def router_admin_delete_group(

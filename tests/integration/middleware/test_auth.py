@@ -136,7 +136,7 @@ async def test_admin_required_non_admin(
     assert response.status_code == 403
     data = response.json()
     assert "detail" in data
-    assert data["detail"] == "Admin Required"
+    assert "缺少权限" in data["detail"]
 
 
 @pytest.mark.asyncio

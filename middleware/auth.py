@@ -52,20 +52,6 @@ async def jwt_required(
     return claims
 
 
-async def admin_required(
-    claims: Annotated[JWTPayload, Depends(jwt_required)],
-) -> JWTPayload:
-    """
-    验证管理员权限（仅读取 JWT claims，不查库）。
-
-    使用方法：
-    >>> APIRouter(dependencies=[Depends(admin_required)])
-    """
-    if not claims.group.admin:
-        http_exceptions.raise_forbidden("Admin Required")
-    return claims
-
-
 async def auth_required(
     session: SessionDep,
     claims: Annotated[JWTPayload, Depends(jwt_required)],

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, status
 from loguru import logger as l
 from sqlalchemy import update as sql_update
 
-from middleware.auth import admin_required
+from middleware.scope import require_scope
 from middleware.dependencies import SessionDep
 from sqlmodels import (
     ThemePreset,
@@ -18,13 +18,13 @@ from utils import http_exceptions
 admin_theme_router = APIRouter(
     prefix="/theme",
     tags=["admin", "admin_theme"],
-    dependencies=[Depends(admin_required)],
 )
 
 
 @admin_theme_router.get(
     path='/',
     summary='获取主题预设列表',
+    dependencies=[Depends(require_scope("admin.themes:read:all"))],
 )
 async def router_admin_theme_list(session: SessionDep) -> ThemePresetListResponse:
     """
@@ -45,6 +45,7 @@ async def router_admin_theme_list(session: SessionDep) -> ThemePresetListRespons
     path='/',
     summary='创建主题预设',
     status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_scope("admin.themes:create:all"))],
 )
 async def router_admin_theme_create(
         session: SessionDep,
@@ -79,6 +80,7 @@ async def router_admin_theme_create(
     path='/{preset_id}',
     summary='更新主题预设',
     status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_scope("admin.themes:write:all"))],
 )
 async def router_admin_theme_update(
         session: SessionDep,
@@ -124,6 +126,7 @@ async def router_admin_theme_update(
     path='/{preset_id}',
     summary='删除主题预设',
     status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_scope("admin.themes:delete:all"))],
 )
 async def router_admin_theme_delete(
         session: SessionDep,
@@ -153,6 +156,7 @@ async def router_admin_theme_delete(
     path='/{preset_id}/default',
     summary='设为默认主题预设',
     status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_scope("admin.themes:write:all"))],
 )
 async def router_admin_theme_set_default(
         session: SessionDep,
