@@ -3,6 +3,7 @@ ServerConfig Redis 缓存
 
 使用 Redis 存储 ServerConfig 序列化数据，减少数据库查询。
 """
+import orjson
 from loguru import logger as l
 from redis.exceptions import RedisError
 
@@ -17,7 +18,7 @@ class ServerConfigCache:
     """
     ServerConfig Redis 缓存管理器
 
-    序列化使用 model_dump_json / model_validate_json。
+    序列化使用 orjson + model_dump(mode='json') / model_validate。
     属于非关键缓存：Redis 运行时抖动（读/写异常）时仅记日志降级为直查库，
     不中断主流程。启动期 Redis 仍然是强制可用的。
     """
@@ -41,7 +42,7 @@ class ServerConfigCache:
         if raw is None:
             return None
 
-        return ServerConfig.model_validate_json(raw)
+        return ServerConfig.model_validate(orjson.loads(raw))
 
     @classmethod
     async def set(cls, config: 'ServerConfig') -> None:
@@ -52,8 +53,8 @@ class ServerConfigCache:
         """
         try:
             client = RedisManager.get_client()
-            json_str: str = config.model_dump_json()
-            await client.set(_CACHE_KEY, json_str, ex=_TTL)
+            data: bytes = orjson.dumps(config.model_dump(mode='json'))
+            await client.set(_CACHE_KEY, data, ex=_TTL)
         except RedisError as e:
             l.warning(f"[ServerConfigCache] 写入失败: {e}")
 

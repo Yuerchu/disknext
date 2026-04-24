@@ -35,13 +35,13 @@ async def router_admin_get_groups(
     :param table_view: 分页排序参数依赖
     :return: 分页用户组列表
     """
-    result = await Group.get_with_count(session, table_view=table_view)
+    result = await Group.get_with_count(session, table_view=table_view, load=rel(Group.policies))
 
     # 构建响应
     items: list[GroupDetailResponse] = []
     for g in result.items:
-        policies = await g.awaitable_attrs.policies
-        user_count = await User.count(session, User.group_id == g.id)
+        policies = g.policies
+        user_count = await User.count(session, cond(User.group_id == g.id))
         items.append(GroupDetailResponse.from_group(g, user_count, policies))
 
     return ListResponse(items=items, count=result.count)
