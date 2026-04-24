@@ -62,7 +62,7 @@ class RedisManager:
                 protocol=3,
                 decode_responses=False,
             )
-            await cls._client.ping()
+            await cls._client.ping()  # type: ignore[misc]  # redis-py async stub
             cls._is_initialized = True
             l.info(f"Redis 连接成功: {appmeta.redis_url}")
 

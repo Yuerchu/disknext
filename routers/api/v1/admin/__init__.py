@@ -10,7 +10,6 @@ from sqlmodels import (
     Entry, EntryType, Share, AdminSummaryResponse, MetricsSummary, LicenseInfo, VersionInfo,
     Aria2TestRequest
 )
-from sqlmodel_ext import SQLModelBase
 from sqlmodels.server_config import ServerConfig, ServerConfigUpdateRequest
 from utils import http_exceptions
 from utils.conf import appmeta

@@ -163,6 +163,6 @@ async def router_delete_custom_property(
     if definition.owner_id != user.id:
         raise HTTPException(status_code=403, detail="无权操作此属性")
 
-    await CustomPropertyDefinition.delete(session, instances=definition)
+    _ = await CustomPropertyDefinition.delete(session, instances=definition)
 
     l.info(f"用户 {user.id} 删除了自定义属性: {id}")

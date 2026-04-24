@@ -6,7 +6,7 @@ WsgiDAV 在 a2wsgi 的线程池中运行，不阻塞 FastAPI 事件循环。
 
 [TODO] 后续此模块将拆分到单独的容器中
 """
-from a2wsgi import WSGIMiddleware
+from starlette.middleware.wsgi import WSGIMiddleware
 from wsgidav.wsgidav_app import WsgiDAVApp
 
 from .domain_controller import DiskNextDomainController
@@ -33,5 +33,5 @@ _wsgidav_config: dict[str, object] = {
 
 _wsgidav_app = WsgiDAVApp(_wsgidav_config)
 
-dav_app = WSGIMiddleware(_wsgidav_app, workers=10)
+dav_app = WSGIMiddleware(_wsgidav_app)
 """ASGI 应用，挂载到 /dav 路径"""

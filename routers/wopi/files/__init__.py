@@ -167,7 +167,7 @@ async def put_file(
     content = await request.body()
 
     driver = create_storage_driver(policy)
-    await driver.write(physical_file.storage_path, content)
+    _ = await driver.write(physical_file.storage_path, content)
 
     # 更新文件大小
     new_size = len(content)
@@ -177,7 +177,7 @@ async def put_file(
 
     # 更新物理文件大小
     physical_file.size = new_size
-    await physical_file.save(session, commit=False)
+    _ = await physical_file.save(session, commit=False)
 
     # 更新用户存储配额
     size_diff = new_size - old_size

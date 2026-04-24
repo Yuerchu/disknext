@@ -1,9 +1,8 @@
 from enum import StrEnum
 from typing import TYPE_CHECKING
 from uuid import UUID
-from datetime import datetime
 
-from sqlmodel import Field, Relationship, UniqueConstraint, Column, func, DateTime
+from sqlmodel import Field, Relationship, UniqueConstraint
 
 from sqlmodel_ext import SQLModelBase, TableBaseMixin, Str255
 

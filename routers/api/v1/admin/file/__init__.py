@@ -193,9 +193,9 @@ async def router_admin_delete_file(
     stmt = sql_update(User).where(cond(User.id == owner_id)).values(
         storage=max(0, User.storage - file_size)
     )
-    await session.exec(stmt)
+    _ = await session.exec(stmt)
 
     # 使用条件删除
-    await Entry.delete(session, condition=Entry.id == file_obj.id)
+    _ = await Entry.delete(session, condition=Entry.id == file_obj.id)
 
     l.info(f"管理员删除了文件: {file_name}")

@@ -5,7 +5,7 @@ from uuid import UUID
 
 from sqlmodel import Field, Relationship
 
-from sqlmodel_ext import SQLModelBase, TableBaseMixin, Str64
+from sqlmodel_ext import SQLModelBase, TableBaseMixin
 
 if TYPE_CHECKING:
     from .product import Product

@@ -8,7 +8,8 @@ from middleware.scope import require_scope
 from middleware.dependencies import SessionDep, TableViewRequestDep
 from sqlmodels import (
     ListResponse,
-    Task, TaskSummary, TaskStatus, TaskType,
+    Task, TaskSummary,
+    User, TaskProps,
 )
 from sqlmodels.task import TaskDetailResponse
 
@@ -84,8 +85,8 @@ async def router_admin_get_task(
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
 
-    user = await task.awaitable_attrs.user
-    props = await task.awaitable_attrs.props
+    user: User = await task.awaitable_attrs.user
+    props: TaskProps = await task.awaitable_attrs.props
 
     return TaskDetailResponse(
         id=task.id,
@@ -95,7 +96,7 @@ async def router_admin_get_task(
         error=task.error,
         user_id=str(task.user_id),
         username=user.email if user else None,
-        props=props.model_dump() if props else None,
+        props=props.model_dump(),
         created_at=task.created_at.isoformat(),
         updated_at=task.updated_at.isoformat(),
     )
@@ -121,6 +122,6 @@ async def router_admin_delete_task(
     """
     task = await Task.get_exist_one(session, task_id)
 
-    await Task.delete(session, task)
+    _ = await Task.delete(session, task)
 
     l.info(f"管理员删除了任务: {task_id}")

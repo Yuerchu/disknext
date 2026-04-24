@@ -3,7 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger as l
 from sqlalchemy import func
-from sqlmodel_ext import rel, cond
+from sqlmodel_ext import rel
 
 from middleware.scope import require_scope
 from middleware.dependencies import SessionDep, ServerConfigDep, TableViewRequestDep, UserFilterParamsDep

@@ -8,8 +8,7 @@ from uuid import UUID
 import aiohttp
 from fastapi import APIRouter, Depends, status
 from loguru import logger as l
-from sqlalchemy import select
-from sqlmodel_ext import cond, rel
+from sqlmodel_ext import cond
 
 from middleware.scope import require_scope
 from middleware.dependencies import SessionDep, TableViewRequestDep
@@ -266,7 +265,7 @@ async def delete_file_app(
     app = await FileApp.get_exist_one(session, app_id)
 
     app_name = app.app_key
-    await FileApp.delete(session, app)
+    _ = await FileApp.delete(session, app)
     l.info(f"删除文件应用: {app_name}")
 
 
@@ -304,7 +303,7 @@ async def update_extensions(
         if ext.wopi_action_url
     }
     for old_ext in old_extensions:
-        await FileAppExtension.delete(session, old_ext, commit=False)
+        _ = await FileAppExtension.delete(session, old_ext, commit=False)
     await session.flush()
 
     # 创建新的扩展名（保留已有的 wopi_action_url）
@@ -469,7 +468,7 @@ async def discover_wopi(
         fetch_mode="all",
     )
     for old_ext in old_extensions:
-        await FileAppExtension.delete(session, old_ext, commit=False)
+        _ = await FileAppExtension.delete(session, old_ext, commit=False)
     await session.flush()
 
     new_extensions: list[FileAppExtension] = []

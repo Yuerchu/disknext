@@ -169,7 +169,7 @@ async def _auto_register_oauth_user(
     default_group = await Group.get_exist_one(session, default_group_id)
 
     # 构建 OAuth 字段
-    oauth_fields: dict = {}
+    oauth_fields: dict[str, str] = {}
     if provider == AuthProviderType.GITHUB:
         oauth_fields["github_id"] = openid
     elif provider == AuthProviderType.QQ:
@@ -224,7 +224,7 @@ async def login_passkey(
         http_exceptions.raise_unauthorized("登录会话已过期，请重新获取 options")
 
     # 从 assertion JSON 中解析 credential_id（Discoverable Credentials 模式）
-    credential_dict: dict = orjson.loads(request.credential)
+    credential_dict: dict[str, str] = orjson.loads(request.credential)
     credential_id_b64: str | None = credential_dict.get("id")
     if not credential_id_b64:
         http_exceptions.raise_bad_request("缺少凭证 ID")

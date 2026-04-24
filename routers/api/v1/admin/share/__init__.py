@@ -1,4 +1,3 @@
-from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -123,6 +122,6 @@ async def router_admin_delete_share(
     """
     share = await Share.get_exist_one(session, share_id)
 
-    await Share.delete(session, share)
+    _ = await Share.delete(session, share)
 
     l.info(f"管理员删除了分享: {share.code}")

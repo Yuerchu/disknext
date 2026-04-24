@@ -157,4 +157,4 @@ async def delete_default_viewer(
     if not existing:
         http_exceptions.raise_not_found("默认设置不存在")
 
-    await UserFileAppDefault.delete(session, existing)
+    _ = await UserFileAppDefault.delete(session, existing)

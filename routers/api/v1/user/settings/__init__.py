@@ -508,4 +508,4 @@ async def router_user_settings_delete_authn(
         http_exceptions.raise_not_found("WebAuthn 凭证不存在")
 
     # PG 触发器 userauthn_last_auth_trg 会阻止删除最后一个认证方式
-    await UserAuthn.delete(session, authn)
+    _ = await UserAuthn.delete(session, authn)

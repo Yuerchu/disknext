@@ -178,7 +178,7 @@ class ScopeSet(SQLModelBase):
     """已持有的 scope 列表"""
 
     @classmethod
-    def from_strings(cls, raw_list: list[str]) -> 'ScopeSet':
+    def from_strings(cls, raw_list: 'list[str] | list[ScopeValueEnum]') -> 'ScopeSet':
         """从字符串列表构建 ScopeSet"""
         return cls(scopes=[Scope.parse(s) for s in raw_list])
 

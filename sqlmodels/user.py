@@ -19,7 +19,7 @@ from .auth_identity import AuthProviderType
 from .scope import ScopeValueEnum
 from .color import ChromaticColor, NeutralColor, ThemeColorsBase
 from .model_base import ResponseBase
-from .token import AccessTokenBase, RefreshTokenBase, TokenResponse
+from .token import TokenResponse
 from utils import JWT
 
 T = TypeVar("T", bound="User")
@@ -386,8 +386,8 @@ class UserAdminDetailResponse(UserPublic):
 from .group import GroupClaims, GroupResponse  # noqa: E402
 
 # 更新前向引用
-JWTPayload.model_rebuild()
-UserResponse.model_rebuild()
+_ = JWTPayload.model_rebuild()
+_ = UserResponse.model_rebuild()
 
 
 # ==================== 数据库模型 ====================
@@ -582,7 +582,7 @@ class User(UserBase, UUIDTableBaseMixin):
             .where(cond(User.id == self.id))
             .values(storage=func.greatest(0, User.storage + delta))
         )
-        await session.exec(stmt)
+        _ = await session.exec(stmt)
 
         if commit:
             await session.commit()

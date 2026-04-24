@@ -17,6 +17,8 @@ import aiohttp
 from yarl import URL
 from loguru import logger as l
 
+from sqlmodels import Policy
+
 from .base import StorageDriver
 from .exceptions import S3APIError, S3MultipartUploadError
 from .models import ChunkResult, DownloadKind, DownloadResult, UploadContext

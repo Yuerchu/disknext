@@ -184,7 +184,7 @@ async def router_directory_create(
         raise HTTPException(status_code=409, detail="同名目录已存在")
 
     policy_id = request.policy_id if request.policy_id else parent.policy_id
-    await Policy.get_exist_one(session, policy_id)
+    _ = await Policy.get_exist_one(session, policy_id)
 
     # 校验用户组是否有权使用该策略（仅当用户显式指定 policy_id 时）
     if request.policy_id:

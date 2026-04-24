@@ -2,7 +2,6 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger as l
-from sqlmodel import Field
 
 from middleware.scope import require_scope
 from middleware.dependencies import SessionDep, TableViewRequestDep
@@ -223,7 +222,7 @@ async def router_policy_onddrive_oauth(
     :param policy_id: 存储策略UUID
     :return: OAuth URL
     """
-    policy = await Policy.get_exist_one(session, policy_id)
+    _ = await Policy.get_exist_one(session, policy_id)
 
     # TODO: 实现OneDrive OAuth
     raise HTTPException(status_code=501, detail="OneDrive OAuth暂未实现")

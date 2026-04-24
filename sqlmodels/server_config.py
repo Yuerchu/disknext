@@ -11,6 +11,31 @@ from sqlmodel_ext import SQLModelBase, TableBaseMixin, Str128, Str255, Str2048, 
 
 from .auth_identity import AuthProviderType
 
+# ==================== 枚举类型 ====================
+
+class CaptchaType(StrEnum):
+    """验证码类型"""
+    DEFAULT = "default"
+    """内置图片验证码"""
+    GCAPTCHA = "gcaptcha"
+    """Google reCAPTCHA"""
+    CLOUD_FLARE_TURNSTILE = "cloudflare turnstile"
+    """Cloudflare Turnstile"""
+
+
+class ViewMethod(StrEnum):
+    """文件列表视图模式"""
+    ICON = "icon"
+    LIST = "list"
+    SMALL_ICON = "smallIcon"
+
+
+class PWADisplayMode(StrEnum):
+    """PWA 显示模式"""
+    STANDALONE = "standalone"
+    FULLSCREEN = "fullscreen"
+    MINIMAL_UI = "minimal-ui"
+    BROWSER = "browser"
 
 # ==================== DTO 模型（原 setting.py）====================
 
@@ -51,7 +76,7 @@ class SiteConfigResponse(SQLModelBase):
     forget_captcha: bool = False
     """找回密码是否需要验证码"""
 
-    captcha_type: 'CaptchaType' = "default"
+    captcha_type: CaptchaType = CaptchaType.DEFAULT
     """验证码类型"""
 
     captcha_key: Str255 | None = None
@@ -111,33 +136,6 @@ OptionalUrlStr = Annotated[str, AfterValidator(_validate_optional_http_url)]
 
 HexColorStr = Annotated[str, AfterValidator(_validate_hex_color)]
 """CSS 颜色字符串（#rrggbb / #rgb / named color），存储为 str"""
-
-
-# ==================== 枚举类型 ====================
-
-class CaptchaType(StrEnum):
-    """验证码类型"""
-    DEFAULT = "default"
-    """内置图片验证码"""
-    GCAPTCHA = "gcaptcha"
-    """Google reCAPTCHA"""
-    CLOUD_FLARE_TURNSTILE = "cloudflare turnstile"
-    """Cloudflare Turnstile"""
-
-
-class ViewMethod(StrEnum):
-    """文件列表视图模式"""
-    ICON = "icon"
-    LIST = "list"
-    SMALL_ICON = "smallIcon"
-
-
-class PWADisplayMode(StrEnum):
-    """PWA 显示模式"""
-    STANDALONE = "standalone"
-    FULLSCREEN = "fullscreen"
-    MINIMAL_UI = "minimal-ui"
-    BROWSER = "browser"
 
 
 # ==================== ServerConfig 基类 ====================

@@ -3,6 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, status
 from loguru import logger as l
 from sqlalchemy import update as sql_update
+from sqlmodel_ext import cond
 
 from middleware.scope import require_scope
 from middleware.dependencies import SessionDep
@@ -148,7 +149,7 @@ async def router_admin_theme_delete(
     """
     preset = await ThemePreset.get_exist_one(session, preset_id)
 
-    await ThemePreset.delete(session, preset)
+    _ = await ThemePreset.delete(session, preset)
     l.info(f"管理员删除了主题预设: {preset.name}")
 
 
@@ -179,9 +180,9 @@ async def router_admin_theme_set_default(
     preset = await ThemePreset.get_exist_one(session, preset_id)
 
     # 清除所有旧默认
-    await session.execute(
+    _ = await session.exec(
         sql_update(ThemePreset)
-        .where(ThemePreset.is_default == True)  # noqa: E712
+        .where(cond(ThemePreset.is_default == True))  # noqa: E712
         .values(is_default=False)
     )
 

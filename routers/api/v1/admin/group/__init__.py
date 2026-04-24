@@ -96,7 +96,7 @@ async def router_admin_get_group_members(
     :return: 分页成员列表
     """
     # 验证组存在
-    await Group.get_exist_one(session, group_id)
+    _ = await Group.get_exist_one(session, group_id)
 
     result = await User.get_with_count(
         session, cond(User.group_id == group_id), table_view=table_view,
@@ -208,7 +208,7 @@ async def router_admin_update_group(
 
     # 更新策略关联
     if request.policy_ids is not None:
-        await GroupPolicyLink.delete(
+        _ = await GroupPolicyLink.delete(
             session,
             condition=cond(GroupPolicyLink.group_id == group_id)
         )
@@ -250,7 +250,6 @@ async def router_admin_delete_group(
             detail=f"无法删除，该组下还有 {user_count} 个用户"
         )
 
-    group_name = group.name
-    await Group.delete(session, group)
+    _ = await Group.delete(session, group)
 
     l.info(f"管理员删除了用户组: {group_id}")

@@ -50,6 +50,6 @@ async def set_ban_recursive(
         stmt = sql_update(Entry).where(col(Entry.id).in_(all_ids)).values(
             is_banned=False, banned_at=None, banned_by=None, ban_reason=None,
         )
-    await session.execute(stmt)
+    _ = await session.exec(stmt)
     await session.commit()
     return len(all_ids)

@@ -73,7 +73,7 @@ _DEFAULT_MAIL_RESET_PWD_TEMPLATE = '''<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1
 async def init_default_group() -> None:
     from .group import Group
     from .policy import Policy, GroupPolicyLink
-    from .scope import ADMIN_SCOPES, USER_DEFAULT_SCOPES, WEBDAV_SCOPES
+    from .scope import ADMIN_SCOPES, USER_DEFAULT_SCOPES
     from .server_config import ServerConfig
     from .database_connection import DatabaseManager
 
@@ -275,7 +275,7 @@ async def init_default_theme_presets() -> None:
 
 # ==================== 默认文件查看器应用种子数据 ====================
 
-_DEFAULT_FILE_APPS: list[dict] = [
+_DEFAULT_FILE_APPS: list[dict[str, str | bool | list[str]]] = [
     # 内置应用（type=builtin，默认启用）
     {
         "name": "PDF 阅读器",

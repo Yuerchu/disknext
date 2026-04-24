@@ -7,6 +7,8 @@ import orjson
 from loguru import logger as l
 from redis.exceptions import RedisError
 
+from sqlmodels.server_config import ServerConfig
+
 from . import RedisManager
 
 
@@ -24,13 +26,12 @@ class ServerConfigCache:
     """
 
     @classmethod
-    async def get(cls) -> 'ServerConfig | None':
+    async def get(cls) -> ServerConfig | None:
         """
         从 Redis 获取 ServerConfig。
 
         :return: 缓存命中时返回 ServerConfig 实例，未命中或 Redis 抖动时返回 None
         """
-        from sqlmodels.server_config import ServerConfig
 
         try:
             client = RedisManager.get_client()

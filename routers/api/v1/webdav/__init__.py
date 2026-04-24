@@ -194,7 +194,7 @@ async def delete_account(
         http_exceptions.raise_not_found("WebDAV 账户不存在")
 
     account_name = account.name
-    await WebDAV.delete(session, account)
+    _ = await WebDAV.delete(session, account)
 
     # 清除认证缓存
     await WebDAVAuthCache.invalidate_account(user_id, account_name)
