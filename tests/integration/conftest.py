@@ -20,6 +20,7 @@ from sqlalchemy.orm import sessionmaker
 from main import app
 from sqlmodels import Group, GroupClaims, Entry, EntryType, Policy, PolicyType, ServerConfig, User
 from sqlmodels.policy import GroupPolicyLink
+from sqlmodels.scope import ADMIN_SCOPES
 from sqlmodels.user import AvatarType, UserStatus
 from utils import Password
 from utils.JWT import create_access_token
@@ -181,6 +182,7 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
         group_id=admin_group.id,
         avatar=AvatarType.DEFAULT,
         password_hash=Password.hash("adminpass123"),
+        scopes=ADMIN_SCOPES,
     )
     test_session.add(admin_user)
 

@@ -15,11 +15,12 @@ from uuid import UUID
 
 from fastapi import Depends, Form, Query
 from sqlmodel.ext.asyncio.session import AsyncSession
+from sqlmodel_ext import TimeFilterRequest, TableViewRequest
 
 from sqlmodels.database_connection import DatabaseManager
 from sqlmodels.server_config import ServerConfig
 from sqlmodels.user import UserFilterParams, UserStatus
-from sqlmodel_ext import TimeFilterRequest, TableViewRequest
+from sqlmodels.captcha import CaptchaScene, verify_captcha_if_needed
 
 
 # --- 数据库会话依赖 ---
@@ -112,7 +113,7 @@ UserFilterParamsDep: TypeAlias = Annotated[UserFilterParams, Depends(_get_user_f
 
 # --- 验证码校验依赖 ---
 
-def require_captcha(scene: 'CaptchaScene') -> Callable[..., Awaitable[None]]:
+def require_captcha(scene: CaptchaScene) -> Callable[..., Awaitable[None]]:
     """
     验证码校验依赖注入工厂。
 
@@ -126,8 +127,6 @@ def require_captcha(scene: 'CaptchaScene') -> Callable[..., Awaitable[None]]:
 
     :param scene: 验证码使用场景（LOGIN / REGISTER / FORGET）
     """
-    from utils.captcha import CaptchaScene, verify_captcha_if_needed
-
     async def _verify_captcha(
             config: ServerConfigDep,
             captcha_code: Annotated[str | None, Form()] = None,

@@ -191,6 +191,151 @@ class PolicyUpdateRequest(SQLModelBase):
     """S3 区域"""
 
 
+class PathTestResponse(SQLModelBase):
+    """路径测试响应"""
+
+    path: str
+    """解析后的路径"""
+
+    is_exists: bool
+    """路径是否存在"""
+
+    is_writable: bool
+    """路径是否可写"""
+
+
+class PolicyGroupInfo(SQLModelBase):
+    """策略关联的用户组信息"""
+
+    id: str
+    """用户组UUID"""
+
+    name: str
+    """用户组名称"""
+
+
+class PolicyDetailResponse(SQLModelBase):
+    """存储策略详情响应"""
+
+    id: str
+    """策略UUID"""
+
+    name: str
+    """策略名称"""
+
+    type: str
+    """策略类型"""
+
+    server: str | None
+    """服务器地址"""
+
+    bucket_name: str | None
+    """存储桶名称"""
+
+    is_private: bool
+    """是否私有"""
+
+    base_url: str | None
+    """基础URL"""
+
+    access_key: str | None
+    """Access Key"""
+
+    secret_key: str | None
+    """Secret Key"""
+
+    max_size: int
+    """最大文件尺寸"""
+
+    auto_rename: bool
+    """是否自动重命名"""
+
+    dir_name_rule: str | None
+    """目录命名规则"""
+
+    file_name_rule: str | None
+    """文件命名规则"""
+
+    is_origin_link_enable: bool
+    """是否启用外链"""
+
+    token: str | None
+    """访问令牌"""
+
+    file_type: str | None
+    """允许的文件类型"""
+
+    mimetype: str | None
+    """MIME类型"""
+
+    od_redirect: str | None
+    """OneDrive重定向地址"""
+
+    chunk_size: int
+    """分片上传大小（字节）"""
+
+    s3_path_style: bool
+    """是否使用S3路径风格"""
+
+    s3_region: str
+    """S3 区域"""
+
+    groups: list[PolicyGroupInfo]
+    """关联的用户组"""
+
+    object_count: int
+    """使用此策略的对象数量"""
+
+
+class PolicyTestPathRequest(SQLModelBase):
+    """测试本地路径请求 DTO"""
+
+    path: str = Field(max_length=512)
+    """要测试的本地路径"""
+
+
+class PolicyTestSlaveRequest(SQLModelBase):
+    """测试从机通信请求 DTO"""
+
+    server: str = Field(max_length=255)
+    """从机服务器地址"""
+
+    secret: str
+    """从机通信密钥"""
+
+
+class PolicyTestS3Request(SQLModelBase):
+    """测试 S3 连接请求 DTO"""
+
+    server: str = Field(max_length=255)
+    """S3 端点地址"""
+
+    bucket_name: str = Field(max_length=255)
+    """存储桶名称"""
+
+    access_key: str
+    """Access Key"""
+
+    secret_key: str
+    """Secret Key"""
+
+    s3_region: str = Field(default='us-east-1', max_length=64)
+    """S3 区域"""
+
+    s3_path_style: bool = False
+    """是否使用路径风格"""
+
+
+class PolicyTestS3Response(SQLModelBase):
+    """S3 连接测试响应"""
+
+    is_connected: bool
+    """连接是否成功"""
+
+    message: str
+    """测试结果消息"""
+
+
 # ==================== 数据库模型 ====================
 
 

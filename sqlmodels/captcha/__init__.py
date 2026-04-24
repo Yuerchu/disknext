@@ -5,6 +5,8 @@ import aiohttp
 from loguru import logger as l
 from pydantic import BaseModel
 
+from sqlmodels import ServerConfig, CaptchaType
+from utils import http_exceptions
 
 class CaptchaRequestBase(BaseModel):
     """验证码验证请求"""
@@ -54,9 +56,9 @@ class CaptchaScene(StrEnum):
 
 
 async def verify_captcha_if_needed(
-        config: 'ServerConfig',
+        config: ServerConfig,
         scene: CaptchaScene,
-        captcha_code: str,
+        captcha_code: str | None,
 ) -> None:
     """
     通用验证码校验：根据 ServerConfig 判断是否需要，需要则校验。
@@ -68,8 +70,6 @@ async def verify_captcha_if_needed(
     :raises HTTPException 403: 验证码验证失败
     :raises HTTPException 500: 验证码密钥未配置
     """
-    from sqlmodels.server_config import CaptchaType, ServerConfig
-    from utils import http_exceptions
 
     # 1. 检查场景是否需要验证码
     is_scene_enabled: bool = {
@@ -80,6 +80,9 @@ async def verify_captcha_if_needed(
 
     if not is_scene_enabled:
         return
+    
+    if not captcha_code:
+        http_exceptions.raise_bad_request(detail="需要验证码但未提供")
 
     # 2. DEFAULT 图片验证码尚未实现，跳过
     if config.captcha_type == CaptchaType.DEFAULT:

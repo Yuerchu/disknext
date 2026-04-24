@@ -45,10 +45,10 @@ class DownloadAria2File(SQLModelBase, TableBaseMixin):
     path: str
     """文件路径"""
 
-    length: int = 0
+    length: int = Field(ge=0)
     """文件大小（字节）"""
 
-    completed_length: int = 0
+    completed_length: int = Field(ge=0)
     """已完成大小（字节）"""
 
     is_selected: bool = True
@@ -108,7 +108,7 @@ class Download(DownloadBase, UUIDTableBaseMixin):
     error: str | None = Field(default=None)
     """错误信息"""
 
-    dst: str
+    dst: str = Field(max_length=255)
     """目标存储路径"""
 
     # Aria2 信息字段

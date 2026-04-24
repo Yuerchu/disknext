@@ -11,50 +11,7 @@ from sqlmodels import (
     ListResponse,
     Share, AdminShareListItem,
 )
-from sqlmodel_ext import SQLModelBase
-
-
-class ShareDetailResponse(SQLModelBase):
-    """分享详情响应"""
-
-    id: UUID
-    """分享UUID"""
-
-    code: str
-    """分享码"""
-
-    views: int
-    """浏览次数"""
-
-    downloads: int
-    """下载次数"""
-
-    remain_downloads: int | None
-    """剩余下载次数"""
-
-    expires: datetime | None
-    """过期时间"""
-
-    preview_enabled: bool
-    """是否启用预览"""
-
-    score: int
-    """评分"""
-
-    has_password: bool
-    """是否有密码"""
-
-    user_id: str
-    """用户UUID"""
-
-    username: str | None
-    """用户名"""
-
-    object: dict | None
-    """关联对象信息"""
-
-    created_at: str
-    """创建时间"""
+from sqlmodels.share import ShareDetailResponse
 
 admin_share_router = APIRouter(
     prefix='/share',

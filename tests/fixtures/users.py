@@ -8,6 +8,7 @@ from uuid import UUID
 
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from sqlmodels.scope import ADMIN_SCOPES
 from sqlmodels.user import AvatarType, User, UserStatus
 from utils.password.pwd import Password
 
@@ -98,6 +99,7 @@ class UserFactory:
             group_id=admin_group_id,
             avatar=AvatarType.DEFAULT,
             password_hash=Password.hash(password),
+            scopes=ADMIN_SCOPES,
         )
 
         admin = await admin.save(session)

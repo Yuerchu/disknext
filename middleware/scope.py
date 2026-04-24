@@ -28,7 +28,7 @@ def require_scope(required_scope: str):
     :param required_scope: 需要的 scope，如 ``admin.files:read:all``
     """
     async def _checker(user: Annotated[User, Depends(auth_required)]) -> User:
-        scope_set = ScopeSet.from_strings(user.scopes or [])
+        scope_set = ScopeSet.from_strings(user.scopes)
         if not scope_set.has(required_scope):
             http_exceptions.raise_forbidden(f"缺少权限: {required_scope}")
         return user

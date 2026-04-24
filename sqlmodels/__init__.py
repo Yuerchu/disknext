@@ -186,6 +186,12 @@ from .model_base import (
     AdminSummaryResponse,
 )
 
+from .captcha import (
+    CaptchaRequestBase,
+    CaptchaBase,
+    CaptchaScene,
+)
+
 # 通用分页模型
 from sqlmodel_ext import ListResponse
 

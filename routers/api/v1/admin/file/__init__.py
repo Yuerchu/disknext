@@ -1,11 +1,9 @@
-from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from loguru import logger as l
-from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import update as sql_update
 from sqlmodel_ext import rel, cond
 
@@ -16,55 +14,7 @@ from sqlmodels import (
     Entry, EntryType, AdminFileResponse, FileBanRequest, )
 from utils.storage import create_storage_driver
 
-async def _set_ban_recursive(
-    session: AsyncSession,
-    obj: Entry,
-    ban: bool,
-    admin_id: UUID,
-    reason: str | None,
-) -> int:
-    """
-    递归设置封禁状态，返回受影响对象数量。
-
-    BFS 收集所有后代 ID，然后批量 UPDATE。
-
-    :param session: 数据库会话
-    :param obj: 要封禁/解禁的对象
-    :param ban: True=封禁, False=解禁
-    :param admin_id: 管理员UUID
-    :param reason: 封禁原因
-    :return: 受影响的对象数量
-    """
-    from sqlmodel import col
-
-    # BFS 收集所有后代 ID（包含自身）
-    all_ids: list[UUID] = [obj.id]
-    if obj.is_folder:
-        queue: list[UUID] = [obj.id]
-        while queue:
-            parent_id = queue.pop(0)
-            children = await Entry.get(
-                session, Entry.parent_id == parent_id, fetch_mode="all",
-            )
-            for child in children:
-                all_ids.append(child.id)
-                if child.is_folder:
-                    queue.append(child.id)
-
-    # 批量 UPDATE
-    if ban:
-        now = datetime.now()
-        stmt = sql_update(Entry).where(col(Entry.id).in_(all_ids)).values(
-            is_banned=True, banned_at=now, banned_by=admin_id, ban_reason=reason,
-        )
-    else:
-        stmt = sql_update(Entry).where(col(Entry.id).in_(all_ids)).values(
-            is_banned=False, banned_at=None, banned_by=None, ban_reason=None,
-        )
-    await session.execute(stmt)
-    await session.commit()
-    return len(all_ids)
-
+from .deps import set_ban_recursive
 
 admin_file_router = APIRouter(
     prefix="/file",
@@ -192,7 +142,7 @@ async def router_admin_ban_file(
     """
     file_obj = await Entry.get_exist_one(session, file_id)
 
-    count = await _set_ban_recursive(session, file_obj, request.ban, user.id, request.reason)
+    count = await set_ban_recursive(session, file_obj, request.ban, user.id, request.reason)
 
     action = "封禁" if request.ban else "解禁"
     l.info(f"管理员{action}了对象: {file_obj.name}，共影响 {count} 个对象")

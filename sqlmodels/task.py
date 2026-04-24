@@ -1,5 +1,5 @@
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 from uuid import UUID
 from datetime import datetime
 
@@ -67,6 +67,39 @@ class TaskSummary(TaskSummaryBase):
     username: Str255 | None
     """用户名"""
 
+
+class TaskDetailResponse(SQLModelBase):
+    """任务详情响应"""
+
+    id: int
+    """任务ID"""
+
+    status: TaskStatus
+    """任务状态"""
+
+    type: TaskType
+    """任务类型"""
+
+    progress: int
+    """任务进度"""
+
+    error: str | None
+    """错误信息"""
+
+    user_id: str
+    """用户UUID"""
+
+    username: str | None
+    """用户名"""
+
+    props: dict[str, Any] | None
+    """任务属性"""
+
+    created_at: str
+    """创建时间"""
+
+    updated_at: str
+    """更新时间"""
 
 
 # ==================== 数据库模型 ====================
