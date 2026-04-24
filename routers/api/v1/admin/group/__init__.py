@@ -42,7 +42,10 @@ async def router_admin_get_groups(
     for g in result.items:
         policies = g.policies
         user_count = await User.count(session, cond(User.group_id == g.id))
-        items.append(GroupDetailResponse.from_group(g, user_count, policies))
+        items.append(GroupDetailResponse.model_validate(g, from_attributes=True, update={
+            'user_count': user_count,
+            'policy_ids': [p.id for p in policies],
+        }))
 
     return ListResponse(items=items, count=result.count)
 
@@ -66,9 +69,11 @@ async def router_admin_get_group(
     """
     group = await Group.get_exist_one(session, group_id, load=rel(Group.policies))
 
-    policies = group.policies
     user_count = await User.count(session, cond(User.group_id == group_id))
-    return GroupDetailResponse.from_group(group, user_count, policies)
+    return GroupDetailResponse.model_validate(group, from_attributes=True, update={
+        'user_count': user_count,
+        'policy_ids': [p.id for p in group.policies],
+    })
 
 
 @admin_group_router.get(

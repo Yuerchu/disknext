@@ -27,7 +27,7 @@ import sqlmodels
 from middleware.auth import auth_required
 from middleware.dependencies import SessionDep, ServerConfigDep, require_captcha
 from sqlmodels.auth_identity import AuthProviderType
-from sqlmodels.group import Group
+from sqlmodels.group import Group, GroupResponse
 from sqlmodels.server_config import ServerConfig
 from sqlmodels.user import AvatarType, User, UserStatus
 from sqlmodels.user_authn import UserAuthn
@@ -674,8 +674,6 @@ async def router_user_me(
     :rtype: ResponseBase
     """
     # group 已由 auth_required 预加载
-    group_response = user.group.to_response()
-
     # 显式加载 tags 关系
     await session.refresh(user, ['tags'])
 
@@ -685,7 +683,7 @@ async def router_user_me(
         nickname=user.nickname,
         avatar=user.avatar,
         created_at=user.created_at,
-        group=group_response,
+        group=GroupResponse.model_validate(user.group, from_attributes=True),
         tags=[tag.name for tag in user.tags] if user.tags else [],
     )
 
@@ -851,7 +849,8 @@ async def router_user_authn_finish(
     )
     authn = await authn.save(session)
 
-    return authn.to_detail_response()
+    from sqlmodels import AuthnDetailResponse
+    return AuthnDetailResponse.model_validate(authn, from_attributes=True)
 
 
 @user_router.post(

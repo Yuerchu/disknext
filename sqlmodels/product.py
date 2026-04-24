@@ -189,18 +189,3 @@ class Product(ProductBase, UUIDTableBaseMixin):
     redeems: list["Redeem"] = Relationship(back_populates="product")
     """关联的兑换码列表"""
 
-    def to_response(self) -> ProductResponse:
-        """转换为响应 DTO"""
-        return ProductResponse(
-            id=self.id,
-            name=self.name,
-            type=self.type,
-            description=self.description,
-            price=float(self.price),
-            is_active=self.is_active,
-            sort_order=self.sort_order,
-            size=self.size,
-            duration_days=self.duration_days,
-            group_id=self.group_id,
-            score_amount=self.score_amount,
-        )

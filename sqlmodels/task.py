@@ -67,13 +67,6 @@ class TaskSummary(TaskSummaryBase):
     username: Str255 | None
     """用户名"""
 
-    @classmethod
-    def from_task(cls, task: "Task", user: "User | None") -> "TaskSummary":
-        """从 Task ORM 对象构建"""
-        return cls(
-            **TaskSummaryBase.model_validate(task, from_attributes=True).model_dump(),
-            username=user.email if user else None,
-        )
 
 
 # ==================== 数据库模型 ====================

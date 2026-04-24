@@ -89,7 +89,13 @@ async def router_admin_get_share_list(
     # user 和 entry 已预加载，直接访问
     items: list[AdminShareListItem] = []
     for s in result.items:
-        items.append(AdminShareListItem.from_share(s, s.user, s.entry))
+        items.append(AdminShareListItem.model_validate(
+            s, from_attributes=True,
+            update={
+                'username': s.user.email if s.user else None,
+                'object_name': s.entry.name if s.entry else None,
+            },
+        ))
 
     return ListResponse(items=items, count=result.count)
 

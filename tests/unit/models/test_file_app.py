@@ -164,8 +164,9 @@ class TestFileAppCRUD:
         assert "{file_url}" in app.iframe_url_template
 
     async def test_to_summary(self, db_session: AsyncSession, sample_app: FileApp) -> None:
-        """测试转换为摘要 DTO"""
-        summary = sample_app.to_summary()
+        """测试 model_validate 转换为摘要 DTO"""
+        from sqlmodels.file_app import FileAppSummary
+        summary = FileAppSummary.model_validate(sample_app, from_attributes=True)
         assert summary.id == sample_app.id
         assert summary.name == sample_app.name
         assert summary.app_key == sample_app.app_key
@@ -360,7 +361,7 @@ class TestFileAppDTO:
     async def test_file_app_response_from_app(
         self, db_session: AsyncSession, sample_app_with_extensions: FileApp, sample_group: Group
     ) -> None:
-        """测试 FileAppResponse.from_app()"""
+        """测试 FileAppResponse.model_validate()"""
         from sqlmodels.file_app import FileAppResponse
 
         extensions = await FileAppExtension.get(
@@ -375,8 +376,12 @@ class TestFileAppDTO:
             group_id=sample_group.id,
         )
 
-        response = FileAppResponse.from_app(
-            sample_app_with_extensions, extensions, [link]
+        response = FileAppResponse.model_validate(
+            sample_app_with_extensions, from_attributes=True,
+            update={
+                'extensions': [ext.extension for ext in extensions],
+                'allowed_group_ids': [link.group_id for link in [link]],
+            },
         )
 
         assert response.id == sample_app_with_extensions.id

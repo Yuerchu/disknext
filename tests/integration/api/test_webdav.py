@@ -70,7 +70,7 @@ async def no_webdav_headers(initialized_db: AsyncSession) -> dict[str, str]:
     initialized_db.add(root)
     await initialized_db.commit()
 
-    group_claims = GroupClaims.from_group(group)
+    group_claims = GroupClaims.model_validate(group, from_attributes=True)
     result = create_access_token(
         sub=user.id,
         jti=uuid4(),

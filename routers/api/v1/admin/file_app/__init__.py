@@ -67,7 +67,13 @@ async def list_file_apps(
             cond(FileAppGroupLink.app_id == app.id),
             fetch_mode="all",
         )
-        apps.append(FileAppResponse.from_app(app, extensions, group_links))
+        apps.append(FileAppResponse.model_validate(
+            app, from_attributes=True,
+            update={
+                'extensions': [ext.extension for ext in extensions],
+                'allowed_group_ids': [link.group_id for link in group_links],
+            },
+        ))
 
     return FileAppListResponse(apps=apps, total=result.count)
 
@@ -135,7 +141,13 @@ async def create_file_app(
 
     l.info(f"创建文件应用: {app.name} ({app.app_key})")
 
-    return FileAppResponse.from_app(app, extensions, group_links)
+    return FileAppResponse.model_validate(
+            app, from_attributes=True,
+            update={
+                'extensions': [ext.extension for ext in extensions],
+                'allowed_group_ids': [link.group_id for link in group_links],
+            },
+        )
 
 
 @admin_file_app_router.get(
@@ -168,7 +180,13 @@ async def get_file_app(
         fetch_mode="all",
     )
 
-    return FileAppResponse.from_app(app, extensions, group_links)
+    return FileAppResponse.model_validate(
+            app, from_attributes=True,
+            update={
+                'extensions': [ext.extension for ext in extensions],
+                'allowed_group_ids': [link.group_id for link in group_links],
+            },
+        )
 
 
 @admin_file_app_router.patch(
@@ -218,7 +236,13 @@ async def update_file_app(
 
     l.info(f"更新文件应用: {app.name} ({app.app_key})")
 
-    return FileAppResponse.from_app(app, extensions, group_links)
+    return FileAppResponse.model_validate(
+            app, from_attributes=True,
+            update={
+                'extensions': [ext.extension for ext in extensions],
+                'allowed_group_ids': [link.group_id for link in group_links],
+            },
+        )
 
 
 @admin_file_app_router.delete(
@@ -310,7 +334,13 @@ async def update_extensions(
 
     l.info(f"更新文件应用 {app.app_key} 的扩展名: {request.extensions}")
 
-    return FileAppResponse.from_app(app, new_extensions, group_links)
+    return FileAppResponse.model_validate(
+        app, from_attributes=True,
+        update={
+            'extensions': [ext.extension for ext in new_extensions],
+            'allowed_group_ids': [link.group_id for link in group_links],
+        },
+    )
 
 
 @admin_file_app_router.put(
@@ -362,7 +392,13 @@ async def update_group_access(
 
     l.info(f"更新文件应用 {app.app_key} 的用户组权限: {request.group_ids}")
 
-    return FileAppResponse.from_app(app, extensions, new_links)
+    return FileAppResponse.model_validate(
+        app, from_attributes=True,
+        update={
+            'extensions': [ext.extension for ext in extensions],
+            'allowed_group_ids': [link.group_id for link in new_links],
+        },
+    )
 
 
 @admin_file_app_router.post(

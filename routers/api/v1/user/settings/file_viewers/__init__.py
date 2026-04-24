@@ -15,6 +15,7 @@ from middleware.dependencies import SessionDep
 from sqlmodels import (
     FileApp,
     FileAppExtension,
+    FileAppSummary,
     SetDefaultViewerRequest,
     User,
     UserFileAppDefault,
@@ -81,7 +82,10 @@ async def set_default_viewer(
     if existing:
         existing.app_id = request.app_id
         existing = await existing.save(session, load=rel(UserFileAppDefault.app))
-        return existing.to_response()
+        return UserFileAppDefaultResponse.model_validate(
+            existing, from_attributes=True,
+            update={'app': FileAppSummary.model_validate(existing.app, from_attributes=True)},
+        )
     else:
         new_default = UserFileAppDefault(
             user_id=user.id,
@@ -89,7 +93,10 @@ async def set_default_viewer(
             app_id=request.app_id,
         )
         new_default = await new_default.save(session, load=rel(UserFileAppDefault.app))
-        return new_default.to_response()
+        return UserFileAppDefaultResponse.model_validate(
+            new_default, from_attributes=True,
+            update={'app': FileAppSummary.model_validate(new_default.app, from_attributes=True)},
+        )
 
 
 @file_viewers_router.get(
@@ -112,7 +119,13 @@ async def list_default_viewers(
         fetch_mode="all",
         load=rel(UserFileAppDefault.app),
     )
-    return [d.to_response() for d in defaults]
+    return [
+        UserFileAppDefaultResponse.model_validate(
+            d, from_attributes=True,
+            update={'app': FileAppSummary.model_validate(d.app, from_attributes=True)},
+        )
+        for d in defaults
+    ]
 
 
 @file_viewers_router.delete(

@@ -59,7 +59,7 @@ async def test_group_options_fields(db_session: AsyncSession):
 
 @pytest.mark.asyncio
 async def test_group_to_response(db_session: AsyncSession):
-    """测试 to_response() DTO 转换"""
+    """测试 model_validate DTO 转换"""
     group = Group(
         name="响应测试组",
         share_enabled=True,
@@ -76,39 +76,37 @@ async def test_group_to_response(db_session: AsyncSession):
     )
     group = await group.save(db_session)
 
-    # 转换为响应 DTO
-    response = group.to_response()
+    response = GroupResponse.model_validate(group, from_attributes=True)
 
     assert isinstance(response, GroupResponse)
     assert response.id == group.id
     assert response.name == "响应测试组"
-    assert response.allow_share is True
-    assert response.webdav is True
+    assert response.share_enabled is True
+    assert response.web_dav_enabled is True
     assert response.share_download is True
     assert response.share_free is False
     assert response.relocate is True
     assert response.source_batch == 5
     assert response.select_node is False
     assert response.advance_delete is True
-    assert response.allow_archive_download is True
-    assert response.allow_webdav_proxy is True
-    assert response.allow_remote_download is False
+    assert response.archive_download is True
+    assert response.webdav_proxy is True
+    assert response.aria2 is False
 
 
 @pytest.mark.asyncio
 async def test_group_to_response_with_defaults(db_session: AsyncSession):
-    """测试默认选项值时 to_response() 返回默认值"""
+    """测试默认选项值时 model_validate 返回默认值"""
     group = Group(name="默认选项组")
     group = await group.save(db_session)
 
-    # 转换为响应 DTO
-    response = group.to_response()
+    response = GroupResponse.model_validate(group, from_attributes=True)
 
     assert isinstance(response, GroupResponse)
     assert response.share_download is False
     assert response.share_free is False
     assert response.source_batch == 0
-    assert response.allow_remote_download is False
+    assert response.aria2 is False
 
 
 @pytest.mark.asyncio

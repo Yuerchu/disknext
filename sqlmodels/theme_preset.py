@@ -1,6 +1,8 @@
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
+from pydantic import model_validator
 from sqlmodel import Field
 
 from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str100
@@ -89,25 +91,28 @@ class ThemePresetResponse(SQLModelBase):
     updated_at: datetime
     """更新时间"""
 
+    _COLOR_KEYS: tuple[str, ...] = (
+        'primary', 'secondary', 'success', 'info', 'warning', 'error', 'neutral',
+    )
+
+    @model_validator(mode='before')
     @classmethod
-    def from_preset(cls, preset: ThemePreset) -> 'ThemePresetResponse':
-        """从数据库模型转换为响应 DTO（平铺列 → 嵌套 colors 对象）"""
-        return cls(
-            id=preset.id,
-            name=preset.name,
-            is_default=preset.is_default,
-            colors=ThemeColorsBase(
-                primary=preset.primary,
-                secondary=preset.secondary,
-                success=preset.success,
-                info=preset.info,
-                warning=preset.warning,
-                error=preset.error,
-                neutral=preset.neutral,
-            ),
-            created_at=preset.created_at,
-            updated_at=preset.updated_at,
-        )
+    def _nest_colors(cls, data: Any) -> Any:
+        """从平铺颜色字段自动构建嵌套 colors 对象"""
+        if isinstance(data, dict):
+            if 'colors' in data:
+                return data
+            data['colors'] = {k: data.pop(k) for k in cls._COLOR_KEYS if k in data}
+            return data
+        # from_attributes: ORM 对象，提取为 dict
+        if hasattr(data, 'colors'):
+            return data
+        result: dict[str, Any] = {}
+        for name in cls.model_fields:
+            if name != 'colors' and hasattr(data, name):
+                result[name] = getattr(data, name)
+        result['colors'] = {k: getattr(data, k) for k in cls._COLOR_KEYS if hasattr(data, k)}
+        return result
 
 
 class ThemePresetListResponse(SQLModelBase):

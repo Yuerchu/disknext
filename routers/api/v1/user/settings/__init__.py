@@ -449,7 +449,7 @@ async def router_user_settings_authns(
         UserAuthn.user_id == user.id,
         fetch_mode="all",
     )
-    return [authn.to_detail_response() for authn in authns]
+    return [AuthnDetailResponse.model_validate(authn, from_attributes=True) for authn in authns]
 
 
 @user_settings_router.patch(
@@ -477,7 +477,7 @@ async def router_user_settings_rename_authn(
 
     authn.name = request.name
     authn = await authn.save(session)
-    return authn.to_detail_response()
+    return AuthnDetailResponse.model_validate(authn, from_attributes=True)
 
 
 @user_settings_router.delete(

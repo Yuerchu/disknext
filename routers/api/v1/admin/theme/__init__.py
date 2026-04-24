@@ -37,7 +37,7 @@ async def router_admin_theme_list(session: SessionDep) -> ThemePresetListRespons
     """
     presets: list[ThemePreset] = await ThemePreset.get(session, fetch_mode="all")
     return ThemePresetListResponse(
-        themes=[ThemePresetResponse.from_preset(p) for p in presets]
+        themes=[ThemePresetResponse.model_validate(p, from_attributes=True) for p in presets]
     )
 
 

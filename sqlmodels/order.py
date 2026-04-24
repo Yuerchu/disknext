@@ -129,17 +129,3 @@ class Order(SQLModelBase, TableBaseMixin):
     user: "User" = Relationship(back_populates="orders")
     product: "Product" = Relationship(back_populates="orders")
 
-    def to_response(self) -> OrderResponse:
-        """转换为响应 DTO"""
-        return OrderResponse(
-            id=self.id,
-            order_no=self.order_no,
-            type=self.type,
-            method=self.method,
-            product_id=self.product_id,
-            num=self.num,
-            name=self.name,
-            price=float(self.price),
-            status=self.status,
-            user_id=self.user_id,
-        )

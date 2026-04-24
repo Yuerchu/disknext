@@ -77,7 +77,7 @@ async def get_viewers(
             if not group_link:
                 continue
 
-        viewers.append((app.to_summary(), ext_record.priority))
+        viewers.append((FileAppSummary.model_validate(app, from_attributes=True), ext_record.priority))
 
     # 按 priority 排序
     viewers.sort(key=lambda x: x[1])

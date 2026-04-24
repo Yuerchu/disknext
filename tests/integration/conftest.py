@@ -268,7 +268,7 @@ def banned_user_info() -> dict[str, str]:
 
 def _build_group_claims(group: Group) -> GroupClaims:
     """从 Group 对象构建 GroupClaims"""
-    return GroupClaims.from_group(group)
+    return GroupClaims.model_validate(group, from_attributes=True)
 
 
 @pytest_asyncio.fixture

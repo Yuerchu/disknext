@@ -232,29 +232,6 @@ class FileAppResponse(SQLModelBase):
     allowed_group_ids: list[UUID] = Field(default=[], max_length=50)
     """允许访问的用户组UUID列表"""
 
-    @classmethod
-    def from_app(
-        cls,
-        app: "FileApp",
-        extensions: list["FileAppExtension"],
-        group_links: list[FileAppGroupLink],
-    ) -> "FileAppResponse":
-        """从 ORM 对象构建 DTO"""
-        return cls(
-            id=app.id,
-            name=app.name,
-            app_key=app.app_key,
-            type=app.type,
-            icon=app.icon,
-            description=app.description,
-            is_enabled=app.is_enabled,
-            is_restricted=app.is_restricted,
-            iframe_url_template=app.iframe_url_template,
-            wopi_discovery_url=app.wopi_discovery_url,
-            wopi_editor_url_template=app.wopi_editor_url_template,
-            extensions=[ext.extension for ext in extensions],
-            allowed_group_ids=[link.group_id for link in group_links],
-        )
 
 
 class FileAppListResponse(SQLModelBase):
@@ -364,18 +341,6 @@ class FileApp(SQLModelBase, UUIDTableBaseMixin):
         link_model=FileAppGroupLink,
     )
 
-    def to_summary(self) -> FileAppSummary:
-        """转换为摘要 DTO"""
-        return FileAppSummary(
-            id=self.id,
-            name=self.name,
-            app_key=self.app_key,
-            type=self.type,
-            icon=self.icon,
-            description=self.description,
-            iframe_url_template=self.iframe_url_template,
-            wopi_editor_url_template=self.wopi_editor_url_template,
-        )
 
 
 class FileAppExtension(SQLModelBase, TableBaseMixin):
@@ -420,10 +385,3 @@ class UserFileAppDefault(SQLModelBase, UUIDTableBaseMixin):
     # 关系
     app: FileApp = Relationship(back_populates="user_defaults")
 
-    def to_response(self) -> UserFileAppDefaultResponse:
-        """转换为响应 DTO（需预加载 app 关系）"""
-        return UserFileAppDefaultResponse(
-            id=self.id,
-            extension=self.extension,
-            app=self.app.to_summary(),
-        )

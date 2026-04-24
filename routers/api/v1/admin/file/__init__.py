@@ -117,7 +117,15 @@ async def router_admin_get_file_list(
     # 构建响应（owner 和 policy 已预加载，直接访问）
     items: list[AdminFileResponse] = []
     for f in result.items:
-        items.append(AdminFileResponse.from_object(f, f.owner, f.policy))
+        items.append(AdminFileResponse.model_validate(
+            f, from_attributes=True,
+            update={
+                'thumb': False,
+                'source_enabled': False,
+                'owner_email': f.owner.email if f.owner else "unknown",
+                'policy_name': f.policy.name if f.policy else "unknown",
+            },
+        ))
 
     return ListResponse(items=items, count=result.count)
 

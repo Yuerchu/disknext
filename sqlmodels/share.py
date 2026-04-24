@@ -272,16 +272,3 @@ class AdminShareListItem(ShareListItemBase):
     object_name: Str255 | None
     """对象名称"""
 
-    @classmethod
-    def from_share(
-        cls,
-        share: "Share",
-        user: "User | None",
-        obj: "Entry | None",
-    ) -> "AdminShareListItem":
-        """从 Share ORM 对象构建"""
-        return cls(
-            **ShareListItemBase.model_validate(share, from_attributes=True).model_dump(),
-            username=user.email if user else None,
-            object_name=obj.name if obj else None,
-        )

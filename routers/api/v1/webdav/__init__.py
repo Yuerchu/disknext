@@ -33,15 +33,7 @@ def _check_webdav_enabled(user: User) -> None:
 
 def _to_response(account: WebDAV) -> WebDAVAccountResponse:
     """将 WebDAV 数据库模型转换为响应 DTO"""
-    return WebDAVAccountResponse(
-        id=account.id,
-        name=account.name,
-        root=account.root,
-        readonly=account.readonly,
-        use_proxy=account.use_proxy,
-        created_at=str(account.created_at),
-        updated_at=str(account.updated_at),
-    )
+    return WebDAVAccountResponse.model_validate(account, from_attributes=True)
 
 
 @webdav_router.get(

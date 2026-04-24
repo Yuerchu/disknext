@@ -307,7 +307,7 @@ async def test_user(db_session: AsyncSession) -> dict[str, str | UUID]:
     )
     await root_folder.save(db_session)
 
-    group_claims = GroupClaims.from_group(group)
+    group_claims = GroupClaims.model_validate(group, from_attributes=True)
 
     access_token_obj = create_access_token(
         sub=user.id,
@@ -377,7 +377,7 @@ async def admin_user(db_session: AsyncSession) -> dict[str, str | UUID]:
     )
     await root_folder.save(db_session)
 
-    admin_group_claims = GroupClaims.from_group(admin_group)
+    admin_group_claims = GroupClaims.model_validate(admin_group, from_attributes=True)
 
     access_token_obj = create_access_token(
         sub=admin.id,

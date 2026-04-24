@@ -160,21 +160,6 @@ class GroupDetailResponse(GroupCoreBase, GroupAllOptionsBase):
     policy_ids: list[UUID] = []
     """关联的存储策略UUID列表"""
 
-    @classmethod
-    def from_group(
-        cls,
-        group: "Group",
-        user_count: int,
-        policies: list["Policy"],
-    ) -> "GroupDetailResponse":
-        """从 Group ORM 对象构建"""
-        return cls(
-            **GroupCoreBase.model_validate(group, from_attributes=True).model_dump(),
-            **GroupAllOptionsBase.model_validate(group, from_attributes=True).model_dump(),
-            user_count=user_count,
-            policy_ids=[p.id for p in policies],
-        )
-
 
 class GroupListResponse(SQLModelBase):
     """用户组列表响应 DTO"""
@@ -194,42 +179,18 @@ class GroupClaims(GroupCoreBase, GroupAllOptionsBase):
     和 GroupAllOptionsBase（share_download, share_free, ... 共 11 个功能开关）。
     """
 
-    @classmethod
-    def from_group(cls, group: "Group") -> "GroupClaims":
-        """
-        从 Group ORM 对象构建权限快照。
 
-        :param group: Group 对象
-        """
-        return cls(
-            **GroupCoreBase.model_validate(group, from_attributes=True).model_dump(),
-            **GroupAllOptionsBase.model_validate(group, from_attributes=True).model_dump(),
-        )
-
-
-class GroupResponse(GroupBase, GroupOptionsBase):
+class GroupResponse(GroupBase, GroupAllOptionsBase):
     """用户组响应 DTO"""
 
     id: UUID
     """用户组UUID"""
 
-    allow_share: bool = False
+    share_enabled: bool = False
     """是否允许分享"""
 
-    allow_remote_download: bool = False
-    """是否允许离线下载"""
-
-    allow_archive_download: bool = False
-    """是否允许打包下载"""
-
-    compress: bool = False
-    """是否允许压缩"""
-
-    webdav: bool = False
+    web_dav_enabled: bool = False
     """是否允许WebDAV"""
-
-    allow_webdav_proxy: bool = False
-    """是否允许WebDAV代理"""
 
 
 # ==================== 数据库模型 ====================
@@ -281,20 +242,3 @@ class Group(GroupBase, GroupAllOptionsBase, UUIDTableBaseMixin):
     )
     """之前属于该组的用户列表（用于过期后恢复）"""
 
-    def to_response(self) -> "GroupResponse":
-        """转换为响应 DTO"""
-        return GroupResponse(
-            id=self.id,
-            name=self.name,
-            allow_share=self.share_enabled,
-            webdav=self.web_dav_enabled,
-            share_download=self.share_download,
-            share_free=self.share_free,
-            relocate=self.relocate,
-            source_batch=self.source_batch,
-            select_node=self.select_node,
-            advance_delete=self.advance_delete,
-            allow_remote_download=self.aria2,
-            allow_archive_download=self.archive_download,
-            allow_webdav_proxy=self.webdav_proxy,
-        )

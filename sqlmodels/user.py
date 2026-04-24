@@ -536,7 +536,7 @@ class User(UserBase, UUIDTableBaseMixin):
         """
 
         # 构建权限快照（选项字段已合并到 Group 表）
-        group_claims = GroupClaims.from_group(self.group)
+        group_claims = GroupClaims.model_validate(self.group, from_attributes=True)
 
         # 创建令牌
         access_token = JWT.create_access_token(

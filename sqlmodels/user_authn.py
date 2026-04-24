@@ -92,14 +92,3 @@ class UserAuthn(SQLModelBase, TableBaseMixin):
     # 关系
     user: "User" = Relationship(back_populates="passkeys")
 
-    def to_detail_response(self) -> AuthnDetailResponse:
-        """转换为详情响应 DTO"""
-        return AuthnDetailResponse(
-            id=self.id,
-            credential_id=self.credential_id,
-            name=self.name,
-            credential_device_type=self.credential_device_type,
-            credential_backed_up=self.credential_backed_up,
-            transports=self.transports,
-            created_at=self.created_at,
-        )

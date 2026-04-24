@@ -118,24 +118,3 @@ class Redeem(SQLModelBase, TableBaseMixin):
     product: "Product" = Relationship(back_populates="redeems")
     user: "User" = Relationship(back_populates="redeems")
 
-    def to_admin_response(self) -> RedeemAdminResponse:
-        """转换为管理侧响应 DTO"""
-        return RedeemAdminResponse(
-            id=self.id,
-            type=self.type,
-            product_id=self.product_id,
-            num=self.num,
-            code=self.code,
-            is_used=self.is_used,
-            used_at=self.used_at,
-            used_by=self.used_by,
-        )
-
-    def to_info_response(self, product_name: str | None = None) -> RedeemInfoResponse:
-        """转换为用户侧响应 DTO"""
-        return RedeemInfoResponse(
-            type=self.type,
-            product_name=product_name,
-            num=self.num,
-            is_used=self.is_used,
-        )

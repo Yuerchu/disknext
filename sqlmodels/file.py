@@ -1471,31 +1471,6 @@ class AdminFileResponse(EntryResponse):
     ban_reason: str | None = None
     """封禁原因"""
 
-    @classmethod
-    def from_object(
-        cls,
-        obj: "Entry",
-        owner: "User | None",
-        policy: "Policy | None",
-    ) -> "AdminFileResponse":
-        """从 Entry ORM 对象构建"""
-        return cls(
-            # EntryBase 字段
-            **EntryBase.model_validate(obj, from_attributes=True).model_dump(),
-            # EntryResponse 字段
-            id=obj.id,
-            thumb=False,
-            created_at=obj.created_at,
-            updated_at=obj.updated_at,
-            source_enabled=False,
-            # AdminFileResponse 字段
-            owner_id=obj.owner_id,
-            owner_email=owner.email if owner else "unknown",
-            policy_name=policy.name if policy else "unknown",
-            is_banned=obj.is_banned,
-            banned_at=obj.banned_at,
-            ban_reason=obj.ban_reason,
-        )
 
 
 class FileBanRequest(SQLModelBase):

@@ -90,7 +90,10 @@ async def router_admin_get_task_list(
     items: list[TaskSummary] = []
     for t in result.items:
         user = await t.awaitable_attrs.user
-        items.append(TaskSummary.from_task(t, user))
+        items.append(TaskSummary.model_validate(
+            t, from_attributes=True,
+            update={'username': user.email if user else None},
+        ))
 
     return ListResponse(items=items, count=result.count)
 

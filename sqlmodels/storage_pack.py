@@ -65,13 +65,3 @@ class StoragePack(SQLModelBase, TableBaseMixin):
     # 关系
     user: "User" = Relationship(back_populates="storage_packs")
 
-    def to_response(self) -> StoragePackResponse:
-        """转换为响应 DTO"""
-        return StoragePackResponse(
-            id=self.id,
-            name=self.name,
-            size=self.size,
-            active_time=self.active_time,
-            expired_time=self.expired_time,
-            product_id=self.product_id,
-        )
