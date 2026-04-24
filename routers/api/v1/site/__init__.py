@@ -7,7 +7,6 @@ from sqlmodels import (
     AuthMethodConfig,
 )
 from sqlmodels.auth_identity import AuthProviderType
-from sqlmodels.server_config import CaptchaType
 from utils import http_exceptions
 
 site_router = APIRouter(
@@ -74,15 +73,8 @@ async def router_site_config(config: ServerConfigDep) -> SiteConfigResponse:
     无需认证。前端在初始化时调用此端点获取验证码类型、
     登录/注册/找回密码是否需要验证码、可用的认证方式等配置。
     """
-    # 根据 captcha_type 选择对应的 public key
-    captcha_key: str | None = None
-    if config.captcha_type == CaptchaType.GCAPTCHA:
-        captcha_key = config.captcha_recaptcha_key or None
-    elif config.captcha_type == CaptchaType.CLOUD_FLARE_TURNSTILE:
-        captcha_key = config.captcha_cloudflare_key or None
-
-    # 构建认证方式列表
-    auth_methods: list[AuthMethodConfig] = [
+    response = SiteConfigResponse.model_validate(config, from_attributes=True)
+    response.auth_methods = [
         AuthMethodConfig(provider=AuthProviderType.EMAIL_PASSWORD, is_enabled=config.is_auth_email_password_enabled),
         AuthMethodConfig(provider=AuthProviderType.PHONE_SMS, is_enabled=config.is_auth_phone_sms_enabled),
         AuthMethodConfig(provider=AuthProviderType.GITHUB, is_enabled=config.is_github_enabled),
@@ -90,23 +82,4 @@ async def router_site_config(config: ServerConfigDep) -> SiteConfigResponse:
         AuthMethodConfig(provider=AuthProviderType.PASSKEY, is_enabled=config.is_auth_passkey_enabled),
         AuthMethodConfig(provider=AuthProviderType.MAGIC_LINK, is_enabled=config.is_auth_magic_link_enabled),
     ]
-
-    return SiteConfigResponse(
-        title=config.site_name,
-        logo_light=config.logo_light or None,
-        logo_dark=config.logo_dark or None,
-        register_enabled=config.is_register_enabled,
-        login_captcha=config.is_login_captcha,
-        reg_captcha=config.is_reg_captcha,
-        forget_captcha=config.is_forget_captcha,
-        captcha_type=config.captcha_type,
-        captcha_key=captcha_key,
-        auth_methods=auth_methods,
-        password_required=config.is_auth_password_required,
-        phone_binding_required=config.is_auth_phone_binding_required,
-        email_binding_required=config.is_auth_email_binding_required,
-        avatar_max_size=config.avatar_size,
-        footer_code=config.footer_code or None,
-        tos_url=config.tos_url or None,
-        privacy_url=config.privacy_url or None,
-    )
+    return response

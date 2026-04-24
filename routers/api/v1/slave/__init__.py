@@ -4,6 +4,7 @@ from fastapi.responses import FileResponse
 from middleware.auth import auth_required
 from sqlmodels import ResponseBase
 from utils import http_exceptions
+from utils.conf.appmeta import BackendVersion
 
 slave_router = APIRouter(
     prefix="/slave",
@@ -16,18 +17,18 @@ slave_aria2_router = APIRouter(
 )
 
 @slave_router.get(
-    path='/ping',
-    summary='测试用路由',
-    description='Test route for checking connectivity.',
+    path='/version',
+    summary='获取版本信息',
+    description='Get the version information of the backend.',
+    dependencies=[Depends(auth_required)],
 )
-def router_slave_ping() -> str:
+def router_slave_version() -> str:
     """
-    Test route for checking connectivity.
+    Get the version information of the backend.
 
     Returns:
         str: 后端版本号
     """
-    from utils.conf.appmeta import BackendVersion
     return BackendVersion
 
 @slave_router.post(

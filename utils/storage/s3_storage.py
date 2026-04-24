@@ -9,7 +9,7 @@ import hmac
 import xml.etree.ElementTree as ET
 from collections.abc import AsyncIterator
 from datetime import datetime, timezone
-from typing import ClassVar, Literal
+from typing import ClassVar, Literal, TYPE_CHECKING
 from urllib.parse import quote, urlencode
 from uuid import UUID
 
@@ -17,7 +17,8 @@ import aiohttp
 from yarl import URL
 from loguru import logger as l
 
-from sqlmodels import Policy
+if TYPE_CHECKING:
+    from sqlmodels import Policy
 
 from .base import StorageDriver
 from .exceptions import S3APIError, S3MultipartUploadError

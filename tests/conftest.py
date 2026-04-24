@@ -12,7 +12,6 @@ Pytest 配置文件
 - URL 前缀必须为 ``postgresql``
 - `TEST_REDIS_URL` 的 db index 必须 >= 1（避免 flushdb 把 db0 的生产数据清掉）
 """
-import asyncio
 import os
 import sys
 from typing import AsyncGenerator
@@ -104,10 +103,11 @@ import pytest_asyncio
 from faker import Faker
 from fastapi.testclient import TestClient
 from httpx import AsyncClient, ASGITransport
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine
+from sqlalchemy.orm import SessionTransaction
 from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
-from sqlalchemy.orm import sessionmaker
 
 from main import app
 from utils.redis import RedisManager
@@ -151,24 +151,14 @@ def faker_random(faker: Faker) -> Faker:
     return faker
 
 
-# ==================== 事件循环 ====================
-
-@pytest.fixture(scope="session")
-def event_loop():
-    """创建 session 级别的事件循环"""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
-
-
 # ==================== 数据库 ====================
 
-@pytest_asyncio.fixture(scope="function")
+@pytest_asyncio.fixture(scope="session")
 async def test_engine() -> AsyncGenerator[AsyncEngine, None]:
     """
-    PostgreSQL 测试引擎（function scope）
+    PostgreSQL 测试引擎（session scope）
 
-    每个测试函数都会 drop_all + create_all 重建所有表，保证测试隔离。
+    整个测试 session 只创建/销毁一次表结构，测试隔离由 db_session 的事务回滚保证。
     """
     engine = create_async_engine(
         _TEST_DATABASE_URL,
@@ -189,37 +179,56 @@ async def test_engine() -> AsyncGenerator[AsyncEngine, None]:
 
 @pytest_asyncio.fixture(scope="function")
 async def db_session(test_engine: AsyncEngine) -> AsyncGenerator[AsyncSession, None]:
-    """异步数据库会话（function scope）"""
-    async_session_factory = sessionmaker(
-        test_engine,
-        class_=AsyncSession,
-        expire_on_commit=False,
-    )
+    """
+    异步数据库会话（function scope，事务回滚隔离）
 
-    async with async_session_factory() as session:
-        yield session
+    每个测试运行在一个外层事务内，session.commit() 实际提交到 savepoint，
+    测试结束后外层事务回滚，保证测试间数据隔离且无需重建表结构。
+    """
+    conn = await test_engine.connect()
+    trans = await conn.begin()
+
+    session = AsyncSession(bind=conn, expire_on_commit=False)
+    await conn.begin_nested()
+
+    @event.listens_for(session.sync_session, "after_transaction_end")
+    def _reopen_nested(sync_session: AsyncSession, transaction: SessionTransaction) -> None:
+        if transaction.nested and not transaction._parent.nested:
+            sync_session.begin_nested()
+
+    yield session
+
+    await session.close()
+    await trans.rollback()
+    await conn.close()
 
 
 # ==================== Redis ====================
 
-@pytest_asyncio.fixture(scope="function", autouse=True)
-async def test_redis() -> AsyncGenerator[None, None]:
+@pytest_asyncio.fixture(scope="session", autouse=True)
+async def _redis_connection() -> AsyncGenerator[None, None]:
     """
-    测试 Redis（function scope，autouse）
+    Redis 连接（session scope，autouse）
 
-    每个测试函数自动连接 Redis 并在结束时 flushdb + 断开。
-    db index 在模块加载时已校验 >= 1，不会误伤生产数据。
+    整个测试 session 只连接/断开一次，测试隔离由 _flush_redis 的 flushdb 保证。
     """
     await RedisManager.connect()
+    yield
+    await RedisManager.disconnect()
+
+
+@pytest_asyncio.fixture(scope="function", autouse=True)
+async def _flush_redis() -> AsyncGenerator[None, None]:
+    """
+    Redis 数据隔离（function scope，autouse）
+
+    每个测试前后 flushdb，保证测试间 Redis 数据隔离。
+    db index 在模块加载时已校验 >= 1，不会误伤生产数据。
+    """
     client = RedisManager.get_client()
     await client.flushdb()
-
     yield
-
-    try:
-        await client.flushdb()
-    finally:
-        await RedisManager.disconnect()
+    await client.flushdb()
 
 
 @pytest_asyncio.fixture(scope="function")

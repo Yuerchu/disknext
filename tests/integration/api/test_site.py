@@ -29,8 +29,8 @@ async def test_site_config(async_client: AsyncClient):
     assert response.status_code == 200
 
     data = response.json()
-    assert "title" in data
-    assert "register_enabled" in data
+    assert "site_name" in data
+    assert "is_register_enabled" in data
 
 
 @pytest.mark.asyncio
@@ -40,8 +40,8 @@ async def test_site_config_contains_title(async_client: AsyncClient):
     assert response.status_code == 200
 
     data = response.json()
-    assert "title" in data
-    assert data["title"] == "DiskNext Test"
+    assert "site_name" in data
+    assert data["site_name"] == "DiskNext Test"
 
 
 @pytest.mark.asyncio
@@ -51,8 +51,8 @@ async def test_site_config_register_enabled(async_client: AsyncClient):
     assert response.status_code == 200
 
     data = response.json()
-    assert "register_enabled" in data
-    assert data["register_enabled"] is True
+    assert "is_register_enabled" in data
+    assert data["is_register_enabled"] is True
 
 
 @pytest.mark.asyncio
@@ -62,9 +62,9 @@ async def test_site_config_captcha_settings(async_client: AsyncClient):
     assert response.status_code == 200
 
     data = response.json()
-    assert "login_captcha" in data
-    assert "reg_captcha" in data
-    assert "forget_captcha" in data
+    assert "is_login_captcha" in data
+    assert "is_reg_captcha" in data
+    assert "is_forget_captcha" in data
 
 
 @pytest.mark.asyncio

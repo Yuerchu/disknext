@@ -9,7 +9,7 @@ from .category import category_router
 from .directory import directory_router
 from .download import download_router
 from .file import router as file_router
-from .object import object_router
+from .entry import entry_router
 from .share import share_router
 from .trash import trash_router
 from .site import site_router
@@ -28,7 +28,7 @@ if appmeta.mode == "master":
     router.include_router(directory_router)
     router.include_router(download_router)
     router.include_router(file_router)
-    router.include_router(object_router)
+    router.include_router(entry_router)
     router.include_router(share_router)
     router.include_router(site_router)
     router.include_router(trash_router)

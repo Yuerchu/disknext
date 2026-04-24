@@ -2,7 +2,7 @@ from enum import StrEnum
 from typing import Annotated, Self
 from uuid import UUID
 
-from pydantic import AfterValidator, EmailStr, HttpUrl, model_validator
+from pydantic import AfterValidator, EmailStr, HttpUrl, field_validator, model_validator
 from pydantic_extra_types.color import Color
 from sqlmodel import Field, col
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -52,53 +52,56 @@ class AuthMethodConfig(SQLModelBase):
 class SiteConfigResponse(SQLModelBase):
     """站点配置响应 DTO"""
 
-    title: Str128 = "DiskNext"
-    """网站标题"""
+    site_name: Str128 = "DiskNext"
+    """站点名称"""
 
-    site_notice: Text5K | None = None
-    """网站公告"""
+    site_notice_public: Text5K | None = None
+    """公开公告"""
 
     logo_light: Str2048 | None = None
-    """网站Logo URL"""
+    """亮色模式 Logo URL"""
 
     logo_dark: Str2048 | None = None
-    """网站Logo URL（深色模式）"""
+    """暗色模式 Logo URL"""
 
-    register_enabled: bool = True
-    """是否允许注册"""
+    is_register_enabled: bool = True
+    """是否开放注册"""
 
-    login_captcha: bool = False
+    is_login_captcha: bool = False
     """登录是否需要验证码"""
 
-    reg_captcha: bool = False
+    is_reg_captcha: bool = False
     """注册是否需要验证码"""
 
-    forget_captcha: bool = False
+    is_forget_captcha: bool = False
     """找回密码是否需要验证码"""
 
     captcha_type: CaptchaType = CaptchaType.DEFAULT
     """验证码类型"""
 
-    captcha_key: Str255 | None = None
-    """验证码 public key（DEFAULT 类型时为 None）"""
+    captcha_recaptcha_key: Str255 | None = None
+    """reCAPTCHA Site Key"""
+
+    captcha_cloudflare_key: Str255 | None = None
+    """Cloudflare Turnstile Site Key"""
 
     auth_methods: list[AuthMethodConfig] = []
     """可用的登录方式列表"""
 
-    password_required: bool = True
+    is_auth_password_required: bool = True
     """注册时是否必须设置密码"""
 
-    phone_binding_required: bool = False
-    """是否强制绑定手机号"""
+    is_auth_phone_binding_required: bool = False
+    """是否强制绑定手机"""
 
-    email_binding_required: bool = True
+    is_auth_email_binding_required: bool = True
     """是否强制绑定邮箱"""
 
-    avatar_max_size: int = 2097152
+    avatar_size: int = 2097152
     """头像文件最大字节数（默认 2MB）"""
 
     footer_code: Text10K | None = None
-    """自定义页脚代码"""
+    """自定义页脚 HTML/JS"""
 
     tos_url: Str2048 | None = None
     """服务条款 URL"""
@@ -159,25 +162,25 @@ class ServerConfigBase(SQLModelBase):
     site_description: str = Field(default="DiskNext", max_length=1024)
     """SEO 描述"""
 
-    site_notice_public: str = Field(default="", max_length=4096)
+    site_notice_public: Text5K | None = None
     """公开公告"""
 
-    site_notice_user: str = Field(default="", max_length=4096)
+    site_notice_user: Text5K | None = None
     """登录用户公告"""
 
-    footer_code: str = Field(default="", max_length=8192)
+    footer_code: Text5K | None = None
     """自定义页脚 HTML/JS"""
 
-    tos_url: OptionalUrlStr = ""
+    tos_url: OptionalUrlStr | None = None
     """服务条款 URL"""
 
-    privacy_url: OptionalUrlStr = ""
+    privacy_url: OptionalUrlStr | None = None
     """隐私政策 URL"""
 
-    logo_light: OptionalUrlStr = ""
+    logo_light: OptionalUrlStr | None = None
     """亮色模式 Logo URL"""
 
-    logo_dark: OptionalUrlStr = ""
+    logo_dark: OptionalUrlStr | None = None
     """暗色模式 Logo URL"""
 
     # ==================== REGISTER ====================

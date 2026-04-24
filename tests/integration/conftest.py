@@ -1,10 +1,11 @@
 """
 集成测试配置文件
 
-提供测试数据库、测试客户端、测试用户等 fixtures
+提供测试数据库、测试客户端、测试用户等 fixtures。
+
+数据库引擎和 Redis 连接由 tests/conftest.py 以 session scope 管理，
+本文件仅负责集成测试特有的数据初始化和 HTTP 客户端配置。
 """
-import asyncio
-import os
 from datetime import timedelta
 from typing import AsyncGenerator
 from uuid import UUID, uuid4
@@ -12,10 +13,7 @@ from uuid import UUID, uuid4
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
-from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
-from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
-from sqlalchemy.orm import sessionmaker
 
 from main import app
 from sqlmodels import Group, GroupClaims, Entry, EntryType, Policy, PolicyType, ServerConfig, User
@@ -26,60 +24,11 @@ from utils import Password
 from utils.JWT import create_access_token
 import utils.conf.appmeta as appmeta
 
-# tests/conftest.py 在模块加载阶段已校验并设置 DATABASE_URL / REDIS_URL 环境变量，
-# 这里直接读取校验后的 URL 作为测试数据库连接
-_TEST_DATABASE_URL: str = os.environ["DATABASE_URL"]
-
-
-# ==================== 事件循环配置 ====================
-
-@pytest.fixture(scope="session")
-def event_loop():
-    """提供会话级别的事件循环"""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
-
-
-# ==================== 测试数据库 ====================
-
-@pytest_asyncio.fixture(scope="function")
-async def test_db_engine() -> AsyncGenerator[AsyncEngine, None]:
-    """创建 PostgreSQL 测试数据库引擎（function scope，每次重建 schema）"""
-    engine = create_async_engine(
-        _TEST_DATABASE_URL,
-        echo=False,
-        future=True,
-    )
-
-    async with engine.begin() as conn:
-        await conn.run_sync(SQLModel.metadata.drop_all)
-        await conn.run_sync(SQLModel.metadata.create_all)
-
-    yield engine
-
-    async with engine.begin() as conn:
-        await conn.run_sync(SQLModel.metadata.drop_all)
-    await engine.dispose()
-
-
-@pytest_asyncio.fixture(scope="function")
-async def test_session(test_db_engine: AsyncEngine) -> AsyncGenerator[AsyncSession, None]:
-    """提供测试数据库会话"""
-    async_session_factory = sessionmaker(
-        test_db_engine,
-        class_=AsyncSession,
-        expire_on_commit=False,
-    )
-
-    async with async_session_factory() as session:
-        yield session
-
 
 # ==================== 测试数据初始化 ====================
 
 @pytest_asyncio.fixture(scope="function")
-async def initialized_db(test_session: AsyncSession) -> AsyncSession:
+async def initialized_db(db_session: AsyncSession) -> AsyncSession:
     """初始化测试数据库（包含基础配置和测试数据）"""
 
     # 1. 创建 ServerConfig 单例
@@ -91,7 +40,7 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
         home_view_method="list",
         share_view_method="list",
     )
-    test_session.add(server_config)
+    db_session.add(server_config)
 
     # 2. 创建默认存储策略
     default_policy = Policy(
@@ -105,7 +54,7 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
         is_origin_link_enabled=False,
         option_serialization={},
     )
-    test_session.add(default_policy)
+    db_session.add(default_policy)
 
     # 3. 创建用户组
     default_group = Group(
@@ -123,7 +72,7 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
         select_node=False,
         advance_delete=False,
     )
-    test_session.add(default_group)
+    db_session.add(default_group)
 
     admin_group = Group(
         id=uuid4(),
@@ -140,23 +89,23 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
         select_node=True,
         advance_delete=True,
     )
-    test_session.add(admin_group)
+    db_session.add(admin_group)
 
-    await test_session.commit()
+    await db_session.commit()
 
     # 刷新以获取ID
-    await test_session.refresh(default_group)
-    await test_session.refresh(admin_group)
-    await test_session.refresh(default_policy)
+    await db_session.refresh(default_group)
+    await db_session.refresh(admin_group)
+    await db_session.refresh(default_policy)
 
     # 4. 关联用户组与存储策略
-    test_session.add(GroupPolicyLink(group_id=default_group.id, policy_id=default_policy.id))
-    test_session.add(GroupPolicyLink(group_id=admin_group.id, policy_id=default_policy.id))
+    db_session.add(GroupPolicyLink(group_id=default_group.id, policy_id=default_policy.id))
+    db_session.add(GroupPolicyLink(group_id=admin_group.id, policy_id=default_policy.id))
 
     # 5. 更新 ServerConfig 的 default_group_id
     server_config.default_group_id = default_group.id
 
-    await test_session.commit()
+    await db_session.commit()
 
     # 6. 创建测试用户
     test_user = User(
@@ -170,7 +119,7 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
         avatar=AvatarType.DEFAULT,
         password_hash=Password.hash("testpass123"),
     )
-    test_session.add(test_user)
+    db_session.add(test_user)
 
     admin_user = User(
         id=uuid4(),
@@ -184,7 +133,7 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
         password_hash=Password.hash("adminpass123"),
         scopes=ADMIN_SCOPES,
     )
-    test_session.add(admin_user)
+    db_session.add(admin_user)
 
     banned_user = User(
         id=uuid4(),
@@ -197,14 +146,14 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
         avatar=AvatarType.DEFAULT,
         password_hash=Password.hash("banned123"),
     )
-    test_session.add(banned_user)
+    db_session.add(banned_user)
 
-    await test_session.commit()
+    await db_session.commit()
 
     # 刷新用户对象
-    await test_session.refresh(test_user)
-    await test_session.refresh(admin_user)
-    await test_session.refresh(banned_user)
+    await db_session.refresh(test_user)
+    await db_session.refresh(admin_user)
+    await db_session.refresh(banned_user)
 
     # 8. 创建用户根目录
     test_user_root = Entry(
@@ -216,7 +165,7 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
         policy_id=default_policy.id,
         size=0,
     )
-    test_session.add(test_user_root)
+    db_session.add(test_user_root)
 
     admin_user_root = Entry(
         id=uuid4(),
@@ -227,14 +176,14 @@ async def initialized_db(test_session: AsyncSession) -> AsyncSession:
         policy_id=default_policy.id,
         size=0,
     )
-    test_session.add(admin_user_root)
+    db_session.add(admin_user_root)
 
-    await test_session.commit()
+    await db_session.commit()
 
     # 9. 设置JWT密钥（从数据库加载）
     appmeta.secret_key = "55dd5c582b21b96b81b0421d6e25507877839e64434d704c89db8ef90e4077d8"
 
-    return test_session
+    return db_session
 
 
 # ==================== 测试用户信息 ====================

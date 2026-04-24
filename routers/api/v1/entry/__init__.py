@@ -47,13 +47,13 @@ from utils import http_exceptions
 
 from .custom_property import router as custom_property_router
 
-object_router = APIRouter(
+entry_router = APIRouter(
     prefix="/object",
     tags=["object"]
 )
-object_router.include_router(custom_property_router)
+entry_router.include_router(custom_property_router)
 
-@object_router.post(
+@entry_router.post(
     path='/',
     summary='创建空白文件',
     description='在指定目录下创建空白文件。',
@@ -141,7 +141,7 @@ async def router_object_create(
     l.info(f"创建空白文件: {request.name}")
 
 
-@object_router.delete(
+@entry_router.delete(
     path='/',
     summary='删除对象',
     description='删除一个或多个对象（文件或目录），文件会移动到用户回收站。',
@@ -189,7 +189,7 @@ async def router_object_delete(
         l.info(f"用户 {user_id} 软删除了 {deleted_count} 个对象到回收站")
 
 
-@object_router.patch(
+@entry_router.patch(
     path='/',
     summary='移动对象',
     description='移动一个或多个对象到目标目录',
@@ -277,7 +277,7 @@ async def router_object_move(
     await session.commit()
 
 
-@object_router.post(
+@entry_router.post(
     path='/copies',
     summary='复制对象',
     description='复制一个或多个对象到目标目录。文件复制仅增加物理文件引用计数，不复制物理文件。',
@@ -390,7 +390,7 @@ async def router_object_copy(
     l.info(f"用户 {user_id} 复制了 {copied_count} 个对象")
 
 
-@object_router.patch(
+@entry_router.patch(
     path='/{file_id}',
     summary='更新对象',
     description='更新对象属性（如重命名）。',
@@ -470,7 +470,7 @@ async def router_object_update(
         l.info(f"用户 {user_id} 将对象 {obj.id} 重命名为 {new_name}")
 
 
-@object_router.get(
+@entry_router.get(
     path='/{file_id}',
     summary='获取对象基本属性',
     description='获取对象的基本属性信息（名称、类型、大小、创建/修改时间等）。',
@@ -510,7 +510,7 @@ async def router_object_property(
     )
 
 
-@object_router.get(
+@entry_router.get(
     path='/{file_id}/detail',
     summary='获取对象详细属性',
     description='获取对象的详细属性信息，包括元数据、分享统计、存储信息等。',
@@ -595,7 +595,7 @@ async def router_object_property_detail(
     )
 
 
-@object_router.patch(
+@entry_router.patch(
     path='/{file_id}/policy',
     summary='切换对象存储策略',
 )
@@ -730,7 +730,7 @@ async def router_object_switch_policy(
 
 # ==================== 元数据端点 ====================
 
-@object_router.get(
+@entry_router.get(
     path='/{file_id}/metadata',
     summary='获取对象元数据',
     description='获取对象的元数据键值对，可按命名空间过滤。',
@@ -784,7 +784,7 @@ async def router_get_object_metadata(
     return MetadataResponse(metadatas=metadata)
 
 
-@object_router.patch(
+@entry_router.patch(
     path='/{file_id}/metadata',
     summary='批量更新对象元数据',
     description='批量设置或删除对象的元数据条目。仅允许修改 custom: 命名空间。',
