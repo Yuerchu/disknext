@@ -395,15 +395,10 @@ async def router_user_me(
     # 显式加载 tags 关系
     await session.refresh(user, ['tags'])
 
-    return sqlmodels.UserResponse(
-        id=user.id,
-        email=user.email,
-        nickname=user.nickname,
-        avatar=user.avatar,
-        created_at=user.created_at,
-        group=GroupResponse.model_validate(user.group, from_attributes=True),
-        tags=[tag.name for tag in user.tags] if user.tags else [],
-    )
+    return sqlmodels.UserResponse.model_validate(user, from_attributes=True, update={
+        'group': GroupResponse.model_validate(user.group, from_attributes=True),
+        'tags': [tag.name for tag in user.tags] if user.tags else [],
+    })
 
 @user_router.get(
     path='/storage',

@@ -9,8 +9,7 @@ FastAPI 依赖注入
 - require_captcha: 验证码校验依赖注入工厂
 """
 from collections.abc import Awaitable, Callable
-from datetime import datetime
-from typing import Annotated, Literal, TypeAlias
+from typing import Annotated, TypeAlias
 from uuid import UUID
 
 from fastapi import Depends, Form, Query
@@ -42,51 +41,13 @@ ServerConfigDep: TypeAlias = Annotated[ServerConfig, Depends(_get_server_config)
 
 # --- 时间筛选依赖 ---
 
-async def _get_time_filter_queries(
-    created_after_datetime: Annotated[datetime | None, Query()] = None,
-    created_before_datetime: Annotated[datetime | None, Query()] = None,
-    updated_after_datetime: Annotated[datetime | None, Query()] = None,
-    updated_before_datetime: Annotated[datetime | None, Query()] = None,
-) -> TimeFilterRequest:
-    """解析时间筛选查询参数"""
-    return TimeFilterRequest(
-        created_after_datetime=created_after_datetime,
-        created_before_datetime=created_before_datetime,
-        updated_after_datetime=updated_after_datetime,
-        updated_before_datetime=updated_before_datetime,
-    )
-
-
-TimeFilterRequestDep: TypeAlias = Annotated[TimeFilterRequest, Depends(_get_time_filter_queries)]
+TimeFilterRequestDep: TypeAlias = Annotated[TimeFilterRequest, Depends()]
 """获取时间筛选参数的依赖（用于 count 等统计接口）"""
 
 
 # --- 分页排序依赖 ---
 
-async def _get_table_view_queries(
-    offset: Annotated[int | None, Query(ge=0)] = 0,
-    limit: Annotated[int | None, Query(ge=1, le=100)] = 20,
-    desc: bool | None = True,
-    order: Literal["created_at", "updated_at"] | None = "created_at",
-    created_after_datetime: Annotated[datetime | None, Query()] = None,
-    created_before_datetime: Annotated[datetime | None, Query()] = None,
-    updated_after_datetime: Annotated[datetime | None, Query()] = None,
-    updated_before_datetime: Annotated[datetime | None, Query()] = None,
-) -> TableViewRequest:
-    """解析分页排序和时间筛选查询参数"""
-    return TableViewRequest(
-        offset=offset,
-        limit=limit,
-        desc=desc,
-        order=order,
-        created_after_datetime=created_after_datetime,
-        created_before_datetime=created_before_datetime,
-        updated_after_datetime=updated_after_datetime,
-        updated_before_datetime=updated_before_datetime,
-    )
-
-
-TableViewRequestDep: TypeAlias = Annotated[TableViewRequest, Depends(_get_table_view_queries)]
+TableViewRequestDep: TypeAlias = Annotated[TableViewRequest, Depends()]
 """获取分页排序和时间筛选参数的依赖"""
 
 

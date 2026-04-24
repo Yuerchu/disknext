@@ -170,3 +170,20 @@ FastAPI                          Storage Gateway
 1. 从 FastAPI 移除 `utils/storage/` 中的 S3 驱动（仅保留 Local 用于开发）
 2. 移除 S3 相关 Python 依赖
 3. 统一存储操作全部走 Gateway
+
+---
+
+## 待办：sqlmodel_ext 升级后迁移 validate_list
+
+`sqlmodel_ext` 已新增 `SQLModelBase.validate_list()` classmethod，等 disknext 更新
+sqlmodel_ext 依赖后，将以下 4 处列表推导替换为 `validate_list` 调用：
+
+| 文件 | 行 | 当前写法 |
+|------|-----|---------|
+| `routers/api/v1/admin/theme/__init__.py` | 41 | `[ThemePresetResponse.model_validate(p, from_attributes=True) for p in presets]` |
+| `routers/api/v1/site/__init__.py` | 60 | `[ThemePresetResponse.model_validate(p, from_attributes=True) for p in presets]` |
+| `routers/api/v1/user/settings/__init__.py` | 452 | `[AuthnDetailResponse.model_validate(authn, from_attributes=True) for authn in authns]` |
+| `routers/api/v1/admin/policy/__init__.py` | 45 | `[PolicySummary.model_validate(p, from_attributes=True) for p in result.items]` |
+
+其余 8 处 for 循环因含 `update={}` 参数、循环内 `await`、条件过滤或元组构造，
+无法使用 `validate_list`，保持现状。

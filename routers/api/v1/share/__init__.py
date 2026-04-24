@@ -54,7 +54,7 @@ async def router_share_get(
         http_exceptions.raise_not_found(detail="分享已过期")
 
     # 3. 获取关联对象
-    obj = await share.awaitable_attrs.object
+    obj = await share.awaitable_attrs.entry
     user = await share.awaitable_attrs.user
 
     # 4. 检查封禁和软删除
@@ -74,39 +74,18 @@ async def router_share_get(
     children_items: list[ShareObjectItem] = []
     if obj and obj.type == EntryType.FOLDER:
         children = await Entry.get_children(session, obj.owner_id, obj.id)
-        children_items = [
-            ShareObjectItem(
-                id=child.id,
-                name=child.name,
-                type=child.type,
-                size=child.size,
-                created_at=child.created_at,
-                updated_at=child.updated_at,
-            )
-            for child in children
-        ]
+        children_items = ShareObjectItem.validate_list(children)
 
     # 7. 构建响应（在 save 之前，避免 MissingGreenlet）
-    response = ShareDetailResponse(
-        expires=share.expires,
-        preview_enabled=share.preview_enabled,
-        score=share.score,
-        created_at=share.created_at,
-        owner=ShareOwnerInfo(
+    response = ShareDetailResponse.model_validate(share, from_attributes=True, update={
+        'owner': ShareOwnerInfo(
             user_id=user.id if user else None,
             nickname=user.nickname if user else None,
             avatar=user.avatar if user else AvatarType.DEFAULT,
         ),
-        object=ShareObjectItem(
-            id=obj.id,
-            name=obj.name,
-            type=obj.type,
-            size=obj.size,
-            created_at=obj.created_at,
-            updated_at=obj.updated_at,
-        ),
-        children=children_items,
-    )
+        'object': ShareObjectItem.model_validate(obj, from_attributes=True),
+        'children': children_items,
+    })
 
     # 8. 递增浏览次数（最后执行，避免 MissingGreenlet）
     share.views += 1
@@ -329,23 +308,17 @@ async def router_share_create(
     # 生成分享码
     code = str(uuid4())
 
-    # 密码加密处理（如果有）
-    hashed_password = None
-    if request.password:
-        hashed_password = Password.hash(request.password)
-
     # 创建分享记录
     user_id = user.id
     share = Share(
         code=code,
-        password=hashed_password,
+        password=request.password,
         file_id=request.file_id,
         user_id=user_id,
         expires=request.expires,
         remain_downloads=request.remain_downloads,
         preview_enabled=request.preview_enabled,
         score=request.score,
-        source_name=obj.name,
     )
     share = await share.save(session)
 
@@ -365,7 +338,6 @@ async def router_share_list(
     limit: int = Query(default=50, le=100),
     desc: bool = Query(default=True),
     order: Literal["created_at", "updated_at"] = Query(default="created_at"),
-    keyword: str | None = Query(default=None),
     expired: bool | None = Query(default=None),
 ) -> ListResponse[ShareResponse]:
     """
@@ -375,15 +347,10 @@ async def router_share_list(
 
     支持：
     - 分页和排序
-    - 关键字搜索（搜索 source_name）
     - 过期状态筛选
     """
     # 构建基础条件
     condition = Share.user_id == user.id
-
-    # 关键字搜索
-    if keyword:
-        condition = condition & Share.source_name.ilike(f"%{keyword}%")
 
     # 过期状态筛选
     now = datetime.now()
@@ -411,21 +378,10 @@ async def router_share_list(
 
     # 转换为响应模型
     items = [
-        ShareResponse(
-            id=share.id,
-            code=share.code,
-            file_id=share.file_id,
-            source_name=share.source_name,
-            views=share.views,
-            downloads=share.downloads,
-            remain_downloads=share.remain_downloads,
-            expires=share.expires,
-            preview_enabled=share.preview_enabled,
-            score=share.score,
-            created_at=share.created_at,
-            is_expired=share.expires is not None and share.expires < now,
-            has_password=share.password is not None,
-        )
+        ShareResponse.model_validate(share, from_attributes=True, update={
+            'is_expired': share.expires is not None and share.expires < now,
+            'has_password': share.password is not None,
+        })
         for share in result.items
     ]
 

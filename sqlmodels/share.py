@@ -3,9 +3,9 @@ from typing import TYPE_CHECKING
 from datetime import datetime
 from uuid import UUID
 
-from sqlmodel import Field, Relationship, UniqueConstraint, Index
+from sqlmodel import Field, Relationship
 
-from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str64, Str128, Str255
+from sqlmodel_ext import NonNegativeBigInt, SQLModelBase, UUIDTableBaseMixin, Str64, Str128, Str255
 
 from .model_base import ResponseBase
 from .file import EntryType
@@ -37,7 +37,7 @@ class ShareBase(SQLModelBase):
     preview_enabled: bool = True
     """是否允许预览"""
 
-    score: int = Field(default=0, ge=0)
+    score: NonNegativeBigInt = 0
     """兑换此分享所需的积分"""
 
 
@@ -46,14 +46,7 @@ class ShareBase(SQLModelBase):
 class Share(SQLModelBase, UUIDTableBaseMixin):
     """分享模型"""
 
-    __table_args__ = (
-        UniqueConstraint("code", name="uq_share_code"),
-        Index("ix_share_source_name", "source_name"),
-        Index("ix_share_user_created", "user_id", "created_at"),
-        Index("ix_share_file", "file_id"),
-    )
-
-    code: Str64 = Field(nullable=False, index=True)
+    code: Str64 = Field(nullable=False, unique=True)
     """分享码"""
 
     password: Str255 | None = None
@@ -66,13 +59,13 @@ class Share(SQLModelBase, UUIDTableBaseMixin):
     )
     """关联的对象UUID"""
 
-    views: int = 0
+    views: NonNegativeBigInt = 0
     """浏览次数"""
 
-    downloads: int = 0
+    downloads: NonNegativeBigInt = 0
     """下载次数"""
 
-    remain_downloads: int | None = None
+    remain_downloads: NonNegativeBigInt | None = None
     """剩余下载次数 (NULL为不限制)"""
 
     expires: datetime | None = None
@@ -81,10 +74,7 @@ class Share(SQLModelBase, UUIDTableBaseMixin):
     preview_enabled: bool = True
     """是否允许预览"""
 
-    source_name: Str255 | None = None
-    """源名称（冗余字段，便于展示）"""
-
-    score: int = Field(default=0, ge=0)
+    score: NonNegativeBigInt = 0
     """兑换此分享所需的积分"""
 
     # 外键
@@ -105,12 +95,6 @@ class Share(SQLModelBase, UUIDTableBaseMixin):
     reports: list["Report"] = Relationship(back_populates="share", cascade_delete=True)
     """举报列表"""
 
-    @property
-    def is_dir(self) -> bool:
-        """是否为目录分享（向后兼容属性）"""
-        from .file import EntryType
-        return self.object.type == EntryType.FOLDER if self.object else False
-
 
 # ==================== DTO 模型 ====================
 
@@ -124,49 +108,6 @@ class CreateShareResponse(ResponseBase):
 
     share_id: UUID
     """新创建的分享记录 ID"""
-
-
-class ShareResponse(SQLModelBase):
-    """查看分享响应 DTO"""
-
-    id: UUID
-    """分享ID"""
-
-    code: Str64
-    """分享码"""
-
-    file_id: UUID
-    """关联对象UUID"""
-
-    source_name: Str255 | None
-    """源名称"""
-
-    views: int
-    """浏览次数"""
-
-    downloads: int
-    """下载次数"""
-
-    remain_downloads: int | None
-    """剩余下载次数"""
-
-    expires: datetime | None
-    """过期时间"""
-
-    preview_enabled: bool
-    """是否允许预览"""
-
-    score: int
-    """积分"""
-
-    created_at: datetime
-    """创建时间"""
-
-    is_expired: bool
-    """是否已过期"""
-
-    has_password: bool
-    """是否有密码"""
 
 
 class ShareOwnerInfo(SQLModelBase):
@@ -204,33 +145,8 @@ class ShareObjectItem(SQLModelBase):
     """修改时间"""
 
 
-class ShareDetailResponse(SQLModelBase):
-    """获取分享详情响应 DTO（面向访客，隐藏内部统计数据）"""
-
-    expires: datetime | None
-    """过期时间"""
-
-    preview_enabled: bool
-    """是否允许预览"""
-
-    score: int
-    """积分"""
-
-    created_at: datetime
-    """创建时间"""
-
-    owner: ShareOwnerInfo
-    """分享者信息"""
-
-    object: ShareObjectItem
-    """分享的根对象"""
-
-    children: list[ShareObjectItem]
-    """子文件/文件夹列表（仅目录分享有内容）"""
-
-
-class ShareListItemBase(SQLModelBase):
-    """分享列表项基础字段"""
+class SharePublic(SQLModelBase):
+    """分享公开可见字段基类"""
 
     id: UUID
     """分享ID"""
@@ -256,19 +172,70 @@ class ShareListItemBase(SQLModelBase):
     score: int
     """积分"""
 
-    user_id: UUID
-    """用户UUID"""
+    has_password: bool
+    """是否有密码"""
 
     created_at: datetime
     """创建时间"""
 
 
-class AdminShareListItem(ShareListItemBase):
-    """管理员分享列表项 DTO，添加关联字段"""
+class ShareResponse(SharePublic):
+    """用户自己的分享列表响应 DTO"""
+
+    file_id: UUID
+    """关联对象UUID"""
+
+    is_expired: bool
+    """是否已过期"""
+
+
+class AdminShareListItem(SharePublic):
+    """管理员分享列表项 DTO"""
+
+    user_id: UUID
+    """用户UUID"""
 
     username: Str255 | None
-    """用户名"""
+    """用户邮箱"""
 
     object_name: Str255 | None
     """对象名称"""
+
+
+class AdminShareDetailResponse(SharePublic):
+    """管理员分享详情响应 DTO"""
+
+    user_id: UUID
+    """用户UUID"""
+
+    username: Str255 | None
+    """用户邮箱"""
+
+    object: ShareObjectItem | None
+    """关联的对象"""
+
+
+class ShareDetailResponse(SQLModelBase):
+    """获取分享详情响应 DTO（面向访客，隐藏内部统计数据）"""
+
+    created_at: datetime
+    """创建时间"""
+
+    expires: datetime | None
+    """过期时间"""
+
+    preview_enabled: bool
+    """是否允许预览"""
+
+    score: int
+    """积分"""
+
+    owner: ShareOwnerInfo
+    """分享者信息"""
+
+    object: ShareObjectItem
+    """分享的根对象"""
+
+    children: list[ShareObjectItem]
+    """子文件/文件夹列表（仅目录分享有内容）"""
 

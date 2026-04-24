@@ -182,7 +182,7 @@ async def router_admin_theme_set_default(
     # 清除所有旧默认
     _ = await session.exec(
         sql_update(ThemePreset)
-        .where(cond(ThemePreset.is_default == True))  # noqa: E712
+        .where(cond(ThemePreset.is_default == True))
         .values(is_default=False)
     )
 

@@ -64,7 +64,7 @@ class TaskSummaryBase(SQLModelBase):
 class TaskSummary(TaskSummaryBase):
     """任务摘要，用于管理员列表展示"""
 
-    username: Str255 | None
+    username: Str255
     """用户名"""
 
 
@@ -95,10 +95,10 @@ class TaskDetailResponse(SQLModelBase):
     props: dict[str, Any] | None
     """任务属性"""
 
-    created_at: str
+    created_at: datetime
     """创建时间"""
 
-    updated_at: str
+    updated_at: datetime
     """更新时间"""
 
 

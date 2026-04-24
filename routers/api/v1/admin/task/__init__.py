@@ -55,10 +55,10 @@ async def router_admin_get_task_list(
 
     items: list[TaskSummary] = []
     for t in result.items:
-        user = await t.awaitable_attrs.user
+        user: User = await t.awaitable_attrs.user
         items.append(TaskSummary.model_validate(
             t, from_attributes=True,
-            update={'username': user.email if user else None},
+            update={'username': user.email},
         ))
 
     return ListResponse(items=items, count=result.count)
@@ -89,16 +89,9 @@ async def router_admin_get_task(
     props: TaskProps = await task.awaitable_attrs.props
 
     return TaskDetailResponse(
-        id=task.id,
-        status=task.status,
-        type=task.type,
-        progress=task.progress,
-        error=task.error,
-        user_id=str(task.user_id),
+        **task.model_dump(),
         username=user.email if user else None,
         props=props.model_dump(),
-        created_at=task.created_at.isoformat(),
-        updated_at=task.updated_at.isoformat(),
     )
 
 

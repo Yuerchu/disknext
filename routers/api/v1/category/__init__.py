@@ -85,17 +85,9 @@ async def router_category_list(
     )
 
     items = [
-        EntryResponse(
-            id=obj.id,
-            name=obj.name,
-            type=EntryType.FILE,
-            size=obj.size,
-            mime_type=obj.mime_type,
-            thumb=False,
-            created_at=obj.created_at,
-            updated_at=obj.updated_at,
-            source_enabled=False,
-        )
+        EntryResponse.model_validate(obj, from_attributes=True, update={
+            'type': EntryType.FILE,
+        })
         for obj in result.items
     ]
 

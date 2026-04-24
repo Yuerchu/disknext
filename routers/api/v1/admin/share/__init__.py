@@ -8,9 +8,9 @@ from middleware.scope import require_scope
 from middleware.dependencies import SessionDep, TableViewRequestDep
 from sqlmodels import (
     ListResponse,
-    Share, AdminShareListItem,
+    Share, AdminShareListItem, AdminShareDetailResponse,
+    ShareObjectItem,
 )
-from sqlmodels.share import ShareDetailResponse
 
 admin_share_router = APIRouter(
     prefix='/share',
@@ -42,14 +42,14 @@ async def router_admin_get_share_list(
         load=[rel(Share.user), rel(Share.entry)],
     )
 
-    # user 和 entry 已预加载，直接访问
     items: list[AdminShareListItem] = []
     for s in result.items:
         items.append(AdminShareListItem.model_validate(
             s, from_attributes=True,
             update={
-                'username': s.user.email if s.user else None,
-                'object_name': s.entry.name if s.entry else None,
+                'has_password': s.password is not None,
+                'username': s.user.email,
+                'object_name': s.entry.name,
             },
         ))
 
@@ -65,7 +65,7 @@ async def router_admin_get_share_list(
 async def router_admin_get_share(
     session: SessionDep,
     share_id: UUID,
-) -> ShareDetailResponse:
+) -> AdminShareDetailResponse:
     """
     获取分享详情。
 
@@ -73,33 +73,14 @@ async def router_admin_get_share(
     :param share_id: 分享ID
     :return: 分享详情
     """
-    share = await Share.get(session, Share.id == share_id, load=rel(Share.entry))
+    share = await Share.get(session, Share.id == share_id, load=[rel(Share.entry), rel(Share.user)])
     if not share:
         raise HTTPException(status_code=404, detail="分享不存在")
 
-    obj = await share.awaitable_attrs.object
-    user = await share.awaitable_attrs.user
-
-    return ShareDetailResponse(
-        id=share.id,
-        code=share.code,
-        views=share.views,
-        downloads=share.downloads,
-        remain_downloads=share.remain_downloads,
-        expires=share.expires,
-        preview_enabled=share.preview_enabled,
-        score=share.score,
-        has_password=bool(share.password),
-        user_id=str(share.user_id),
-        username=user.email if user else None,
-        object={
-            "id": str(obj.id),
-            "name": obj.name,
-            "type": obj.type.value,
-            "size": obj.size,
-        } if obj else None,
-        created_at=share.created_at.isoformat(),
-    )
+    return AdminShareDetailResponse.model_validate(share, from_attributes=True, update={
+        'username': share.user.email,
+        'object': ShareObjectItem.model_validate(share.entry, from_attributes=True),
+    })
 
 
 @admin_share_router.delete(

@@ -253,13 +253,12 @@ async def router_policy_get_policy(
     # 统计使用此策略的对象数量
     object_count = await Entry.count(session, Entry.policy_id == policy_id)
 
-    return PolicyDetailResponse(
-        **policy.model_dump(),
-        id=str(policy.id),
-        type=policy.type.value,
-        groups=[PolicyGroupInfo(id=str(g.id), name=g.name) for g in groups],
-        object_count=object_count,
-    )
+    return PolicyDetailResponse.model_validate(policy, from_attributes=True, update={
+        'id': str(policy.id),
+        'type': policy.type.value,
+        'groups': [PolicyGroupInfo(id=str(g.id), name=g.name) for g in groups],
+        'object_count': object_count,
+    })
 
 
 @admin_policy_router.delete(

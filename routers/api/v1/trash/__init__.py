@@ -42,14 +42,9 @@ async def router_trash_list(
     items = await Entry.get_trash_items(session, user.id)
 
     return [
-        TrashItemResponse(
-            id=item.id,
-            name=item.name,
-            type=item.type,
-            size=item.size,
-            deleted_at=item.deleted_at,
-            original_parent_id=item.deleted_original_parent_id,
-        )
+        TrashItemResponse.model_validate(item, from_attributes=True, update={
+            'original_parent_id': item.deleted_original_parent_id,
+        })
         for item in items
     ]
 

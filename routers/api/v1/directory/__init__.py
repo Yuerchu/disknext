@@ -48,24 +48,10 @@ async def _get_directory_response(
         id=folder.id,
         parent=folder.parent_id,
         objects=[
-            EntryResponse(
-                id=child.id,
-                name=child.name,
-                thumb=False,
-                size=child.size,
-                type=EntryType.FOLDER if child.is_folder else EntryType.FILE,
-                created_at=child.created_at,
-                updated_at=child.updated_at,
-                source_enabled=False,
-            )
+            EntryResponse.model_validate(child, from_attributes=True)
             for child in children
         ],
-        policy=PolicyResponse(
-            id=folder.policy.id,
-            name=folder.policy.name,
-            type=folder.policy.type,
-            max_size=folder.policy.max_size,
-        ),
+        policy=PolicyResponse.model_validate(folder.policy, from_attributes=True),
     )
 
 

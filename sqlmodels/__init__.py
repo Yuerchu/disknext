@@ -149,9 +149,10 @@ from .server_config import (
 )
 from .mail_template import MailTemplate, MailTemplateType
 from .share import (
-    Share, ShareBase, ShareCreateRequest, CreateShareResponse, ShareResponse,
-    ShareOwnerInfo, ShareObjectItem, ShareDetailResponse,
-    AdminShareListItem,
+    Share, ShareBase, ShareCreateRequest, CreateShareResponse,
+    ShareOwnerInfo, ShareObjectItem, SharePublic,
+    ShareResponse, ShareDetailResponse,
+    AdminShareListItem, AdminShareDetailResponse,
 )
 from .source_link import SourceLink
 from .storage_pack import StoragePack, StoragePackResponse
