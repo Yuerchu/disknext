@@ -46,7 +46,7 @@ class ShareBase(SQLModelBase):
 class Share(SQLModelBase, UUIDTableBaseMixin):
     """分享模型"""
 
-    code: Str64 = Field(nullable=False, unique=True)
+    code: UUID = Field(nullable=False, unique=True)
     """分享码"""
 
     password: Str255 | None = None

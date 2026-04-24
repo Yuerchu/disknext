@@ -305,24 +305,15 @@ async def router_share_create(
     if obj.is_banned:
         http_exceptions.raise_banned()
 
-    # 生成分享码
-    code = str(uuid4())
-
     # 创建分享记录
-    user_id = user.id
     share = Share(
-        code=code,
-        password=request.password,
-        file_id=request.file_id,
-        user_id=user_id,
-        expires=request.expires,
-        remain_downloads=request.remain_downloads,
-        preview_enabled=request.preview_enabled,
-        score=request.score,
+        **request.model_dump(),
+        code=uuid4(),
+        user_id=user.id,
     )
     share = await share.save(session)
 
-    l.info(f"用户 {user_id} 创建分享: {share.code}")
+    l.info(f"用户 {user.id} 创建分享: {share.code}")
 
     return CreateShareResponse(share_id=share.id)
 
