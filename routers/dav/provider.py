@@ -318,7 +318,7 @@ class DiskNextDAVProvider(DAVProvider):
         if not obj:
             return None
 
-        if obj.is_folder:
+        if obj.type == EntryType.FOLDER:
             return DiskNextCollection(path, environ, obj, user_id, account)
         else:
             return DiskNextFile(path, environ, obj, user_id, account)
@@ -364,7 +364,7 @@ class DiskNextCollection(DAVCollection):
         if not obj:
             return None
 
-        if obj.is_folder:
+        if obj.type == EntryType.FOLDER:
             return DiskNextCollection(member_path, self.environ, obj, self._user_id, self._account)
         else:
             return DiskNextFile(member_path, self.environ, obj, self._user_id, self._account)

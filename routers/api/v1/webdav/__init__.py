@@ -8,7 +8,7 @@ from sqlmodel_ext import cond
 from middleware.auth import auth_required
 from middleware.dependencies import SessionDep
 from sqlmodels import (
-    Entry,
+    Entry, EntryType,
     User,
     WebDAV,
     WebDAVAccountResponse,
@@ -94,7 +94,7 @@ async def create_account(
 
     # 验证 root 路径存在且为目录
     root_obj = await Entry.get_by_path(session, user_id, request.root)
-    if not root_obj or not root_obj.is_folder:
+    if not root_obj or not root_obj.type == EntryType.FOLDER:
         http_exceptions.raise_bad_request("根目录路径不存在或不是目录")
 
     # 创建账户
@@ -146,7 +146,7 @@ async def update_account(
     # 验证 root 路径
     if request.root is not None:
         root_obj = await Entry.get_by_path(session, user_id, request.root)
-        if not root_obj or not root_obj.is_folder:
+        if not root_obj or not root_obj.type == EntryType.FOLDER:
             http_exceptions.raise_bad_request("根目录路径不存在或不是目录")
 
     if request.password:

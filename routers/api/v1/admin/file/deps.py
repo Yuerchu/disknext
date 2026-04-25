@@ -28,7 +28,7 @@ async def set_ban_recursive(
     """
     # BFS 收集所有后代 ID（包含自身）
     all_ids: list[UUID] = [obj.id]
-    if obj.is_folder:
+    if obj.type == EntryType.FOLDER:
         queue: list[UUID] = [obj.id]
         while queue:
             parent_id = queue.pop(0)
@@ -37,7 +37,7 @@ async def set_ban_recursive(
             )
             for child in children:
                 all_ids.append(child.id)
-                if child.is_folder:
+                if child.type == EntryType.FOLDER:
                     queue.append(child.id)
 
     # 批量 UPDATE

@@ -99,7 +99,7 @@ async def router_admin_preview_file(
     """
     file_obj = await Entry.get_exist_one(session, file_id)
 
-    if not file_obj.is_file:
+    if not file_obj.type == EntryType.FILE:
         raise HTTPException(status_code=400, detail="对象不是文件")
 
     # 获取物理文件
@@ -170,7 +170,7 @@ async def router_admin_delete_file(
     """
     file_obj = await Entry.get_exist_one(session, file_id)
 
-    if not file_obj.is_file:
+    if not file_obj.type == EntryType.FILE:
         raise HTTPException(status_code=400, detail="对象不是文件")
 
     file_name = file_obj.name

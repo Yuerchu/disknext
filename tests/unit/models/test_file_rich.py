@@ -16,10 +16,8 @@ import pytest
 from faker import Faker
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from sqlmodels.group import Group
 from sqlmodels.file import Entry, EntryType
 from sqlmodels.physical_file import PhysicalFile
-from sqlmodels.policy import Policy, PolicyType
 from sqlmodels.user import User, UserStatus
 
 
@@ -468,7 +466,8 @@ class TestRestoreBatch:
         )
         obj = await obj.save(db_session)
 
-        with pytest.raises(ValueError, match="用户根目录不存在"):
+        from sqlalchemy.exc import NoResultFound
+        with pytest.raises(NoResultFound):
             await Entry.restore_batch(db_session, [obj], orphan.id)
 
 

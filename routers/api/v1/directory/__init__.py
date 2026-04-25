@@ -71,8 +71,6 @@ async def router_directory_root(
     :return: 根目录内容
     """
     root = await Entry.get_root(session, user.id)
-    if not root:
-        raise HTTPException(status_code=404, detail="根目录不存在")
 
     if root.is_banned:
         http_exceptions.raise_banned()
@@ -100,20 +98,12 @@ async def router_directory_get(
     :param path: 目录路径（从根目录开始的相对路径）
     :return: 目录内容
     """
-    path = path.strip("/")
-    if not path:
-        # 空路径交给根目录端点处理（理论上不会到达这里）
-        root = await Entry.get_root(session, user.id)
-        if not root:
-            raise HTTPException(status_code=404, detail="根目录不存在")
-        return await _get_directory_response(session, user.id, root)
-
-    folder = await Entry.get_by_path(session, user.id, "/" + path)
+    folder = await Entry.get_by_path(session, user.id, path)
 
     if not folder:
         raise HTTPException(status_code=404, detail="目录不存在")
 
-    if not folder.is_folder:
+    if not folder.type == EntryType.FOLDER:
         raise HTTPException(status_code=400, detail="指定路径不是目录")
 
     if folder.is_banned:
@@ -153,7 +143,7 @@ async def router_directory_create(
     if not parent or parent.owner_id != user_id:
         raise HTTPException(status_code=404, detail="父目录不存在")
 
-    if not parent.is_folder:
+    if not parent.type == EntryType.FOLDER:
         raise HTTPException(status_code=400, detail="父对象不是目录")
 
     if parent.is_banned:

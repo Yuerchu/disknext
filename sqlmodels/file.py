@@ -10,6 +10,8 @@ from sqlmodel import Field, Relationship, CheckConstraint, Index, col, text
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel_ext import (
     SQLModelBase, 
+    ListResponse,
+    TableViewRequest,
     UUIDTableBaseMixin, 
     NonNegativeBigInt, 
     PositiveBigInt, 
@@ -353,30 +355,21 @@ class Entry(EntryBase, UUIDTableBaseMixin):
             return self.physical_file.storage_path
         return None
 
-    @property
-    def is_file(self) -> bool:
-        """是否为文件"""
-        return self.type == EntryType.FILE
-
-    @property
-    def is_folder(self) -> bool:
-        """是否为目录"""
-        return self.type == EntryType.FOLDER
-
     # ==================== 业务方法 ====================
 
     @classmethod
-    async def get_root(cls, session, user_id: UUID) -> "Entry | None":
+    async def get_root(cls, session, user_id: UUID) -> "Entry":
         """
         获取用户的根目录
 
         :param session: 数据库会话
         :param user_id: 用户UUID
-        :return: 根目录对象，不存在则返回 None
+        :return: 根目录对象，不存在则报错
         """
         return await cls.get(
             session,
-            (cls.owner_id == user_id) & (cls.parent_id == None) & (cls.deleted_at == None)
+            (cls.owner_id == user_id) & (cls.parent_id == None) & (cls.deleted_at == None),
+            fetch_mode="one"
         )
 
     @classmethod
@@ -550,13 +543,6 @@ class Entry(EntryBase, UUIDTableBaseMixin):
         """
         将 URI 解析为 Entry 实例
 
-        分派逻辑（类似 Cloudreve 的 getNavigator）：
-        - MY    → user_id = uri.id(str(requesting_user_id))
-                  验证权限（自己的或管理员），然后 get_by_path
-        - SHARE → 通过 uri.fs_id 查 Share 表，验证密码和有效期
-                  获取 share.object，然后沿 uri.path 遍历子对象
-        - TRASH → 延后实现
-
         :param session: 数据库会话
         :param uri: DiskNextURI 实例
         :param requesting_user_id: 请求用户UUID
@@ -576,6 +562,7 @@ class Entry(EntryBase, UUIDTableBaseMixin):
             target_user_id = UUID(target_user_id_str)
 
             # 权限检查：只能访问自己的空间（管理员权限由路由层判断）
+            # [TODO] 但实际上单个用户也可授权自己的文件给其他用户访问
             if requesting_user_id and target_user_id != requesting_user_id:
                 raise PermissionError("无权访问其他用户的文件空间")
 
@@ -739,8 +726,6 @@ class Entry(EntryBase, UUIDTableBaseMixin):
         :return: 恢复的对象数量
         """
         root = await cls.get_root(session, user_id)
-        if not root:
-            raise ValueError("用户根目录不存在")
 
         restored_count = 0
 
@@ -794,22 +779,22 @@ class Entry(EntryBase, UUIDTableBaseMixin):
         total_file_size = 0
 
         # 根对象本身是文件
-        if self.is_file and self.physical_file_id:
+        if self.type == EntryType.FILE and self.physical_file_id:
             file_entries.append((self.id, self.name, self.physical_file_id))
             total_file_size += self.size
 
         # BFS 遍历子目录
-        if self.is_folder:
+        if self.type == EntryType.FOLDER:
             queue: list[UUID] = [self.id]
             while queue:
                 parent_id = queue.pop(0)
                 children = await Entry.get_all_children(session, user_id, parent_id)
                 for child in children:
                     total_count += 1
-                    if child.is_file and child.physical_file_id:
+                    if child.type == EntryType.FILE and child.physical_file_id:
                         file_entries.append((child.id, child.name, child.physical_file_id))
                         total_file_size += child.size
-                    elif child.is_folder:
+                    elif child.type == EntryType.FOLDER:
                         queue.append(child.id)
 
         return file_entries, total_count, total_file_size
@@ -942,21 +927,21 @@ class Entry(EntryBase, UUIDTableBaseMixin):
         total_count = 1
         total_file_size = 0
 
-        if self.is_file and self.physical_file_id:
+        if self.type == EntryType.FILE and self.physical_file_id:
             file_entries.append((self.id, self.name, self.physical_file_id))
             total_file_size += self.size
 
-        if self.is_folder:
+        if self.type == EntryType.FOLDER:
             queue: list[UUID] = [self.id]
             while queue:
                 parent_id = queue.pop(0)
                 children = await Entry.get_children(session, user_id, parent_id)
                 for child in children:
                     total_count += 1
-                    if child.is_file and child.physical_file_id:
+                    if child.type == EntryType.FILE and child.physical_file_id:
                         file_entries.append((child.id, child.name, child.physical_file_id))
                         total_file_size += child.size
-                    elif child.is_folder:
+                    elif child.type == EntryType.FOLDER:
                         queue.append(child.id)
 
         # 阶段二：批量获取所有 PhysicalFile（单次 SQL）
@@ -970,7 +955,7 @@ class Entry(EntryBase, UUIDTableBaseMixin):
 
         # 处理引用计数，收集可删除的 PhysicalFile
         deletable_pfs: list[PhysicalFile] = []
-        for obj_id, obj_name, physical_file_id in file_entries:
+        for _, _, physical_file_id in file_entries:
             physical_file = pf_map.get(physical_file_id)
             if not physical_file:
                 continue
@@ -1033,18 +1018,18 @@ class Entry(EntryBase, UUIDTableBaseMixin):
         """
         pf_ids: set[UUID] = set()
 
-        if self.is_file and self.physical_file_id:
+        if self.type == EntryType.FILE and self.physical_file_id:
             pf_ids.add(self.physical_file_id)
 
-        if self.is_folder:
+        if self.type == EntryType.FOLDER:
             queue: list[UUID] = [self.id]
             while queue:
                 parent_id = queue.pop(0)
                 children = await Entry.get_children(session, user_id, parent_id)
                 for child in children:
-                    if child.is_file and child.physical_file_id:
+                    if child.type == EntryType.FILE and child.physical_file_id:
                         pf_ids.add(child.physical_file_id)
-                    elif child.is_folder:
+                    elif child.type == EntryType.FOLDER:
                         queue.append(child.id)
 
         return pf_ids
@@ -1091,13 +1076,6 @@ class Entry(EntryBase, UUIDTableBaseMixin):
         new_ids: list[UUID] = []
         total_copied_size = 0
 
-        # 在 save() 之前保存需要的属性值，避免 commit 后对象过期导致懒加载失败
-        src_is_folder = self.is_folder
-        src_is_file = self.is_file
-        src_id = self.id
-        src_size = self.size
-        src_physical_file_id = self.physical_file_id
-
         # 创建新的 Entry 记录
         new_obj = Entry(
             name=self.name,
@@ -1111,20 +1089,20 @@ class Entry(EntryBase, UUIDTableBaseMixin):
         )
 
         # 如果是文件，增加物理文件引用计数
-        if src_is_file and src_physical_file_id:
-            physical_file = pf_map.get(src_physical_file_id)
+        if self.type == EntryType.FILE and self.physical_file_id:
+            physical_file = pf_map.get(self.physical_file_id)
             if physical_file:
                 physical_file.increment_reference()
                 physical_file = await physical_file.save(session)
-            total_copied_size += src_size
+            total_copied_size += self.size
 
         new_obj = await new_obj.save(session)
         copied_count += 1
         new_ids.append(new_obj.id)
 
         # 如果是目录，递归复制子对象
-        if src_is_folder:
-            children = await Entry.get_children(session, user_id, src_id)
+        if self.type == EntryType.FOLDER:
+            children = await Entry.get_children(session, user_id, self.id)
             for child in children:
                 child_count, child_ids, child_size = await child._copy_recursive_impl(
                     session, new_obj.id, user_id, pf_map

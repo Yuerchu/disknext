@@ -2,6 +2,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger as l
+import aiohttp
 
 from middleware.scope import require_scope
 from middleware.dependencies import SessionDep, TableViewRequestDep
@@ -105,8 +106,6 @@ async def router_policy_test_slave(
     :param request: 测试请求
     :return: 测试结果
     """
-    import aiohttp
-
     try:
         async with aiohttp.ClientSession() as client:
             async with client.get(
@@ -114,15 +113,14 @@ async def router_policy_test_slave(
                 headers={"Authorization": request.secret},
                 timeout=aiohttp.ClientTimeout(total=10)
             ) as resp:
-                if resp.status == 200:
-                    return
-                else:
+                if resp.status != 200:
                     raise HTTPException(
                         status_code=400,
                         detail=f"从机响应错误，HTTP {resp.status}",
                     )
+                return
     except HTTPException:
-        raise
+        raise HTTPException(status_code=400, detail="从机响应错误")
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"连接失败: {str(e)}")
 

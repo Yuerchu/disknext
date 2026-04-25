@@ -1,4 +1,4 @@
-from typing import Annotated, Literal
+from typing import Annotated
 from uuid import UUID, uuid4
 from datetime import datetime
 
@@ -7,7 +7,7 @@ from loguru import logger as l
 from sqlmodel_ext import rel
 
 from middleware.auth import auth_required
-from middleware.dependencies import SessionDep
+from middleware.dependencies import SessionDep, TableViewRequestDep
 from sqlmodels import ResponseBase
 from sqlmodels.user import AvatarType, User
 from sqlmodels.share import (
@@ -15,7 +15,7 @@ from sqlmodels.share import (
     ShareDetailResponse, ShareOwnerInfo, ShareObjectItem,
 )
 from sqlmodels.file import Entry, EntryType
-from sqlmodel_ext import ListResponse, TableViewRequest
+from sqlmodel_ext import ListResponse
 from utils import http_exceptions
 from utils.password.pwd import Password, PasswordStatus
 
@@ -325,10 +325,7 @@ async def router_share_create(
 async def router_share_list(
     session: SessionDep,
     user: Annotated[User, Depends(auth_required)],
-    offset: int = Query(default=0, ge=0),
-    limit: int = Query(default=50, le=100),
-    desc: bool = Query(default=True),
-    order: Literal["created_at", "updated_at"] = Query(default="created_at"),
+    table_view: TableViewRequestDep,
     expired: bool | None = Query(default=None),
 ) -> ListResponse[ShareResponse]:
     """
@@ -351,14 +348,6 @@ async def router_share_list(
     elif expired is False:
         # 未过期：expires 为 NULL 或 >= 当前时间
         condition = condition & ((Share.expires == None) | (Share.expires >= now))
-
-    # 构建 table_view
-    table_view = TableViewRequest(
-        offset=offset,
-        limit=limit,
-        desc=desc,
-        order=order,
-    )
 
     # 使用 get_with_count 获取分页数据
     result = await Share.get_with_count(

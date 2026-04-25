@@ -140,24 +140,7 @@ async def router_admin_create_group(
         raise HTTPException(status_code=409, detail="用户组名称已存在")
 
     # 创建用户组（选项字段已合并到 Group 表）
-    group = Group(
-        name=request.name,
-        max_storage=request.max_storage,
-        share_enabled=request.share_enabled,
-        web_dav_enabled=request.web_dav_enabled,
-        speed_limit=request.speed_limit,
-        share_download=request.share_download,
-        share_free=request.share_free,
-        relocate=request.relocate,
-        source_batch=request.source_batch,
-        select_node=request.select_node,
-        advance_delete=request.advance_delete,
-        archive_download=request.archive_download,
-        archive_task=request.archive_task,
-        webdav_proxy=request.webdav_proxy,
-        aria2=request.aria2,
-        redirected_source=request.redirected_source,
-    )
+    group = Group(**request.model_dump(exclude={'policy_ids'}))
     group = await group.save(session)
     group_id_val: UUID = group.id
 

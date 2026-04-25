@@ -4,6 +4,7 @@ File 模型的单元测试
 import pytest
 from sqlalchemy.exc import IntegrityError
 from sqlmodel.ext.asyncio.session import AsyncSession
+from sqlmodel_ext import rel
 
 from sqlmodels.file import Entry, EntryType
 from sqlmodels.user import User
@@ -92,7 +93,7 @@ async def test_object_create_file(db_session: AsyncSession):
 
 @pytest.mark.asyncio
 async def test_object_is_file_property(db_session: AsyncSession):
-    """测试 is_file 属性"""
+    """测试 file 属性"""
     from sqlmodels.policy import Policy, PolicyType
 
     group = Group(name="测试组")
@@ -113,13 +114,13 @@ async def test_object_is_file_property(db_session: AsyncSession):
     )
     file = await file.save(db_session)
 
-    assert file.is_file is True
-    assert file.is_folder is False
+    assert file.type == EntryType.FILE
+    assert file.type != EntryType.FOLDER
 
 
 @pytest.mark.asyncio
 async def test_object_is_folder_property(db_session: AsyncSession):
-    """测试 is_folder 属性"""
+    """测试 folder 属性"""
     from sqlmodels.policy import Policy, PolicyType
 
     group = Group(name="测试组")
@@ -139,8 +140,8 @@ async def test_object_is_folder_property(db_session: AsyncSession):
     )
     folder = await folder.save(db_session)
 
-    assert folder.is_folder is True
-    assert folder.is_file is False
+    assert folder.type == EntryType.FOLDER
+    assert folder.type != EntryType.FILE
 
 
 @pytest.mark.asyncio
@@ -393,7 +394,7 @@ async def test_object_parent_child_relationship(db_session: AsyncSession):
     loaded_child = await Entry.get(
         db_session,
         Entry.id == child.id,
-        load=Entry.parent
+        load=rel(Entry.parent)
     )
 
     assert loaded_child.parent is not None

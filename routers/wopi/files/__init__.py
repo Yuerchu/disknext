@@ -49,7 +49,7 @@ async def check_file_info(
         session,
         cond(Entry.id == file_id),
     )
-    if not file_obj or not file_obj.is_file:
+    if not file_obj or not file_obj.type == EntryType.FILE:
         http_exceptions.raise_not_found("文件不存在")
 
     # 获取用户信息
@@ -96,7 +96,7 @@ async def get_file(
 
     # 获取文件
     file_obj: Entry | None = await Entry.get(session, Entry.id == file_id)
-    if not file_obj or not file_obj.is_file:
+    if not file_obj or not file_obj.type == EntryType.FILE:
         http_exceptions.raise_not_found("文件不存在")
 
     # 获取物理文件
@@ -150,7 +150,7 @@ async def put_file(
 
     # 获取文件
     file_obj: Entry | None = await Entry.get(session, Entry.id == file_id)
-    if not file_obj or not file_obj.is_file:
+    if not file_obj or not file_obj.type == EntryType.FILE:
         http_exceptions.raise_not_found("文件不存在")
 
     # 获取物理文件

@@ -101,18 +101,7 @@ async def create_file_app(
         http_exceptions.raise_conflict(f"应用标识 '{request.app_key}' 已存在")
 
     # 创建应用
-    app = FileApp(
-        name=request.name,
-        app_key=request.app_key,
-        type=request.type,
-        icon=request.icon,
-        description=request.description,
-        is_enabled=request.is_enabled,
-        is_restricted=request.is_restricted,
-        iframe_url_template=request.iframe_url_template,
-        wopi_discovery_url=request.wopi_discovery_url,
-        wopi_editor_url_template=request.wopi_editor_url_template,
-    )
+    app = FileApp(**request.model_dump(exclude={'extensions', 'allowed_group_ids'}))
     app = await app.save(session)
     app_id = app.id
 

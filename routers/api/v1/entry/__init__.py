@@ -86,7 +86,7 @@ async def router_object_create(
     if not parent or parent.owner_id != user_id:
         raise HTTPException(status_code=404, detail="父目录不存在")
 
-    if not parent.is_folder:
+    if not parent.type == EntryType.FOLDER:
         raise HTTPException(status_code=400, detail="父对象不是目录")
 
     if parent.is_banned:
@@ -219,7 +219,7 @@ async def router_object_move(
     if not dst or dst.owner_id != user_id:
         raise HTTPException(status_code=404, detail="目标目录不存在")
 
-    if not dst.is_folder:
+    if not dst.type == EntryType.FOLDER:
         raise HTTPException(status_code=400, detail="目标不是有效文件夹")
 
     if dst.is_banned:
@@ -261,7 +261,7 @@ async def router_object_move(
     moved_count = 0
     for src in src_list:
         # 循环检测：O(1) 查找
-        if src.is_folder and src.id in ancestor_ids:
+        if src.type == EntryType.FOLDER and src.id in ancestor_ids:
             continue
 
         # 重名检查
@@ -316,7 +316,7 @@ async def router_object_copy(
     if not dst or dst.owner_id != user_id:
         raise HTTPException(status_code=404, detail="目标目录不存在")
 
-    if not dst.is_folder:
+    if not dst.type == EntryType.FOLDER:
         raise HTTPException(status_code=400, detail="目标不是有效文件夹")
 
     if dst.is_banned:
@@ -368,7 +368,7 @@ async def router_object_copy(
             continue
 
         # 循环检测：O(1) 查找
-        if src.is_folder and src.id in ancestor_ids:
+        if src.type == EntryType.FOLDER and src.id in ancestor_ids:
             continue
 
         # 重名检查
@@ -678,7 +678,7 @@ async def router_object_switch_policy(
     )
     task_props = await task_props.save(session)
 
-    if obj_is_file:
+    if obj_type == EntryType.FILE:
         # 文件：后台迁移
         async def _run_file_migration() -> None:
             async with DatabaseManager.session() as bg_session:

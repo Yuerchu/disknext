@@ -110,7 +110,7 @@ async def create_upload_session(
     if not parent or parent.owner_id != user.id:
         raise HTTPException(status_code=404, detail="父目录不存在")
 
-    if not parent.is_folder:
+    if not parent.type == EntryType.FOLDER:
         raise HTTPException(status_code=400, detail="父对象不是目录")
 
     if parent.is_banned:
@@ -443,7 +443,7 @@ async def create_download_token_endpoint(
     if not file_obj or file_obj.owner_id != user.id:
         raise HTTPException(status_code=404, detail="文件不存在")
 
-    if not file_obj.is_file:
+    if not file_obj.type == EntryType.FILE:
         raise HTTPException(status_code=400, detail="对象不是文件")
 
     if file_obj.is_banned:
@@ -489,7 +489,7 @@ async def download_file(
     if not file_obj or file_obj.owner_id != owner_id:
         raise HTTPException(status_code=404, detail="文件不存在")
 
-    if not file_obj.is_file:
+    if not file_obj.type == EntryType.FILE:
         raise HTTPException(status_code=400, detail="对象不是文件")
 
     if file_obj.is_banned:
@@ -549,7 +549,7 @@ async def create_empty_file(
     if not parent or parent.owner_id != user_id:
         raise HTTPException(status_code=404, detail="父目录不存在")
 
-    if not parent.is_folder:
+    if not parent.type == EntryType.FOLDER:
         raise HTTPException(status_code=400, detail="父对象不是目录")
 
     if parent.is_banned:
@@ -639,7 +639,7 @@ async def create_wopi_session(
     if not file_obj or file_obj.owner_id != user.id:
         http_exceptions.raise_not_found("文件不存在")
 
-    if not file_obj.is_file:
+    if not file_obj.type == EntryType.FILE:
         http_exceptions.raise_bad_request("对象不是文件")
 
     # 获取文件扩展名
@@ -731,7 +731,7 @@ async def _validate_source_link(
     if not file_obj:
         http_exceptions.raise_not_found("文件不存在")
 
-    if not file_obj.is_file:
+    if not file_obj.type == EntryType.FILE:
         http_exceptions.raise_bad_request("对象不是文件")
 
     if file_obj.is_banned:
@@ -875,7 +875,7 @@ async def file_content(
     if not file_obj or file_obj.owner_id != user.id:
         http_exceptions.raise_not_found("文件不存在")
 
-    if not file_obj.is_file:
+    if not file_obj.type == EntryType.FILE:
         http_exceptions.raise_bad_request("对象不是文件")
 
     physical_file = file_obj.physical_file
@@ -940,7 +940,7 @@ async def patch_file_content(
     if not file_obj or file_obj.owner_id != user.id:
         http_exceptions.raise_not_found("文件不存在")
 
-    if not file_obj.is_file:
+    if not file_obj.type == EntryType.FILE:
         http_exceptions.raise_bad_request("对象不是文件")
 
     if file_obj.is_banned:
@@ -1057,7 +1057,7 @@ async def file_source(
     if not file_obj or file_obj.owner_id != user.id:
         http_exceptions.raise_not_found("文件不存在")
 
-    if not file_obj.is_file:
+    if not file_obj.type == EntryType.FILE:
         http_exceptions.raise_bad_request("对象不是文件")
 
     if file_obj.is_banned:
