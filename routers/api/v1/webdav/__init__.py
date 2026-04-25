@@ -17,6 +17,7 @@ from sqlmodels import (
 )
 from utils.redis.webdav_auth_cache import WebDAVAuthCache
 from utils import http_exceptions
+from utils.http.error_codes import ErrorCode as E
 from utils.password.pwd import Password
 
 webdav_router = APIRouter(
@@ -28,7 +29,7 @@ webdav_router = APIRouter(
 def _check_webdav_enabled(user: User) -> None:
     """检查用户组是否启用了 WebDAV 功能"""
     if not user.group.web_dav_enabled:
-        http_exceptions.raise_forbidden("WebDAV 功能未启用")
+        http_exceptions.raise_forbidden(E.WEBDAV_DISABLED, "WebDAV 功能未启用")
 
 
 def _to_response(account: WebDAV) -> WebDAVAccountResponse:
@@ -90,12 +91,12 @@ async def create_account(
         cond(WebDAV.user_id == user_id),
     )
     if existing:
-        http_exceptions.raise_conflict("账户名已存在")
+        http_exceptions.raise_conflict(E.WEBDAV_ACCOUNT_NAME_EXISTS, "账户名已存在")
 
     # 验证 root 路径存在且为目录
     root_obj = await Entry.get_by_path(session, user_id, request.root)
     if not root_obj or not root_obj.type == EntryType.FOLDER:
-        http_exceptions.raise_bad_request("根目录路径不存在或不是目录")
+        http_exceptions.raise_bad_request(E.WEBDAV_ROOT_INVALID, "根目录路径不存在或不是目录")
 
     # 创建账户
     account = WebDAV(
@@ -141,13 +142,13 @@ async def update_account(
         cond(WebDAV.user_id == user_id),
     )
     if not account:
-        http_exceptions.raise_not_found("WebDAV 账户不存在")
+        http_exceptions.raise_not_found(E.WEBDAV_ACCOUNT_NOT_FOUND, "WebDAV 账户不存在")
 
     # 验证 root 路径
     if request.root is not None:
         root_obj = await Entry.get_by_path(session, user_id, request.root)
         if not root_obj or not root_obj.type == EntryType.FOLDER:
-            http_exceptions.raise_bad_request("根目录路径不存在或不是目录")
+            http_exceptions.raise_bad_request(E.WEBDAV_ROOT_INVALID, "根目录路径不存在或不是目录")
 
     if request.password:
         hashed_password = Password.hash(request.password)
@@ -191,7 +192,7 @@ async def delete_account(
         cond(WebDAV.user_id == user_id),
     )
     if not account:
-        http_exceptions.raise_not_found("WebDAV 账户不存在")
+        http_exceptions.raise_not_found(E.WEBDAV_ACCOUNT_NOT_FOUND, "WebDAV 账户不存在")
 
     account_name = account.name
     _ = await WebDAV.delete(session, account)

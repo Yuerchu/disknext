@@ -22,6 +22,7 @@ from sqlmodels import (
     UserFileAppDefaultResponse,
 )
 from utils import http_exceptions
+from utils.http.error_codes import ErrorCode as E
 
 file_viewers_router = APIRouter(
     prefix='/file_viewers',
@@ -57,7 +58,7 @@ async def set_default_viewer(
     # 验证应用存在
     app: FileApp | None = await FileApp.get(session, FileApp.id == request.app_id)
     if not app:
-        http_exceptions.raise_not_found("应用不存在")
+        http_exceptions.raise_not_found(E.USER_SETTINGS_VIEWER_APP_NOT_FOUND, "应用不存在")
 
     # 验证应用支持该扩展名
     ext_record: FileAppExtension | None = await FileAppExtension.get(
@@ -68,7 +69,7 @@ async def set_default_viewer(
         ),
     )
     if not ext_record:
-        http_exceptions.raise_bad_request("该应用不支持此扩展名")
+        http_exceptions.raise_bad_request(E.USER_SETTINGS_VIEWER_EXT_UNSUPPORTED, "该应用不支持此扩展名")
 
     # 查找已有记录
     existing: UserFileAppDefault | None = await UserFileAppDefault.get(
@@ -155,6 +156,6 @@ async def delete_default_viewer(
         ),
     )
     if not existing:
-        http_exceptions.raise_not_found("默认设置不存在")
+        http_exceptions.raise_not_found(E.USER_SETTINGS_VIEWER_DEFAULT_NOT_FOUND, "默认设置不存在")
 
     _ = await UserFileAppDefault.delete(session, existing)

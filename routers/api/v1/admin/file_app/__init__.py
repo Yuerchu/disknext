@@ -28,6 +28,7 @@ from sqlmodels import (
 )
 from sqlmodels.file_app import FileAppType
 from utils import http_exceptions
+from utils.http.error_codes import ErrorCode as E
 
 admin_file_app_router = APIRouter(
     prefix="/file_app",
@@ -98,7 +99,7 @@ async def create_file_app(
     # 检查 app_key 唯一
     existing = await FileApp.get(session, FileApp.app_key == request.app_key)
     if existing:
-        http_exceptions.raise_conflict(f"应用标识 '{request.app_key}' 已存在")
+        http_exceptions.raise_conflict(E.ADMIN_FILE_APP_KEY_EXISTS, f"应用标识 '{request.app_key}' 已存在")
 
     # 创建应用
     app = FileApp(**request.model_dump(exclude={'extensions', 'allowed_group_ids'}))
@@ -202,7 +203,7 @@ async def update_file_app(
     if request.app_key is not None and request.app_key != app.app_key:
         existing = await FileApp.get(session, FileApp.app_key == request.app_key)
         if existing:
-            http_exceptions.raise_conflict(f"应用标识 '{request.app_key}' 已存在")
+            http_exceptions.raise_conflict(E.ADMIN_FILE_APP_KEY_EXISTS, f"应用标识 '{request.app_key}' 已存在")
 
     # 更新非 None 字段
     update_data = request.model_dump(exclude_unset=True)
@@ -417,10 +418,10 @@ async def discover_wopi(
     app = await FileApp.get_exist_one(session, app_id)
 
     if app.type != FileAppType.WOPI:
-        http_exceptions.raise_bad_request("仅 WOPI 类型应用支持自动发现")
+        http_exceptions.raise_bad_request(E.WOPI_APP_TYPE_MISMATCH, "仅 WOPI 类型应用支持自动发现")
 
     if not app.wopi_discovery_url:
-        http_exceptions.raise_bad_request("未配置 WOPI Discovery URL")
+        http_exceptions.raise_bad_request(E.WOPI_DISCOVERY_NOT_CONFIGURED, "未配置 WOPI Discovery URL")
 
     # commit 后对象会过期，先保存需要的值
     discovery_url = app.wopi_discovery_url
@@ -435,17 +436,18 @@ async def discover_wopi(
             ) as resp:
                 if resp.status != 200:
                     http_exceptions.raise_bad_gateway(
-                        f"WOPI 服务端返回 HTTP {resp.status}"
+                        E.WOPI_DISCOVERY_FAILED,
+                        f"WOPI 服务端返回 HTTP {resp.status}",
                     )
                 xml_content = await resp.text()
     except aiohttp.ClientError as e:
-        http_exceptions.raise_bad_gateway(f"无法连接 WOPI 服务端: {e}")
+        http_exceptions.raise_bad_gateway(E.WOPI_DISCOVERY_FAILED, f"无法连接 WOPI 服务端: {e}")
 
     # 解析 XML
     try:
         action_urls, app_names = parse_wopi_discovery_xml(xml_content)
     except ValueError as e:
-        http_exceptions.raise_bad_request(str(e))
+        http_exceptions.raise_bad_request(E.WOPI_DISCOVERY_FAILED, str(e))
 
     if not action_urls:
         return WopiDiscoveryResponse(app_names=app_names)

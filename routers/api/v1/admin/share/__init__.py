@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from loguru import logger as l
 from sqlmodel_ext import rel
 
@@ -11,6 +11,8 @@ from sqlmodels import (
     Share, AdminShareListItem, AdminShareDetailResponse,
     ShareObjectItem,
 )
+from utils import http_exceptions
+from utils.http.error_codes import ErrorCode as E
 
 admin_share_router = APIRouter(
     prefix='/share',
@@ -75,7 +77,7 @@ async def router_admin_get_share(
     """
     share = await Share.get(session, Share.id == share_id, load=[rel(Share.entry), rel(Share.user)])
     if not share:
-        raise HTTPException(status_code=404, detail="分享不存在")
+        http_exceptions.raise_not_found(E.SHARE_NOT_FOUND, "分享不存在")
 
     return AdminShareDetailResponse.model_validate(share, from_attributes=True, update={
         'username': share.user.email,

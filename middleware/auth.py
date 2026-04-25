@@ -10,6 +10,7 @@ from utils import JWT
 from utils.conf import appmeta
 from .dependencies import SessionDep
 from utils import http_exceptions
+from utils.http.error_codes import ErrorCode as E
 from utils.redis.user_ban_store import UserBanStore
 
 
@@ -34,20 +35,20 @@ async def jwt_required(
             group=payload["group"],
         )
     except (jwt.InvalidTokenError, KeyError, ValueError):
-        http_exceptions.raise_unauthorized("凭据过期或无效")
+        http_exceptions.raise_unauthorized(E.AUTH_INVALID_CREDENTIALS, "凭据过期或无效")
 
     # 1. JWT 内嵌 status 检查
     if claims.status != UserStatus.ACTIVE:
-        http_exceptions.raise_forbidden("账户已被禁用")
+        http_exceptions.raise_forbidden(E.AUTH_ACCOUNT_DISABLED, "账户已被禁用")
 
     # 2. Redis 黑名单即时封禁检查
     if await UserBanStore.is_banned(str(claims.sub)):
-        http_exceptions.raise_forbidden("账户已被禁用")
+        http_exceptions.raise_forbidden(E.AUTH_ACCOUNT_DISABLED, "账户已被禁用")
 
     # 3. DB 权威源复核
     user = await User.get(session, User.id == claims.sub)
     if not user or user.status != UserStatus.ACTIVE:
-        http_exceptions.raise_forbidden("账户已被禁用")
+        http_exceptions.raise_forbidden(E.AUTH_ACCOUNT_DISABLED, "账户已被禁用")
 
     return claims
 
@@ -59,7 +60,7 @@ async def auth_required(
     """验证 JWT + 从数据库加载完整 User（含 group 关系）"""
     user = await User.get(session, User.id == claims.sub, load=rel(User.group))
     if not user:
-        http_exceptions.raise_unauthorized("用户不存在")
+        http_exceptions.raise_unauthorized(E.AUTH_INVALID_CREDENTIALS, "用户不存在")
     return user
 
 
@@ -73,10 +74,10 @@ def verify_download_token(token: str) -> tuple[str, UUID, UUID] | None:
     try:
         payload = jwt.decode(token, appmeta.secret_key, algorithms=["HS256"])
         if payload.get("type") != "download":
-            http_exceptions.raise_unauthorized("Download token required")
+            http_exceptions.raise_unauthorized(E.AUTH_DOWNLOAD_TOKEN_INVALID, "Download token required")
         jti = payload.get("jti")
         if not jti:
-            http_exceptions.raise_unauthorized("Download token required")
+            http_exceptions.raise_unauthorized(E.AUTH_DOWNLOAD_TOKEN_INVALID, "Download token required")
         return jti, UUID(payload["file_id"]), UUID(payload["owner_id"])
     except jwt.InvalidTokenError:
-        http_exceptions.raise_unauthorized("Download token required")
+        http_exceptions.raise_unauthorized(E.AUTH_DOWNLOAD_TOKEN_INVALID, "Download token required")

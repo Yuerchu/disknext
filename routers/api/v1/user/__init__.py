@@ -27,6 +27,7 @@ from sqlmodels.group import GroupResponse
 from sqlmodels.user import AvatarType, User, UserStatus
 from sqlmodels.user_authn import UserAuthn
 from utils import JWT, Password, http_exceptions
+from utils.http.error_codes import ErrorCode as E
 from utils.conf import appmeta
 from utils.redis.challenge_store import ChallengeStore
 
@@ -86,9 +87,9 @@ async def router_user_session(
         case AuthProviderType.MAGIC_LINK:
             user = await login_magic_link(session, request)
         case AuthProviderType.PHONE_SMS:
-            http_exceptions.raise_not_implemented("短信登录暂未开放")
+            http_exceptions.raise_not_implemented(message="短信登录暂未开放")
         case _:
-            http_exceptions.raise_bad_request(f"不支持的登录方式: {request.provider}")
+            http_exceptions.raise_bad_request(E.AUTH_PROVIDER_UNSUPPORTED, f"不支持的登录方式: {request.provider}")
 
     return await user.issue_tokens(session)
 
@@ -116,19 +117,19 @@ async def router_user_session_refresh(
     try:
         payload = jwt.decode(token, appmeta.secret_key, algorithms=["HS256"])
     except jwt.InvalidTokenError:
-        http_exceptions.raise_unauthorized("刷新令牌无效或已过期")
+        http_exceptions.raise_unauthorized(E.AUTH_REFRESH_TOKEN_INVALID, "刷新令牌无效或已过期")
 
     if payload.get("token_type") != "refresh":
-        http_exceptions.raise_unauthorized("非刷新令牌")
+        http_exceptions.raise_unauthorized(E.AUTH_REFRESH_TOKEN_TYPE, "非刷新令牌")
 
     user_id_str = payload.get("sub")
     if not user_id_str:
-        http_exceptions.raise_unauthorized("令牌缺少用户标识")
+        http_exceptions.raise_unauthorized(E.AUTH_TOKEN_MISSING_SUB, "令牌缺少用户标识")
 
     user: User = await User.get_exist_one(session, UUID(user_id_str), load=rel(User.group))
 
     if user.status != UserStatus.ACTIVE:
-        http_exceptions.raise_forbidden("账户已被禁用")
+        http_exceptions.raise_forbidden(E.AUTH_ACCOUNT_DISABLED, "账户已被禁用")
 
     return await user.issue_tokens(session)
 
@@ -166,17 +167,17 @@ async def router_user_register(
     """
     # 1. 检查注册开关
     if not config.is_register_enabled:
-        http_exceptions.raise_bad_request("注册功能未开放")
+        http_exceptions.raise_bad_request(E.USER_REGISTRATION_CLOSED, "注册功能未开放")
 
     # 2. 目前只支持 email_password 注册
     if request.provider == AuthProviderType.PHONE_SMS:
-        http_exceptions.raise_not_implemented("短信注册暂未开放")
+        http_exceptions.raise_not_implemented(message="短信注册暂未开放")
     elif request.provider != AuthProviderType.EMAIL_PASSWORD:
-        http_exceptions.raise_bad_request("不支持的注册方式")
+        http_exceptions.raise_bad_request(E.USER_REGISTRATION_UNSUPPORTED, "不支持的注册方式")
 
     # 3. 检查密码是否必填
     if config.is_auth_password_required and not request.credential:
-        http_exceptions.raise_bad_request("密码不能为空")
+        http_exceptions.raise_bad_request(E.USER_PASSWORD_EMPTY, "密码不能为空")
 
     # 4. 验证邮箱唯一性
     existing_user = await sqlmodels.User.get(
@@ -184,7 +185,7 @@ async def router_user_register(
         sqlmodels.User.email == request.identifier,
     )
     if existing_user:
-        raise HTTPException(status_code=409, detail="该邮箱已被注册")
+        http_exceptions.raise_conflict(E.USER_EMAIL_EXISTS, "该邮箱已被注册")
 
     # 5. 获取默认用户组
     if not config.default_group_id:
@@ -249,12 +250,12 @@ async def router_user_magic_link(
     """
     # 检查 magic_link 是否启用
     if not config.is_auth_magic_link_enabled:
-        http_exceptions.raise_bad_request("Magic Link 登录未启用")
+        http_exceptions.raise_bad_request(E.AUTH_MAGIC_LINK_DISABLED, "Magic Link 登录未启用")
 
     # 验证邮箱存在
     user = await User.get(session, User.email == request.email)
     if not user:
-        http_exceptions.raise_not_found("该邮箱未注册")
+        http_exceptions.raise_not_found(E.USER_EMAIL_NOT_REGISTERED, "该邮箱未注册")
 
     # 生成签名 token
     serializer = URLSafeTimedSerializer(appmeta.secret_key)
@@ -339,7 +340,7 @@ async def router_user_avatar(
 
     user = await sqlmodels.User.get(session, sqlmodels.User.id == id)
     if not user:
-        http_exceptions.raise_not_found("用户不存在")
+        http_exceptions.raise_not_found(E.USER_NOT_FOUND, "用户不存在")
 
     avatar_path, _, size_l, size_m, size_s = await get_avatar_settings(session)
 
@@ -416,7 +417,7 @@ async def router_user_storage(
     # 获取用户组的基础存储容量
     group = await sqlmodels.Group.get(session, sqlmodels.Group.id == user.group_id)
     if not group:
-        raise HTTPException(status_code=404, detail="用户组不存在")
+        http_exceptions.raise_not_found(E.ADMIN_GROUP_NOT_FOUND, "用户组不存在")
 
     now = datetime.now()
     stmt = select(func.coalesce(func.sum(sqlmodels.StoragePack.size), 0)).where(
@@ -461,7 +462,7 @@ async def router_user_authn_start(
     - 400: Passkey 未启用
     """
     if not config.is_authn_enabled:
-        http_exceptions.raise_bad_request("Passkey 未启用")
+        http_exceptions.raise_bad_request(E.AUTH_PASSKEY_DISABLED, "Passkey 未启用")
 
     rp_id, rp_name, _origin = config.get_rp_config()
 
@@ -523,7 +524,7 @@ async def router_user_authn_finish(
     # 取出 challenge（一次性）
     challenge: bytes | None = await ChallengeStore.retrieve_and_delete(f"reg:{user.id}")
     if challenge is None:
-        http_exceptions.raise_bad_request("注册会话已过期，请重新开始")
+        http_exceptions.raise_bad_request(E.AUTH_PASSKEY_REGISTER_EXPIRED, "注册会话已过期，请重新开始")
 
     rp_id, _rp_name, origin = config.get_rp_config()
 
@@ -537,7 +538,7 @@ async def router_user_authn_finish(
         )
     except Exception as e:
         logger.warning(f"WebAuthn 注册验证失败: {e}")
-        http_exceptions.raise_bad_request("Passkey 验证失败")
+        http_exceptions.raise_bad_request(E.AUTH_PASSKEY_VERIFICATION_FAILED, "Passkey 验证失败")
 
     # 编码为 base64url 存储
     credential_id_b64: str = bytes_to_base64url(verification.credential_id)
@@ -587,7 +588,7 @@ async def router_user_authn_options(
     - 400: Passkey 未启用
     """
     if not config.is_authn_enabled:
-        http_exceptions.raise_bad_request("Passkey 未启用")
+        http_exceptions.raise_bad_request(E.AUTH_PASSKEY_DISABLED, "Passkey 未启用")
 
     rp_id, _rp_name, _origin = config.get_rp_config()
 

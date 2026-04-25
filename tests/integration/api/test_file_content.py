@@ -167,7 +167,7 @@ class TestGetFileContent:
         )
 
         assert response.status_code == 400
-        assert "UTF-8" in response.json()["detail"]
+        assert response.json()["detail"]["code"] == "file.not_utf8_text"
 
     @pytest.mark.asyncio
     async def test_get_content_not_found(

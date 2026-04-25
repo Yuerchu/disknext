@@ -10,7 +10,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from loguru import logger as l
 
 from middleware.auth import auth_required
@@ -22,6 +22,8 @@ from sqlmodels import (
     CustomPropertyResponse,
     User,
 )
+from utils import http_exceptions
+from utils.http.error_codes import ErrorCode as E
 
 router = APIRouter(
     prefix="/custom_property",
@@ -92,7 +94,7 @@ async def router_create_custom_property(
         (CustomPropertyDefinition.name == request.name),
     )
     if existing:
-        raise HTTPException(status_code=409, detail="同名自定义属性已存在")
+        http_exceptions.raise_conflict(E.ENTRY_CUSTOM_PROP_DUPLICATE, "同名自定义属性已存在")
 
     definition = CustomPropertyDefinition(
         owner_id=user.id,
@@ -131,7 +133,7 @@ async def router_update_custom_property(
     definition = await CustomPropertyDefinition.get_exist_one(session, id)
 
     if definition.owner_id != user.id:
-        raise HTTPException(status_code=403, detail="无权操作此属性")
+        http_exceptions.raise_forbidden(E.ENTRY_CUSTOM_PROP_FORBIDDEN, "无权操作此属性")
 
     definition = await definition.update(session, request)
 
@@ -161,7 +163,7 @@ async def router_delete_custom_property(
     definition = await CustomPropertyDefinition.get_exist_one(session, id)
 
     if definition.owner_id != user.id:
-        raise HTTPException(status_code=403, detail="无权操作此属性")
+        http_exceptions.raise_forbidden(E.ENTRY_CUSTOM_PROP_FORBIDDEN, "无权操作此属性")
 
     _ = await CustomPropertyDefinition.delete(session, instances=definition)
 

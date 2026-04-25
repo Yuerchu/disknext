@@ -15,7 +15,7 @@ from uuid import UUID
 
 import orjson
 import whatthepatch
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Query, UploadFile
 from starlette.responses import Response
 from loguru import logger as l
 from sqlmodel_ext import cond, rel
@@ -48,6 +48,9 @@ from utils.storage import create_storage_driver, UploadContext
 from utils.JWT import create_download_token, DOWNLOAD_TOKEN_TTL
 from utils.JWT.wopi_token import create_wopi_token
 from utils import http_exceptions
+from utils.http.http_exceptions import AppError
+from utils.http.error_codes import ErrorCode as E
+
 from .viewers import viewers_router
 from sqlmodels import TextContentResponse, PatchContentRequest, PatchContentResponse, SourceLinkResponse
 
@@ -63,9 +66,10 @@ def _check_policy_size_limit(policy: Policy, file_size: int) -> None:
     :raises HTTPException: 413 Payload Too Large
     """
     if policy.max_size > 0 and file_size > policy.max_size:
-        raise HTTPException(
+        raise AppError(
             status_code=413,
-            detail=f"文件大小超过限制 ({policy.max_size} bytes)",
+            code=E.FILE_SIZE_EXCEEDED,
+            message=f"文件大小超过限制 ({policy.max_size} bytes)",
         )
 
 # ==================== 主路由 ====================
@@ -100,7 +104,7 @@ async def create_upload_session(
     """
     # 验证文件名
     if not request.file_name or '/' in request.file_name or '\\' in request.file_name:
-        raise HTTPException(status_code=400, detail="无效的文件名")
+        http_exceptions.raise_bad_request(E.ENTRY_INVALID_NAME, "无效的文件名")
 
     # 验证父目录（排除已删除的）
     parent = await Entry.get(
@@ -108,13 +112,13 @@ async def create_upload_session(
         (Entry.id == request.parent_id) & (Entry.deleted_at == None)
     )
     if not parent or parent.owner_id != user.id:
-        raise HTTPException(status_code=404, detail="父目录不存在")
+        http_exceptions.raise_not_found(E.ENTRY_PARENT_NOT_FOUND, "父目录不存在")
 
     if not parent.type == EntryType.FOLDER:
-        raise HTTPException(status_code=400, detail="父对象不是目录")
+        http_exceptions.raise_bad_request(E.ENTRY_PARENT_NOT_DIR, "父对象不是目录")
 
     if parent.is_banned:
-        http_exceptions.raise_banned("目标目录已被封禁，无法执行此操作")
+        http_exceptions.raise_banned(E.ENTRY_TARGET_BANNED, "目标目录已被封禁，无法执行此操作")
 
     # 确定存储策略
     policy_id = request.policy_id or parent.policy_id
@@ -125,7 +129,7 @@ async def create_upload_session(
         group = await user.awaitable_attrs.group
         await session.refresh(group, ['policies'])
         if request.policy_id not in {p.id for p in group.policies}:
-            raise HTTPException(status_code=403, detail="当前用户组无权使用该存储策略")
+            http_exceptions.raise_forbidden(E.POLICY_FORBIDDEN, "当前用户组无权使用该存储策略")
 
     # 验证文件大小限制
     _check_policy_size_limit(policy, request.file_size)
@@ -133,7 +137,7 @@ async def create_upload_session(
     # 检查存储配额（auth_required 已预加载 user.group）
     max_storage = user.group.max_storage
     if max_storage > 0 and user.storage + request.file_size > max_storage:
-        http_exceptions.raise_insufficient_quota("存储空间不足")
+        http_exceptions.raise_insufficient_quota(E.FILE_QUOTA_EXCEEDED, "存储空间不足")
 
     # 检查是否已存在同名文件（仅检查未删除的）
     existing = await Entry.get(
@@ -144,7 +148,7 @@ async def create_upload_session(
         (Entry.deleted_at == None)
     )
     if existing:
-        raise HTTPException(status_code=409, detail="同名文件已存在")
+        http_exceptions.raise_conflict(E.ENTRY_DUPLICATE, "同名文件已存在")
 
     # 计算分片信息
     chunk_size = policy.chunk_size
@@ -215,28 +219,28 @@ async def upload_chunk(
     # 获取上传会话
     upload_session = await UploadSession.get(session, UploadSession.id == session_id)
     if not upload_session or upload_session.owner_id != user.id:
-        raise HTTPException(status_code=404, detail="上传会话不存在")
+        http_exceptions.raise_not_found(E.FILE_UPLOAD_SESSION_NOT_FOUND, "上传会话不存在")
 
     if upload_session.is_expired:
-        raise HTTPException(status_code=400, detail="上传会话已过期")
+        http_exceptions.raise_bad_request(E.FILE_UPLOAD_SESSION_EXPIRED, "上传会话已过期")
 
     # 存储 user.id，避免后续 save() 导致 user 过期后无法访问
     user_id = user.id
 
     if chunk_index < 0 or chunk_index >= upload_session.total_chunks:
-        raise HTTPException(status_code=400, detail="无效的分片索引")
+        http_exceptions.raise_bad_request(E.FILE_UPLOAD_INVALID_CHUNK, "无效的分片索引")
 
     # 获取策略
     policy = await Policy.get(session, Policy.id == upload_session.policy_id)
     if not policy:
-        raise HTTPException(status_code=500, detail="存储策略不存在")
+        http_exceptions.raise_internal_error(E.POLICY_NOT_FOUND, "存储策略不存在")
 
     # 读取分片内容
     content = await file.read()
 
     # 写入分片
     if not upload_session.storage_path:
-        raise HTTPException(status_code=500, detail="存储路径丢失")
+        http_exceptions.raise_internal_error(E.FILE_STORAGE_PATH_MISSING, "存储路径丢失")
 
     driver = create_storage_driver(policy)
     upload_ctx = UploadContext(
@@ -340,7 +344,7 @@ async def delete_upload_session(
     """删除上传会话端点"""
     upload_session = await UploadSession.get(session, UploadSession.id == session_id)
     if not upload_session or upload_session.owner_id != user.id:
-        raise HTTPException(status_code=404, detail="上传会话不存在")
+        http_exceptions.raise_not_found(E.FILE_UPLOAD_SESSION_NOT_FOUND, "上传会话不存在")
 
     # 删除临时文件
     policy = await Policy.get(session, Policy.id == upload_session.policy_id)
@@ -413,7 +417,7 @@ async def clear_upload_sessions(
 )
 async def download_archive(session_id: str) -> ResponseBase:
     """打包下载"""
-    raise HTTPException(status_code=501, detail="打包下载功能暂未实现")
+    http_exceptions.raise_not_implemented(message="打包下载功能暂未实现")
 
 
 # ==================== 下载子路由 ====================
@@ -441,10 +445,10 @@ async def create_download_token_endpoint(
         (Entry.id == file_id) & (Entry.deleted_at == None)
     )
     if not file_obj or file_obj.owner_id != user.id:
-        raise HTTPException(status_code=404, detail="文件不存在")
+        http_exceptions.raise_not_found(E.FILE_NOT_FOUND, "文件不存在")
 
     if not file_obj.type == EntryType.FILE:
-        raise HTTPException(status_code=400, detail="对象不是文件")
+        http_exceptions.raise_bad_request(E.FILE_NOT_FILE, "对象不是文件")
 
     if file_obj.is_banned:
         http_exceptions.raise_banned()
@@ -475,7 +479,7 @@ async def download_file(
     # 验证令牌
     result = verify_download_token(token)
     if not result:
-        raise HTTPException(status_code=401, detail="下载令牌无效或已过期")
+        http_exceptions.raise_unauthorized(E.AUTH_DOWNLOAD_TOKEN_INVALID, "下载令牌无效或已过期")
 
     _, file_id, owner_id = result
 
@@ -487,28 +491,28 @@ async def download_file(
         load=rel(Entry.physical_file),
     )
     if not file_obj or file_obj.owner_id != owner_id:
-        raise HTTPException(status_code=404, detail="文件不存在")
+        http_exceptions.raise_not_found(E.FILE_NOT_FOUND, "文件不存在")
 
     if not file_obj.type == EntryType.FILE:
-        raise HTTPException(status_code=400, detail="对象不是文件")
+        http_exceptions.raise_bad_request(E.FILE_NOT_FILE, "对象不是文件")
 
     if file_obj.is_banned:
         http_exceptions.raise_banned()
 
     physical_file = file_obj.physical_file
     if not physical_file or not physical_file.storage_path:
-        raise HTTPException(status_code=500, detail="文件存储路径丢失")
+        http_exceptions.raise_internal_error(E.FILE_STORAGE_PATH_MISSING, "文件存储路径丢失")
 
     storage_path = physical_file.storage_path
 
     # 获取策略
     policy = await Policy.get(session, Policy.id == file_obj.policy_id)
     if not policy:
-        raise HTTPException(status_code=500, detail="存储策略不存在")
+        http_exceptions.raise_internal_error(E.POLICY_NOT_FOUND, "存储策略不存在")
 
     driver = create_storage_driver(policy)
     if not await driver.exists(storage_path):
-        raise HTTPException(status_code=404, detail="物理文件不存在")
+        http_exceptions.raise_not_found(E.FILE_PHYSICAL_NOT_FOUND, "物理文件不存在")
 
     return (await driver.get_download_result(storage_path, file_obj.name)).to_response()
 
@@ -539,7 +543,7 @@ async def create_empty_file(
 
     # 验证文件名
     if not request.name or '/' in request.name or '\\' in request.name:
-        raise HTTPException(status_code=400, detail="无效的文件名")
+        http_exceptions.raise_bad_request(E.ENTRY_INVALID_NAME, "无效的文件名")
 
     # 验证父目录（排除已删除的）
     parent = await Entry.get(
@@ -547,13 +551,13 @@ async def create_empty_file(
         (Entry.id == request.parent_id) & (Entry.deleted_at == None)
     )
     if not parent or parent.owner_id != user_id:
-        raise HTTPException(status_code=404, detail="父目录不存在")
+        http_exceptions.raise_not_found(E.ENTRY_PARENT_NOT_FOUND, "父目录不存在")
 
     if not parent.type == EntryType.FOLDER:
-        raise HTTPException(status_code=400, detail="父对象不是目录")
+        http_exceptions.raise_bad_request(E.ENTRY_PARENT_NOT_DIR, "父对象不是目录")
 
     if parent.is_banned:
-        http_exceptions.raise_banned("目标目录已被封禁，无法执行此操作")
+        http_exceptions.raise_banned(E.ENTRY_TARGET_BANNED, "目标目录已被封禁，无法执行此操作")
 
     # 检查是否已存在同名文件（仅检查未删除的）
     existing = await Entry.get(
@@ -564,7 +568,7 @@ async def create_empty_file(
         (Entry.deleted_at == None)
     )
     if existing:
-        raise HTTPException(status_code=409, detail="同名文件已存在")
+        http_exceptions.raise_conflict(E.ENTRY_DUPLICATE, "同名文件已存在")
 
     # 确定存储策略
     policy_id = request.policy_id or parent.policy_id
@@ -637,15 +641,15 @@ async def create_wopi_session(
         Entry.id == file_id,
     )
     if not file_obj or file_obj.owner_id != user.id:
-        http_exceptions.raise_not_found("文件不存在")
+        http_exceptions.raise_not_found(E.FILE_NOT_FOUND, "文件不存在")
 
     if not file_obj.type == EntryType.FILE:
-        http_exceptions.raise_bad_request("对象不是文件")
+        http_exceptions.raise_bad_request(E.FILE_NOT_FILE, "对象不是文件")
 
     # 获取文件扩展名
     name_parts = file_obj.name.rsplit('.', 1)
     if len(name_parts) < 2:
-        http_exceptions.raise_bad_request("文件无扩展名，无法使用 WOPI 查看器")
+        http_exceptions.raise_bad_request(E.FILE_NO_EXTENSION, "文件无扩展名，无法使用 WOPI 查看器")
     ext = name_parts[1].lower()
 
     # 查找 WOPI 类型的应用
@@ -678,7 +682,7 @@ async def create_wopi_session(
             break
 
     if not wopi_app:
-        http_exceptions.raise_not_found("无可用的 WOPI 查看器")
+        http_exceptions.raise_not_found(E.WOPI_NO_VIEWER, "无可用的 WOPI 查看器")
 
     # 优先使用 per-extension URL（Discovery 自动填充），回退到全局模板
     editor_url_template: str | None = None
@@ -687,7 +691,7 @@ async def create_wopi_session(
     if not editor_url_template:
         editor_url_template = wopi_app.wopi_editor_url_template
     if not editor_url_template:
-        http_exceptions.raise_bad_request("WOPI 应用未配置编辑器 URL 模板，请先执行 Discovery 或手动配置")
+        http_exceptions.raise_bad_request(E.WOPI_EDITOR_NOT_CONFIGURED, "WOPI 应用未配置编辑器 URL 模板，请先执行 Discovery 或手动配置")
 
     # 获取站点 URL
     site_url = config.site_url
@@ -729,20 +733,20 @@ async def _validate_source_link(
         load=rel(Entry.physical_file),
     )
     if not file_obj:
-        http_exceptions.raise_not_found("文件不存在")
+        http_exceptions.raise_not_found(E.FILE_NOT_FOUND, "文件不存在")
 
     if not file_obj.type == EntryType.FILE:
-        http_exceptions.raise_bad_request("对象不是文件")
+        http_exceptions.raise_bad_request(E.FILE_NOT_FILE, "对象不是文件")
 
     if file_obj.is_banned:
         http_exceptions.raise_banned()
 
     policy = await Policy.get(session, Policy.id == file_obj.policy_id)
     if not policy:
-        http_exceptions.raise_internal_error("存储策略不存在")
+        http_exceptions.raise_internal_error(E.POLICY_NOT_FOUND, "存储策略不存在")
 
     if not policy.is_origin_link_enable:
-        http_exceptions.raise_forbidden("当前存储策略未启用外链功能")
+        http_exceptions.raise_forbidden(E.POLICY_EXTERNAL_LINK_DISABLED, "当前存储策略未启用外链功能")
 
     # SourceLink 必须存在（只有主动创建过外链的文件才能通过外链访问）
     link: SourceLink | None = await SourceLink.get(
@@ -750,11 +754,11 @@ async def _validate_source_link(
         cond(SourceLink.file_id == file_id),
     )
     if not link:
-        http_exceptions.raise_not_found("外链不存在")
+        http_exceptions.raise_not_found(E.FILE_EXTERNAL_LINK_NOT_FOUND, "外链不存在")
 
     physical_file = file_obj.physical_file
     if not physical_file or not physical_file.storage_path:
-        http_exceptions.raise_internal_error("文件存储路径丢失")
+        http_exceptions.raise_internal_error(E.FILE_STORAGE_PATH_MISSING, "文件存储路径丢失")
 
     return file_obj, link, physical_file, policy
 
@@ -790,7 +794,7 @@ async def file_get(
 
     driver = create_storage_driver(policy)
     if not await driver.exists(file_path):
-        http_exceptions.raise_not_found("物理文件不存在")
+        http_exceptions.raise_not_found(E.FILE_PHYSICAL_NOT_FOUND, "物理文件不存在")
 
     return (await driver.get_download_result(file_path, name)).to_response()
 
@@ -828,7 +832,7 @@ async def file_source_redirect(
 
     driver = create_storage_driver(policy)
     if not await driver.exists(file_path):
-        http_exceptions.raise_not_found("物理文件不存在")
+        http_exceptions.raise_not_found(E.FILE_PHYSICAL_NOT_FOUND, "物理文件不存在")
 
     return (await driver.get_source_link_result(file_path, name)).to_response()
 
@@ -841,7 +845,7 @@ async def file_source_redirect(
 )
 async def file_update(id: str) -> ResponseBase:
     """更新文件内容"""
-    raise HTTPException(status_code=501, detail="更新文件功能暂未实现")
+    http_exceptions.raise_not_implemented(message="更新文件功能暂未实现")
 
 
 @router.get(
@@ -873,18 +877,18 @@ async def file_content(
         load=rel(Entry.physical_file),
     )
     if not file_obj or file_obj.owner_id != user.id:
-        http_exceptions.raise_not_found("文件不存在")
+        http_exceptions.raise_not_found(E.FILE_NOT_FOUND, "文件不存在")
 
     if not file_obj.type == EntryType.FILE:
-        http_exceptions.raise_bad_request("对象不是文件")
+        http_exceptions.raise_bad_request(E.FILE_NOT_FILE, "对象不是文件")
 
     physical_file = file_obj.physical_file
     if not physical_file or not physical_file.storage_path:
-        http_exceptions.raise_internal_error("文件存储路径丢失")
+        http_exceptions.raise_internal_error(E.FILE_STORAGE_PATH_MISSING, "文件存储路径丢失")
 
     policy = await Policy.get(session, Policy.id == file_obj.policy_id)
     if not policy:
-        http_exceptions.raise_internal_error("存储策略不存在")
+        http_exceptions.raise_internal_error(E.POLICY_NOT_FOUND, "存储策略不存在")
 
     # 读取文件内容
     driver = create_storage_driver(policy)
@@ -893,7 +897,7 @@ async def file_content(
     try:
         content = raw_bytes.decode('utf-8')
     except UnicodeDecodeError:
-        http_exceptions.raise_bad_request("文件不是有效的 UTF-8 文本")
+        http_exceptions.raise_bad_request(E.FILE_NOT_UTF8, "文件不是有效的 UTF-8 文本")
 
     # 换行符规范化
     content = content.replace('\r\n', '\n').replace('\r', '\n')
@@ -938,23 +942,23 @@ async def patch_file_content(
         load=rel(Entry.physical_file),
     )
     if not file_obj or file_obj.owner_id != user.id:
-        http_exceptions.raise_not_found("文件不存在")
+        http_exceptions.raise_not_found(E.FILE_NOT_FOUND, "文件不存在")
 
     if not file_obj.type == EntryType.FILE:
-        http_exceptions.raise_bad_request("对象不是文件")
+        http_exceptions.raise_bad_request(E.FILE_NOT_FILE, "对象不是文件")
 
     if file_obj.is_banned:
         http_exceptions.raise_banned()
 
     physical_file = file_obj.physical_file
     if not physical_file or not physical_file.storage_path:
-        http_exceptions.raise_internal_error("文件存储路径丢失")
+        http_exceptions.raise_internal_error(E.FILE_STORAGE_PATH_MISSING, "文件存储路径丢失")
 
     storage_path = physical_file.storage_path
 
     policy = await Policy.get(session, Policy.id == file_obj.policy_id)
     if not policy:
-        http_exceptions.raise_internal_error("存储策略不存在")
+        http_exceptions.raise_internal_error(E.POLICY_NOT_FOUND, "存储策略不存在")
 
     # 读取文件内容
     driver = create_storage_driver(policy)
@@ -968,17 +972,17 @@ async def patch_file_content(
     # 冲突检测（hash 基于规范化后的内容，与 GET 端点一致）
     current_hash = hashlib.sha256(normalized_bytes).hexdigest()
     if current_hash != request.base_hash:
-        http_exceptions.raise_conflict("文件内容已被修改，请刷新后重试")
+        http_exceptions.raise_conflict(E.FILE_CONTENT_MODIFIED, "文件内容已被修改，请刷新后重试")
 
     # 解析并应用 patch
     diffs = list(whatthepatch.parse_patch(request.patch))
     if not diffs:
-        http_exceptions.raise_unprocessable_entity("无效的 patch 格式")
+        http_exceptions.raise_unprocessable_entity(E.FILE_INVALID_PATCH, "无效的 patch 格式")
 
     try:
         result = whatthepatch.apply_diff(diffs[0], original_text)
     except HunkApplyException:
-        http_exceptions.raise_unprocessable_entity("Patch 应用失败，差异内容与当前文件不匹配")
+        http_exceptions.raise_unprocessable_entity(E.FILE_PATCH_MISMATCH, "Patch 应用失败，差异内容与当前文件不匹配")
 
     new_text = '\n'.join(result)
 
@@ -1025,7 +1029,7 @@ async def patch_file_content(
 )
 async def file_thumb(id: str) -> ResponseBase:
     """获取文件缩略图"""
-    raise HTTPException(status_code=501, detail="缩略图功能暂未实现")
+    http_exceptions.raise_not_implemented(message="缩略图功能暂未实现")
 
 
 @router.post(
@@ -1055,20 +1059,20 @@ async def file_source(
         (Entry.id == file_id) & (Entry.deleted_at == None),
     )
     if not file_obj or file_obj.owner_id != user.id:
-        http_exceptions.raise_not_found("文件不存在")
+        http_exceptions.raise_not_found(E.FILE_NOT_FOUND, "文件不存在")
 
     if not file_obj.type == EntryType.FILE:
-        http_exceptions.raise_bad_request("对象不是文件")
+        http_exceptions.raise_bad_request(E.FILE_NOT_FILE, "对象不是文件")
 
     if file_obj.is_banned:
         http_exceptions.raise_banned()
 
     policy = await Policy.get(session, Policy.id == file_obj.policy_id)
     if not policy:
-        http_exceptions.raise_internal_error("存储策略不存在")
+        http_exceptions.raise_internal_error(E.POLICY_NOT_FOUND, "存储策略不存在")
 
     if not policy.is_origin_link_enable:
-        http_exceptions.raise_forbidden("当前存储策略未启用外链功能")
+        http_exceptions.raise_forbidden(E.POLICY_EXTERNAL_LINK_DISABLED, "当前存储策略未启用外链功能")
 
     # 查找已有 SourceLink
     link: SourceLink | None = await SourceLink.get(
@@ -1097,7 +1101,7 @@ async def file_source(
 )
 async def file_archive() -> ResponseBase:
     """打包文件"""
-    raise HTTPException(status_code=501, detail="打包功能暂未实现")
+    http_exceptions.raise_not_implemented(message="打包功能暂未实现")
 
 
 @router.post(
@@ -1108,7 +1112,7 @@ async def file_archive() -> ResponseBase:
 )
 async def file_compress() -> ResponseBase:
     """创建压缩任务"""
-    raise HTTPException(status_code=501, detail="压缩功能暂未实现")
+    http_exceptions.raise_not_implemented(message="压缩功能暂未实现")
 
 
 @router.post(
@@ -1119,7 +1123,7 @@ async def file_compress() -> ResponseBase:
 )
 async def file_decompress() -> ResponseBase:
     """创建解压任务"""
-    raise HTTPException(status_code=501, detail="解压功能暂未实现")
+    http_exceptions.raise_not_implemented(message="解压功能暂未实现")
 
 
 @router.post(
@@ -1130,7 +1134,7 @@ async def file_decompress() -> ResponseBase:
 )
 async def file_relocate() -> ResponseBase:
     """创建转移任务"""
-    raise HTTPException(status_code=501, detail="转移功能暂未实现")
+    http_exceptions.raise_not_implemented(message="转移功能暂未实现")
 
 
 @router.get(
@@ -1144,4 +1148,4 @@ async def file_search(
     keyword: str = Query(...),
 ) -> ResponseBase:
     """搜索文件"""
-    raise HTTPException(status_code=501, detail="搜索功能暂未实现")
+    http_exceptions.raise_not_implemented(message="搜索功能暂未实现")

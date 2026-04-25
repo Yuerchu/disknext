@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from loguru import logger as l
 from sqlalchemy import func
 from sqlmodel_ext import rel
@@ -16,6 +16,7 @@ from sqlmodels.user import (
     UserAdminCreateRequest, UserAdminUpdateRequest, UserCalibrateResponse, UserStatus,
 )
 from utils import Password, http_exceptions
+from utils.http.error_codes import ErrorCode as E
 
 from .deps import build_user_filter_condition
 
@@ -108,12 +109,12 @@ async def router_admin_create_user(
     if request.email:
         existing_user = await User.get(session, User.email == request.email)
         if existing_user:
-            raise HTTPException(status_code=409, detail="该邮箱已被注册")
+            http_exceptions.raise_conflict(E.USER_EMAIL_EXISTS, "该邮箱已被注册")
 
     # 验证用户组存在
     group = await Group.get(session, Group.id == request.group_id)
     if not group:
-        raise HTTPException(status_code=400, detail="目标用户组不存在")
+        http_exceptions.raise_bad_request(E.ADMIN_GROUP_NOT_FOUND, "目标用户组不存在")
 
     user = User(
         email=request.email,
@@ -159,13 +160,13 @@ async def router_admin_update_user(
     if (request.group_id
             and config.default_admin_id == user_id
             and request.group_id != user.group_id):
-        http_exceptions.raise_forbidden("默认管理员不允许更改用户组")
+        http_exceptions.raise_forbidden(E.ADMIN_GROUP_DEFAULT_IMMUTABLE, "默认管理员不允许更改用户组")
 
     # 如果更新用户组，验证新组存在
     if request.group_id:
         group = await Group.get(session, Group.id == request.group_id)
         if not group:
-            raise HTTPException(status_code=400, detail="目标用户组不存在")
+            http_exceptions.raise_bad_request(E.ADMIN_GROUP_NOT_FOUND, "目标用户组不存在")
 
     update_data = request.model_dump(exclude_unset=True)
 
@@ -208,7 +209,7 @@ async def router_admin_delete_users(
     :param request: 批量删除请求，包含待删除用户的 UUID 列表
     :return: 删除结果（已删除数 / 总请求数）
     """
-    raise HTTPException(503)
+    http_exceptions.raise_service_unavailable(E.ADMIN_SLAVE_CONNECTION_FAILED)
     # for uid in request.ids:
     #     user = await User.get(session, User.id == uid, load=User.group)
 

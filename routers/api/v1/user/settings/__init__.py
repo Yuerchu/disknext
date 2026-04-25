@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, UploadFile, status
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 import sqlmodels
@@ -18,6 +18,8 @@ from sqlmodels.color import ThemeColorsBase
 from sqlmodels.user import AvatarType
 from sqlmodels.user_authn import UserAuthn
 from utils import Password, http_exceptions
+from utils.http.error_codes import ErrorCode as E
+from utils.http.http_exceptions import AppError
 from utils.conf import appmeta
 from utils.password.pwd import PasswordStatus, TwoFactorResponse, TwoFactorVerifyRequest
 from .file_viewers import file_viewers_router
@@ -187,23 +189,25 @@ async def router_user_settings_avatar(
     # 验证 MIME 类型
     if file.content_type not in ALLOWED_CONTENT_TYPES:
         http_exceptions.raise_bad_request(
-            f"不支持的图片格式，允许: {', '.join(ALLOWED_CONTENT_TYPES)}"
+            E.USER_SETTINGS_AVATAR_INVALID,
+            f"不支持的图片格式，允许: {', '.join(ALLOWED_CONTENT_TYPES)}",
         )
 
     # 读取并验证大小
     _, max_upload_size, _, _, _ = await get_avatar_settings(session)
     raw_bytes = await file.read()
     if len(raw_bytes) > max_upload_size:
-        raise HTTPException(
+        raise AppError(
             status_code=413,
-            detail=f"文件过大，最大允许 {max_upload_size} 字节",
+            code=E.FILE_SIZE_EXCEEDED,
+            message=f"文件过大，最大允许 {max_upload_size} 字节",
         )
 
     # 处理并保存（内部会验证图片有效性，无效抛出 ValueError）
     try:
         await process_and_save_avatar(session, user.id, raw_bytes)
     except ValueError as e:
-        http_exceptions.raise_bad_request(str(e))
+        http_exceptions.raise_bad_request(E.USER_SETTINGS_AVATAR_INVALID, str(e))
 
     # 更新用户头像字段
     user.avatar = AvatarType.FILE
@@ -235,7 +239,7 @@ async def router_user_settings_avatar_gravatar(
     from utils.avatar import delete_avatar_files
 
     if not user.email:
-        http_exceptions.raise_bad_request("Gravatar 需要邮箱，请先绑定邮箱")
+        http_exceptions.raise_bad_request(E.USER_SETTINGS_GRAVATAR_NO_EMAIL, "Gravatar 需要邮箱，请先绑定邮箱")
 
     if user.avatar == AvatarType.FILE:
         await delete_avatar_files(session, user.id)
@@ -297,7 +301,7 @@ async def router_user_settings_theme(
             session, ThemePreset.id == request.theme_preset_id
         )
         if not preset:
-            http_exceptions.raise_not_found("主题预设不存在")
+            http_exceptions.raise_not_found(E.USER_SETTINGS_THEME_NOT_FOUND, "主题预设不存在")
     user.theme_preset_id = request.theme_preset_id
 
     # 将颜色解构到快照列
@@ -335,11 +339,11 @@ async def router_user_settings_change_password(
     - 403: 当前密码错误
     """
     if not user.password_hash:
-        http_exceptions.raise_bad_request("未设置密码")
+        http_exceptions.raise_bad_request(E.USER_SETTINGS_PASSWORD_NOT_SET, "未设置密码")
 
     verify_result = Password.verify(user.password_hash, request.old_password)
     if verify_result == PasswordStatus.INVALID:
-        http_exceptions.raise_forbidden("当前密码错误")
+        http_exceptions.raise_forbidden(E.USER_SETTINGS_PASSWORD_WRONG, "当前密码错误")
 
     user.password_hash = Password.hash(request.new_password)
     user = await user.save(session)
@@ -373,7 +377,7 @@ async def router_user_settings_patch(
 
     # language / timezone 不允许设为 null
     if value is None and option != SettingOption.NICKNAME:
-        http_exceptions.raise_bad_request(f"设置项 {option.value} 不允许为空")
+        http_exceptions.raise_bad_request(E.USER_SETTINGS_OPTION_REQUIRED, f"设置项 {option.value} 不允许为空")
 
     setattr(user, option.value, value)
     user = await user.save(session)
@@ -418,12 +422,12 @@ async def router_user_settings_2fa_enable(
     try:
         secret = serializer.loads(request.setup_token, salt="2fa-setup-salt", max_age=600)
     except SignatureExpired:
-        raise HTTPException(status_code=400, detail="Setup session expired")
+        http_exceptions.raise_bad_request(E.USER_SETTINGS_TOTP_SESSION_EXPIRED, "Setup session expired")
     except BadSignature:
-        raise HTTPException(status_code=400, detail="Invalid token")
+        http_exceptions.raise_bad_request(E.USER_SETTINGS_TOTP_INVALID_TOKEN, "Invalid token")
 
     if Password.verify_totp(secret, request.code) != PasswordStatus.VALID:
-        raise HTTPException(status_code=400, detail="Invalid OTP code")
+        http_exceptions.raise_bad_request(E.USER_SETTINGS_TOTP_INVALID_CODE, "Invalid OTP code")
 
     user.two_factor_secret = secret
     user = await user.save(session)
@@ -474,7 +478,7 @@ async def router_user_settings_rename_authn(
         (UserAuthn.id == authn_id) & (UserAuthn.user_id == user.id),
     )
     if not authn:
-        http_exceptions.raise_not_found("WebAuthn 凭证不存在")
+        http_exceptions.raise_not_found(E.USER_SETTINGS_WEBAUTHN_NOT_FOUND, "WebAuthn 凭证不存在")
 
     authn.name = request.name
     authn = await authn.save(session)
@@ -506,7 +510,7 @@ async def router_user_settings_delete_authn(
         (UserAuthn.id == authn_id) & (UserAuthn.user_id == user.id),
     )
     if not authn:
-        http_exceptions.raise_not_found("WebAuthn 凭证不存在")
+        http_exceptions.raise_not_found(E.USER_SETTINGS_WEBAUTHN_NOT_FOUND, "WebAuthn 凭证不存在")
 
     # PG 触发器 userauthn_last_auth_trg 会阻止删除最后一个认证方式
     _ = await UserAuthn.delete(session, authn)

@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from fastapi.responses import Response
 from loguru import logger as l
 from sqlmodel import update as sql_update
@@ -12,6 +12,8 @@ from middleware.scope import require_scope
 from sqlmodels import (
     Policy, User, ListResponse,
     Entry, EntryType, AdminFileResponse, FileBanRequest, )
+from utils import http_exceptions
+from utils.http.error_codes import ErrorCode as E
 from utils.storage import create_storage_driver
 
 from .deps import set_ban_recursive
@@ -100,20 +102,20 @@ async def router_admin_preview_file(
     file_obj = await Entry.get_exist_one(session, file_id)
 
     if not file_obj.type == EntryType.FILE:
-        raise HTTPException(status_code=400, detail="对象不是文件")
+        http_exceptions.raise_bad_request(E.FILE_NOT_FILE, "对象不是文件")
 
     # 获取物理文件
     physical_file = await file_obj.awaitable_attrs.physical_file
     if not physical_file or not physical_file.storage_path:
-        raise HTTPException(status_code=500, detail="文件存储路径丢失")
+        http_exceptions.raise_internal_error(E.FILE_STORAGE_PATH_MISSING, "文件存储路径丢失")
 
     policy = await Policy.get(session, Policy.id == file_obj.policy_id)
     if not policy:
-        raise HTTPException(status_code=500, detail="存储策略不存在")
+        http_exceptions.raise_internal_error(E.POLICY_NOT_FOUND, "存储策略不存在")
 
     driver = create_storage_driver(policy)
     if not await driver.exists(physical_file.storage_path):
-        raise HTTPException(status_code=404, detail="物理文件不存在")
+        http_exceptions.raise_not_found(E.FILE_PHYSICAL_NOT_FOUND, "物理文件不存在")
 
     return (await driver.get_download_result(physical_file.storage_path, file_obj.name)).to_response()
 
@@ -171,7 +173,7 @@ async def router_admin_delete_file(
     file_obj = await Entry.get_exist_one(session, file_id)
 
     if not file_obj.type == EntryType.FILE:
-        raise HTTPException(status_code=400, detail="对象不是文件")
+        http_exceptions.raise_bad_request(E.FILE_NOT_FILE, "对象不是文件")
 
     file_name = file_obj.name
     file_size = file_obj.size

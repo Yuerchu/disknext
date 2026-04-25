@@ -6,7 +6,7 @@
 """
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 
 from middleware.auth import auth_required
 from middleware.dependencies import SessionDep, ServerConfigDep, TableViewRequestDep
@@ -18,6 +18,8 @@ from sqlmodels import (
     EntryType,
     User,
 )
+from utils import http_exceptions
+from utils.http.error_codes import ErrorCode as E
 
 category_router = APIRouter(
     prefix="/category",
@@ -71,11 +73,11 @@ async def router_category_list(
     }
     extensions_str = category_attr_map.get(category)
     if not extensions_str:
-        raise HTTPException(status_code=404, detail=f"分类 {category.value} 未配置扩展名")
+        http_exceptions.raise_not_found(E.CATEGORY_NOT_CONFIGURED, f"分类 {category.value} 未配置扩展名")
 
     extensions = [ext.strip() for ext in extensions_str.split(",") if ext.strip()]
     if not extensions:
-        raise HTTPException(status_code=404, detail=f"分类 {category.value} 扩展名列表为空")
+        http_exceptions.raise_not_found(E.CATEGORY_NOT_CONFIGURED, f"分类 {category.value} 扩展名列表为空")
 
     result = await Entry.get_by_category(
         session,

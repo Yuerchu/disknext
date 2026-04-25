@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from loguru import logger as l
 from sqlmodel_ext import rel
 
@@ -12,6 +12,8 @@ from sqlmodels import (
     User, TaskProps,
 )
 from sqlmodels.task import TaskDetailResponse
+from utils import http_exceptions
+from utils.http.error_codes import ErrorCode as E
 
 admin_task_router = APIRouter(
     prefix='/task',
@@ -83,7 +85,7 @@ async def router_admin_get_task(
     """
     task = await Task.get(session, Task.id == task_id, load=rel(Task.props))
     if not task:
-        raise HTTPException(status_code=404, detail="任务不存在")
+        http_exceptions.raise_not_found(E.ADMIN_TASK_NOT_FOUND, "任务不存在")
 
     user: User = await task.awaitable_attrs.user
     props: TaskProps = await task.awaitable_attrs.props

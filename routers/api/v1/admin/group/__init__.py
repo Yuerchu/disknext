@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from loguru import logger as l
 from sqlmodel_ext import cond, rel
 
@@ -12,6 +12,8 @@ from sqlmodels import (
 from sqlmodels.group import (
     GroupCreateRequest, GroupUpdateRequest, GroupDetailResponse, )
 from sqlmodels.policy import GroupPolicyLink
+from utils import http_exceptions
+from utils.http.error_codes import ErrorCode as E
 
 admin_group_router = APIRouter(
     prefix="/group",
@@ -137,7 +139,7 @@ async def router_admin_create_group(
     # 检查名称唯一性
     existing = await Group.get(session, Group.name == request.name)
     if existing:
-        raise HTTPException(status_code=409, detail="用户组名称已存在")
+        http_exceptions.raise_conflict(E.ADMIN_GROUP_NAME_EXISTS, "用户组名称已存在")
 
     # 创建用户组（选项字段已合并到 Group 表）
     group = Group(**request.model_dump(exclude={'policy_ids'}))
@@ -179,7 +181,7 @@ async def router_admin_update_group(
     if request.name and request.name != group.name:
         existing = await Group.get(session, Group.name == request.name)
         if existing:
-            raise HTTPException(status_code=409, detail="用户组名称已存在")
+            http_exceptions.raise_conflict(E.ADMIN_GROUP_NAME_EXISTS, "用户组名称已存在")
 
     # 更新字段（选项字段已合并到 Group 表，统一处理）
     update_data = request.model_dump(exclude_unset=True, exclude={'policy_ids'})
@@ -228,9 +230,9 @@ async def router_admin_delete_group(
     # 检查是否有用户属于该组
     user_count = await User.count(session, User.group_id == group_id)
     if user_count > 0:
-        raise HTTPException(
-            status_code=400,
-            detail=f"无法删除，该组下还有 {user_count} 个用户"
+        http_exceptions.raise_bad_request(
+            E.ADMIN_GROUP_HAS_USERS,
+            f"无法删除，该组下还有 {user_count} 个用户",
         )
 
     _ = await Group.delete(session, group)

@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from sqlmodels import ServerConfig, CaptchaType
 from utils import http_exceptions
+from utils.http.error_codes import ErrorCode as E
 
 class CaptchaRequestBase(BaseModel):
     """验证码验证请求"""
@@ -82,7 +83,7 @@ async def verify_captcha_if_needed(
         return
     
     if not captcha_code:
-        http_exceptions.raise_bad_request(detail="需要验证码但未提供")
+        http_exceptions.raise_bad_request(E.CAPTCHA_REQUIRED, "需要验证码但未提供")
 
     # 2. DEFAULT 图片验证码尚未实现，跳过
     if config.captcha_type == CaptchaType.DEFAULT:
@@ -109,4 +110,4 @@ async def verify_captcha_if_needed(
         CaptchaRequestBase(response=captcha_code, secret=secret)
     )
     if not is_valid:
-        http_exceptions.raise_forbidden(detail="验证码验证失败")
+        http_exceptions.raise_forbidden(E.CAPTCHA_INVALID, "验证码验证失败")

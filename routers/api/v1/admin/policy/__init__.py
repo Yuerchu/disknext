@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from loguru import logger as l
 import aiohttp
 
@@ -15,6 +15,8 @@ from sqlmodels.policy import (
     PolicyTestPathRequest, PolicyTestSlaveRequest,
     PolicyTestS3Request, PolicyTestS3Response,
 )
+from utils import http_exceptions
+from utils.http.error_codes import ErrorCode as E
 from utils.storage import DirectoryCreationError, create_storage_driver, S3StorageDriver
 
 admin_policy_router = APIRouter(
@@ -114,15 +116,15 @@ async def router_policy_test_slave(
                 timeout=aiohttp.ClientTimeout(total=10)
             ) as resp:
                 if resp.status != 200:
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"从机响应错误，HTTP {resp.status}",
+                    http_exceptions.raise_bad_request(
+                        E.ADMIN_SLAVE_RESPONSE_ERROR,
+                        f"从机响应错误，HTTP {resp.status}",
                     )
                 return
-    except HTTPException:
-        raise HTTPException(status_code=400, detail="从机响应错误")
+    except http_exceptions.AppError:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"连接失败: {str(e)}")
+        http_exceptions.raise_bad_request(E.ADMIN_SLAVE_CONNECTION_FAILED, f"连接失败: {str(e)}")
 
 @admin_policy_router.post(
     path='/',
@@ -152,12 +154,12 @@ async def router_policy_add_policy(
     # 验证本地存储策略必须指定 server 路径
     if request.type == PolicyType.LOCAL:
         if not request.server:
-            raise HTTPException(status_code=400, detail="本地存储策略必须指定 server 路径")
+            http_exceptions.raise_bad_request(E.POLICY_LOCAL_NO_PATH, "本地存储策略必须指定 server 路径")
 
     # 检查策略名称是否已存在
     existing = await Policy.get(session, Policy.name == request.name)
     if existing:
-        raise HTTPException(status_code=409, detail="策略名称已存在")
+        http_exceptions.raise_conflict(E.POLICY_NAME_EXISTS, "策略名称已存在")
 
     # 创建策略对象（所有字段已合并到 Policy 表）
     policy = Policy.model_validate(request, from_attributes=True)
@@ -167,7 +169,7 @@ async def router_policy_add_policy(
         driver = create_storage_driver(policy)
         await driver.ensure_base_directory()
     except DirectoryCreationError as e:
-        raise HTTPException(status_code=500, detail=f"创建存储目录失败: {e}")
+        http_exceptions.raise_internal_error(E.POLICY_DIR_CREATE_FAILED, f"创建存储目录失败: {e}")
 
     policy = await policy.save(session)
 
@@ -184,7 +186,7 @@ async def router_policy_add_cors() -> ResponseBase:
     此端点用于S3存储的跨域配置。
     """
     # TODO: 实现S3 CORS配置
-    raise HTTPException(status_code=501, detail="S3 CORS配置暂未实现")
+    http_exceptions.raise_not_implemented(message="S3 CORS配置暂未实现")
 
 
 @admin_policy_router.post(
@@ -200,7 +202,7 @@ async def router_policy_add_scf() -> ResponseBase:
     此端点用于腾讯云COS的云函数回调配置。
     """
     # TODO: 实现COS SCF配置
-    raise HTTPException(status_code=501, detail="COS回调函数配置暂未实现")
+    http_exceptions.raise_not_implemented(message="COS回调函数配置暂未实现")
 
 
 @admin_policy_router.get(
@@ -223,7 +225,7 @@ async def router_policy_onddrive_oauth(
     _ = await Policy.get_exist_one(session, policy_id)
 
     # TODO: 实现OneDrive OAuth
-    raise HTTPException(status_code=501, detail="OneDrive OAuth暂未实现")
+    http_exceptions.raise_not_implemented(message="OneDrive OAuth暂未实现")
 
 
 @admin_policy_router.get(
@@ -284,9 +286,9 @@ async def router_policy_delete_policy(
     # 检查是否有文件使用此策略
     file_count = await Entry.count(session, Entry.policy_id == policy_id)
     if file_count > 0:
-        raise HTTPException(
-            status_code=400,
-            detail=f"无法删除，还有 {file_count} 个文件使用此策略"
+        http_exceptions.raise_bad_request(
+            E.POLICY_HAS_FILES,
+            f"无法删除，还有 {file_count} 个文件使用此策略",
         )
 
     policy_name = policy.name
@@ -327,7 +329,7 @@ async def router_policy_update_policy(
     if request.name and request.name != policy.name:
         existing = await Policy.get(session, Policy.name == request.name)
         if existing:
-            raise HTTPException(status_code=409, detail="策略名称已存在")
+            http_exceptions.raise_conflict(E.POLICY_NAME_EXISTS, "策略名称已存在")
 
     # 直接更新 Policy 字段（所有字段已合并到单表）
     update_data = request.model_dump(exclude_unset=True)

@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from loguru import logger as l
 
 from middleware.dependencies import SessionDep, ServerConfigDep
@@ -13,6 +13,7 @@ from sqlmodels import (
 from sqlmodels.server_config import ServerConfig, ServerConfigUpdateRequest
 from utils import http_exceptions
 from utils.conf import appmeta
+from utils.http.error_codes import ErrorCode as E
 
 from .file import admin_file_router
 from .file_app import admin_file_app_router
@@ -248,18 +249,18 @@ async def router_admin_aira2_test(
         async with aiohttp.ClientSession() as client:
             async with client.post(request.rpc_url, json=payload, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                 if resp.status != 200:
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"连接失败，HTTP {resp.status}",
+                    http_exceptions.raise_bad_request(
+                        E.ADMIN_SLAVE_CONNECTION_FAILED,
+                        f"连接失败，HTTP {resp.status}",
                     )
 
                 result = await resp.json()
                 if "error" in result:
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"Aria2 错误: {result['error']['message']}",
+                    http_exceptions.raise_bad_request(
+                        E.ADMIN_SLAVE_CONNECTION_FAILED,
+                        f"Aria2 错误: {result['error']['message']}",
                     )
-    except HTTPException:
+    except http_exceptions.AppError:
         raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"连接失败: {str(e)}")
+        http_exceptions.raise_bad_request(E.ADMIN_SLAVE_CONNECTION_FAILED, f"连接失败: {str(e)}")

@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel_ext import cond, rel
 
@@ -19,6 +19,7 @@ from sqlmodels import (
     User,
 )
 from utils import http_exceptions
+from utils.http.error_codes import ErrorCode as E
 
 directory_router = APIRouter(
     prefix="/directory",
@@ -42,7 +43,7 @@ async def _get_directory_response(
     children = await Entry.get_children(session, user_id, folder.id)
     await session.refresh(folder, ['policy'])
     if not folder.policy:
-        raise HTTPException(status_code=500, detail="目录对应的存储策略不存在")
+        http_exceptions.raise_internal_error(E.POLICY_NOT_FOUND, "目录对应的存储策略不存在")
 
     return DirectoryResponse(
         id=folder.id,
@@ -101,10 +102,10 @@ async def router_directory_get(
     folder = await Entry.get_by_path(session, user.id, path)
 
     if not folder:
-        raise HTTPException(status_code=404, detail="目录不存在")
+        http_exceptions.raise_not_found(E.DIR_NOT_FOUND, "目录不存在")
 
     if not folder.type == EntryType.FOLDER:
-        raise HTTPException(status_code=400, detail="指定路径不是目录")
+        http_exceptions.raise_bad_request(E.ENTRY_NOT_DIR, "指定路径不是目录")
 
     if folder.is_banned:
         http_exceptions.raise_banned()
@@ -134,20 +135,20 @@ async def router_directory_create(
     name = request.name.strip()
 
     if not name or '/' in name or '\\' in name:
-        raise HTTPException(status_code=400, detail="无效的目录名")
+        http_exceptions.raise_bad_request(E.ENTRY_INVALID_NAME, "无效的目录名")
 
     parent = await Entry.get(
         session,
         (Entry.id == request.parent_id) & (Entry.deleted_at == None)
     )
     if not parent or parent.owner_id != user_id:
-        raise HTTPException(status_code=404, detail="父目录不存在")
+        http_exceptions.raise_not_found(E.ENTRY_PARENT_NOT_FOUND, "父目录不存在")
 
     if not parent.type == EntryType.FOLDER:
-        raise HTTPException(status_code=400, detail="父对象不是目录")
+        http_exceptions.raise_bad_request(E.ENTRY_PARENT_NOT_DIR, "父对象不是目录")
 
     if parent.is_banned:
-        http_exceptions.raise_banned("目标目录已被封禁，无法执行此操作")
+        http_exceptions.raise_banned(E.ENTRY_TARGET_BANNED, "目标目录已被封禁，无法执行此操作")
 
     existing = await Entry.get(
         session,
@@ -157,7 +158,7 @@ async def router_directory_create(
         (Entry.deleted_at == None)
     )
     if existing:
-        raise HTTPException(status_code=409, detail="同名目录已存在")
+        http_exceptions.raise_conflict(E.DIR_DUPLICATE, "同名目录已存在")
 
     policy_id = request.policy_id if request.policy_id else parent.policy_id
     _ = await Policy.get_exist_one(session, policy_id)
@@ -170,7 +171,7 @@ async def router_directory_create(
             load=rel(Group.policies),
         )
         if not group or request.policy_id not in {p.id for p in group.policies}:
-            raise HTTPException(status_code=403, detail="当前用户组无权使用该存储策略")
+            http_exceptions.raise_forbidden(E.POLICY_FORBIDDEN, "当前用户组无权使用该存储策略")
 
     new_folder = Entry(
         name=name,

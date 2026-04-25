@@ -8,7 +8,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends
 from loguru import logger as l
 from sqlmodel import col
 
@@ -44,6 +44,7 @@ from sqlmodels import (
 from utils.storage import create_storage_driver, migrate_file_with_task, migrate_directory_files
 from sqlmodels.database_connection import DatabaseManager
 from utils import http_exceptions
+from utils.http.error_codes import ErrorCode as E
 
 from .custom_property import router as custom_property_router
 
@@ -76,7 +77,7 @@ async def router_object_create(
 
     # 验证文件名
     if not request.name or '/' in request.name or '\\' in request.name:
-        raise HTTPException(status_code=400, detail="无效的文件名")
+        http_exceptions.raise_bad_request(E.ENTRY_INVALID_NAME, "无效的文件名")
 
     # 验证父目录（排除已删除的）
     parent = await Entry.get(
@@ -84,13 +85,13 @@ async def router_object_create(
         (Entry.id == request.parent_id) & (Entry.deleted_at == None)
     )
     if not parent or parent.owner_id != user_id:
-        raise HTTPException(status_code=404, detail="父目录不存在")
+        http_exceptions.raise_not_found(E.ENTRY_PARENT_NOT_FOUND, "父目录不存在")
 
     if not parent.type == EntryType.FOLDER:
-        raise HTTPException(status_code=400, detail="父对象不是目录")
+        http_exceptions.raise_bad_request(E.ENTRY_PARENT_NOT_DIR, "父对象不是目录")
 
     if parent.is_banned:
-        http_exceptions.raise_banned("目标目录已被封禁，无法执行此操作")
+        http_exceptions.raise_banned(E.ENTRY_TARGET_BANNED, "目标目录已被封禁，无法执行此操作")
 
     # 检查是否已存在同名文件（仅检查未删除的）
     existing = await Entry.get(
@@ -101,7 +102,7 @@ async def router_object_create(
         (Entry.deleted_at == None)
     )
     if existing:
-        raise HTTPException(status_code=409, detail="同名文件已存在")
+        http_exceptions.raise_conflict(E.ENTRY_DUPLICATE, "同名文件已存在")
 
     # 确定存储策略
     policy_id = request.policy_id or parent.policy_id
@@ -217,13 +218,13 @@ async def router_object_move(
         (Entry.id == request.dst_id) & (Entry.deleted_at == None)
     )
     if not dst or dst.owner_id != user_id:
-        raise HTTPException(status_code=404, detail="目标目录不存在")
+        http_exceptions.raise_not_found(E.ENTRY_TARGET_NOT_FOUND, "目标目录不存在")
 
     if not dst.type == EntryType.FOLDER:
-        raise HTTPException(status_code=400, detail="目标不是有效文件夹")
+        http_exceptions.raise_bad_request(E.ENTRY_TARGET_NOT_DIR, "目标不是有效文件夹")
 
     if dst.is_banned:
-        http_exceptions.raise_banned("目标目录已被封禁，无法执行此操作")
+        http_exceptions.raise_banned(E.ENTRY_TARGET_BANNED, "目标目录已被封禁，无法执行此操作")
 
     # 存储 dst 的属性，避免后续数据库操作导致 dst 过期后无法访问
     dst_id = dst.id
@@ -314,13 +315,13 @@ async def router_object_copy(
         (Entry.id == request.dst_id) & (Entry.deleted_at == None)
     )
     if not dst or dst.owner_id != user_id:
-        raise HTTPException(status_code=404, detail="目标目录不存在")
+        http_exceptions.raise_not_found(E.ENTRY_TARGET_NOT_FOUND, "目标目录不存在")
 
     if not dst.type == EntryType.FOLDER:
-        raise HTTPException(status_code=400, detail="目标不是有效文件夹")
+        http_exceptions.raise_bad_request(E.ENTRY_TARGET_NOT_DIR, "目标不是有效文件夹")
 
     if dst.is_banned:
-        http_exceptions.raise_banned("目标目录已被封禁，无法执行此操作")
+        http_exceptions.raise_banned(E.ENTRY_TARGET_BANNED, "目标目录已被封禁，无法执行此操作")
 
     copied_count = 0
     new_ids: list[UUID] = []
@@ -356,11 +357,11 @@ async def router_object_copy(
             continue
 
         if src.is_banned:
-            http_exceptions.raise_banned("源对象已被封禁，无法执行此操作")
+            http_exceptions.raise_banned(E.ENTRY_BANNED, "源对象已被封禁，无法执行此操作")
 
         # 不能复制根目录
         if src.parent_id is None:
-            http_exceptions.raise_banned("无法复制根目录")
+            http_exceptions.raise_forbidden(E.ENTRY_COPY_ROOT, "无法复制根目录")
 
         # 不能复制到自身
         # [TODO] 视为创建副本
@@ -427,26 +428,26 @@ async def router_object_update(
         (Entry.id == file_id) & (Entry.deleted_at == None)
     )
     if not obj:
-        raise HTTPException(status_code=404, detail="对象不存在")
+        http_exceptions.raise_not_found(E.ENTRY_NOT_FOUND, "对象不存在")
 
     if obj.owner_id != user_id:
-        raise HTTPException(status_code=403, detail="无权操作此对象")
+        http_exceptions.raise_forbidden(E.ENTRY_FORBIDDEN, "无权操作此对象")
 
     if obj.is_banned:
         http_exceptions.raise_banned()
 
     # 不能重命名根目录
     if obj.parent_id is None:
-        raise HTTPException(status_code=400, detail="无法重命名根目录")
+        http_exceptions.raise_bad_request(E.ENTRY_ROOT_RENAME, "无法重命名根目录")
 
     if request.name is not None:
         # 验证新名称格式
         new_name = request.name.strip()
         if not new_name:
-            raise HTTPException(status_code=400, detail="名称不能为空")
+            http_exceptions.raise_bad_request(E.ENTRY_NAME_EMPTY, "名称不能为空")
 
         if '/' in new_name or '\\' in new_name:
-            raise HTTPException(status_code=400, detail="名称不能包含斜杠")
+            http_exceptions.raise_bad_request(E.ENTRY_NAME_SLASH, "名称不能包含斜杠")
 
         # 如果名称没有变化，直接返回
         if obj.name == new_name:
@@ -461,7 +462,7 @@ async def router_object_update(
             (Entry.deleted_at == None)
         )
         if existing:
-            raise HTTPException(status_code=409, detail="同名对象已存在")
+            http_exceptions.raise_conflict(E.ENTRY_DUPLICATE, "同名对象已存在")
 
         # 更新名称
         obj.name = new_name
@@ -493,10 +494,10 @@ async def router_object_property(
         (Entry.id == file_id) & (Entry.deleted_at == None)
     )
     if not obj:
-        raise HTTPException(status_code=404, detail="对象不存在")
+        http_exceptions.raise_not_found(E.ENTRY_NOT_FOUND, "对象不存在")
 
     if obj.owner_id != user.id:
-        raise HTTPException(status_code=403, detail="无权查看此对象")
+        http_exceptions.raise_forbidden(E.ENTRY_VIEW_FORBIDDEN, "无权查看此对象")
 
     return EntryPropertyResponse(
         id=obj.id,
@@ -535,10 +536,10 @@ async def router_object_property_detail(
         load=[Entry.metadata_entries, Entry.policy, Entry.physical_file],
     )
     if not obj:
-        raise HTTPException(status_code=404, detail="对象不存在")
+        http_exceptions.raise_not_found(E.ENTRY_NOT_FOUND, "对象不存在")
 
     if obj.owner_id != user.id:
-        raise HTTPException(status_code=403, detail="无权查看此对象")
+        http_exceptions.raise_forbidden(E.ENTRY_VIEW_FORBIDDEN, "无权查看此对象")
 
     # 策略名称（已预加载）
     policy_name = obj.policy.name if obj.policy else None
@@ -628,31 +629,31 @@ async def router_object_switch_policy(
         (Entry.id == file_id) & (Entry.deleted_at == None)
     )
     if not obj:
-        http_exceptions.raise_not_found("对象不存在")
+        http_exceptions.raise_not_found(E.ENTRY_NOT_FOUND, "对象不存在")
     if obj.owner_id != user_id:
-        http_exceptions.raise_forbidden("无权操作此对象")
+        http_exceptions.raise_forbidden(E.ENTRY_FORBIDDEN, "无权操作此对象")
     if obj.is_banned:
         http_exceptions.raise_banned()
 
     # 根目录不能直接切换策略（应通过子对象或子目录操作）
     if obj.parent_id is None:
-        raise HTTPException(status_code=400, detail="不能对根目录切换存储策略，请对子目录操作")
+        http_exceptions.raise_bad_request(E.ENTRY_ROOT_POLICY_CHANGE, "不能对根目录切换存储策略，请对子目录操作")
 
     # 校验目标策略存在
     dest_policy = await Policy.get(session, Policy.id == request.policy_id)
     if not dest_policy:
-        http_exceptions.raise_not_found("目标存储策略不存在")
+        http_exceptions.raise_not_found(E.POLICY_NOT_FOUND, "目标存储策略不存在")
 
     # 校验用户组权限
     group: Group = await user.awaitable_attrs.group
     await session.refresh(group, ['policies'])
     allowed_ids = {p.id for p in group.policies}
     if request.policy_id not in allowed_ids:
-        http_exceptions.raise_forbidden("当前用户组无权使用该存储策略")
+        http_exceptions.raise_forbidden(E.POLICY_FORBIDDEN, "当前用户组无权使用该存储策略")
 
     # 不能切换到相同策略
     if obj.policy_id == request.policy_id:
-        raise HTTPException(status_code=400, detail="目标策略与当前策略相同")
+        http_exceptions.raise_bad_request(E.ENTRY_SAME_POLICY, "目标策略与当前策略相同")
 
     # 保存必要的属性，避免 save 后对象过期
     src_policy_id = obj.policy_id
@@ -759,10 +760,10 @@ async def router_get_object_metadata(
         load=Entry.metadata_entries,
     )
     if not obj:
-        raise HTTPException(status_code=404, detail="对象不存在")
+        http_exceptions.raise_not_found(E.ENTRY_NOT_FOUND, "对象不存在")
 
     if obj.owner_id != user.id:
-        raise HTTPException(status_code=403, detail="无权查看此对象")
+        http_exceptions.raise_forbidden(E.ENTRY_VIEW_FORBIDDEN, "无权查看此对象")
 
     # 解析命名空间过滤
     ns_filter: set[str] | None = None
@@ -814,18 +815,18 @@ async def router_patch_object_metadata(
         (Entry.id == file_id) & (Entry.deleted_at == None),
     )
     if not obj:
-        raise HTTPException(status_code=404, detail="对象不存在")
+        http_exceptions.raise_not_found(E.ENTRY_NOT_FOUND, "对象不存在")
 
     if obj.owner_id != user.id:
-        raise HTTPException(status_code=403, detail="无权操作此对象")
+        http_exceptions.raise_forbidden(E.ENTRY_FORBIDDEN, "无权操作此对象")
 
     # 先验证所有命名空间（快速失败）
     for patch in request.patches:
         patch_ns = patch.key.split(":")[0] if ":" in patch.key else ""
         if patch_ns not in USER_WRITABLE_NAMESPACES:
-            raise HTTPException(
-                status_code=400,
-                detail=f"不允许修改命名空间 '{patch_ns}' 的元数据，仅允许 custom: 命名空间",
+            http_exceptions.raise_bad_request(
+                E.ENTRY_METADATA_NS_FORBIDDEN,
+                f"不允许修改命名空间 '{patch_ns}' 的元数据，仅允许 custom: 命名空间",
             )
 
     # 批量获取该文件的所有现有元数据（单次 SQL）

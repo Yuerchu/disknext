@@ -135,8 +135,7 @@ async def test_admin_required_non_admin(
     )
     assert response.status_code == 403
     data = response.json()
-    assert "detail" in data
-    assert "缺少权限" in data["detail"]
+    assert data["detail"]["code"] == "scope.missing_permission"
 
 
 @pytest.mark.asyncio

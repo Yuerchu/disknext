@@ -16,6 +16,7 @@ from middleware.auth import auth_required
 from sqlmodels.scope import ScopeSet
 from sqlmodels.user import User
 from utils import http_exceptions
+from utils.http.error_codes import ErrorCode as E
 
 
 def require_scope(required_scope: str):
@@ -30,7 +31,7 @@ def require_scope(required_scope: str):
     async def _checker(user: Annotated[User, Depends(auth_required)]) -> User:
         scope_set = ScopeSet.from_strings(user.scopes)
         if not scope_set.has(required_scope):
-            http_exceptions.raise_forbidden(f"缺少权限: {required_scope}")
+            http_exceptions.raise_forbidden(E.SCOPE_MISSING, f"缺少权限: {required_scope}")
         return user
 
     return _checker

@@ -17,6 +17,7 @@ from middleware.dependencies import SessionDep
 from sqlmodels import Entry, EntryType, PhysicalFile, Policy, User, WopiFileInfo
 from utils.storage import create_storage_driver
 from utils import http_exceptions
+from utils.http.error_codes import ErrorCode as E
 from utils.JWT.wopi_token import verify_wopi_token
 
 wopi_files_router = APIRouter(prefix="/files", tags=["wopi"])
@@ -42,7 +43,7 @@ async def check_file_info(
     # 验证令牌 [TODO] 丢到依赖注入里去验证
     payload = verify_wopi_token(access_token)
     if not payload or payload.file_id != file_id:
-        http_exceptions.raise_unauthorized("WOPI token 无效或文件不匹配")
+        http_exceptions.raise_unauthorized(E.WOPI_TOKEN_INVALID, "WOPI token 无效或文件不匹配")
 
     # 获取文件
     file_obj: Entry | None = await Entry.get(
@@ -50,7 +51,7 @@ async def check_file_info(
         cond(Entry.id == file_id),
     )
     if not file_obj or not file_obj.type == EntryType.FILE:
-        http_exceptions.raise_not_found("文件不存在")
+        http_exceptions.raise_not_found(E.FILE_NOT_FOUND, "文件不存在")
 
     # 获取用户信息
     user: User | None = await User.get(session, User.id == payload.user_id)
@@ -92,26 +93,26 @@ async def get_file(
     # 验证令牌
     payload = verify_wopi_token(access_token)
     if not payload or payload.file_id != file_id:
-        http_exceptions.raise_unauthorized("WOPI token 无效或文件不匹配")
+        http_exceptions.raise_unauthorized(E.WOPI_TOKEN_INVALID, "WOPI token 无效或文件不匹配")
 
     # 获取文件
     file_obj: Entry | None = await Entry.get(session, Entry.id == file_id)
     if not file_obj or not file_obj.type == EntryType.FILE:
-        http_exceptions.raise_not_found("文件不存在")
+        http_exceptions.raise_not_found(E.FILE_NOT_FOUND, "文件不存在")
 
     # 获取物理文件
     physical_file: PhysicalFile | None = await file_obj.awaitable_attrs.physical_file
     if not physical_file or not physical_file.storage_path:
-        http_exceptions.raise_internal_error("文件存储路径丢失")
+        http_exceptions.raise_internal_error(E.FILE_STORAGE_PATH_MISSING, "文件存储路径丢失")
 
     # 获取策略
     policy: Policy | None = await Policy.get(session, cond(Policy.id == file_obj.policy_id))
     if not policy:
-        http_exceptions.raise_internal_error("存储策略不存在")
+        http_exceptions.raise_internal_error(E.POLICY_NOT_FOUND, "存储策略不存在")
 
     driver = create_storage_driver(policy)
     if not await driver.exists(physical_file.storage_path):
-        http_exceptions.raise_not_found("物理文件不存在")
+        http_exceptions.raise_not_found(E.FILE_PHYSICAL_NOT_FOUND, "物理文件不存在")
 
     content = await driver.read(physical_file.storage_path)
 
@@ -143,25 +144,25 @@ async def put_file(
     # 验证令牌
     payload = verify_wopi_token(access_token)
     if not payload or payload.file_id != file_id:
-        http_exceptions.raise_unauthorized("WOPI token 无效或文件不匹配")
+        http_exceptions.raise_unauthorized(E.WOPI_TOKEN_INVALID, "WOPI token 无效或文件不匹配")
 
     if not payload.can_write:
-        http_exceptions.raise_forbidden("没有写入权限")
+        http_exceptions.raise_forbidden(E.WOPI_WRITE_FORBIDDEN, "没有写入权限")
 
     # 获取文件
     file_obj: Entry | None = await Entry.get(session, Entry.id == file_id)
     if not file_obj or not file_obj.type == EntryType.FILE:
-        http_exceptions.raise_not_found("文件不存在")
+        http_exceptions.raise_not_found(E.FILE_NOT_FOUND, "文件不存在")
 
     # 获取物理文件
     physical_file: PhysicalFile | None = await file_obj.awaitable_attrs.physical_file
     if not physical_file or not physical_file.storage_path:
-        http_exceptions.raise_internal_error("文件存储路径丢失")
+        http_exceptions.raise_internal_error(E.FILE_STORAGE_PATH_MISSING, "文件存储路径丢失")
 
     # 获取策略
     policy: Policy | None = await Policy.get(session, Policy.id == file_obj.policy_id)
     if not policy:
-        http_exceptions.raise_internal_error("存储策略不存在")
+        http_exceptions.raise_internal_error(E.POLICY_NOT_FOUND, "存储策略不存在")
 
     # 读取请求体
     content = await request.body()

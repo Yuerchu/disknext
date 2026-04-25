@@ -15,6 +15,7 @@ from sqlmodels import (
     ThemePresetListResponse,
 )
 from utils import http_exceptions
+from utils.http.error_codes import ErrorCode as E
 
 admin_theme_router = APIRouter(
     prefix="/theme",
@@ -67,7 +68,7 @@ async def router_admin_theme_create(
     # 检查名称唯一性
     existing = await ThemePreset.get(session, ThemePreset.name == request.name)
     if existing:
-        http_exceptions.raise_conflict(f"主题预设名称 '{request.name}' 已存在")
+        http_exceptions.raise_conflict(E.ADMIN_THEME_NAME_EXISTS, f"主题预设名称 '{request.name}' 已存在")
 
     preset = ThemePreset(
         name=request.name,
@@ -110,7 +111,7 @@ async def router_admin_theme_update(
     if request.name is not None and request.name != preset.name:
         existing = await ThemePreset.get(session, ThemePreset.name == request.name)
         if existing:
-            http_exceptions.raise_conflict(f"主题预设名称 '{request.name}' 已存在")
+            http_exceptions.raise_conflict(E.ADMIN_THEME_NAME_EXISTS, f"主题预设名称 '{request.name}' 已存在")
         preset.name = request.name
 
     # 更新颜色字段

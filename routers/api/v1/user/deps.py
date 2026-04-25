@@ -20,6 +20,7 @@ from sqlmodels.server_config import ServerConfig
 from sqlmodels.user import AvatarType, User, UserStatus
 from sqlmodels.user_authn import UserAuthn
 from utils import Password, http_exceptions
+from utils.http.error_codes import ErrorCode as E
 from utils.conf import appmeta
 from utils.password.pwd import PasswordStatus
 from utils.redis.challenge_store import ChallengeStore
@@ -38,7 +39,7 @@ def check_provider_enabled(config: ServerConfig, provider: AuthProviderType) -> 
     }
     is_enabled = provider_map.get(provider, False)
     if not is_enabled:
-        http_exceptions.raise_bad_request(f"登录方式 {provider.value} 未启用")
+        http_exceptions.raise_bad_request(E.AUTH_PROVIDER_DISABLED, f"登录方式 {provider.value} 未启用")
 
 
 async def login_email_password(
@@ -47,28 +48,28 @@ async def login_email_password(
 ) -> User:
     """邮箱+密码登录"""
     if not request.credential:
-        http_exceptions.raise_bad_request("密码不能为空")
+        http_exceptions.raise_bad_request(E.USER_PASSWORD_EMPTY, "密码不能为空")
 
     user: User | None = await User.get(session, cond(User.email == request.identifier), load=rel(User.group))
     if not user or not user.password_hash:
         logger.debug(f"未找到邮箱密码身份: {request.identifier}")
-        http_exceptions.raise_unauthorized("邮箱或密码错误")
+        http_exceptions.raise_unauthorized(E.AUTH_INVALID_CREDENTIALS, "邮箱或密码错误")
 
     if Password.verify(user.password_hash, request.credential) != PasswordStatus.VALID:
         logger.debug(f"密码验证失败: {request.identifier}")
-        http_exceptions.raise_unauthorized("邮箱或密码错误")
+        http_exceptions.raise_unauthorized(E.AUTH_INVALID_CREDENTIALS, "邮箱或密码错误")
 
     if user.status != UserStatus.ACTIVE:
-        http_exceptions.raise_forbidden("账户已被禁用")
+        http_exceptions.raise_forbidden(E.AUTH_ACCOUNT_DISABLED, "账户已被禁用")
 
     # 检查两步验证
     if user.two_factor_secret:
         if not request.two_fa_code:
             logger.debug(f"需要两步验证: {request.identifier}")
-            http_exceptions.raise_precondition_required("需要两步验证")
+            http_exceptions.raise_precondition_required(E.AUTH_TWO_FA_REQUIRED, "需要两步验证")
         if Password.verify_totp(user.two_factor_secret, request.two_fa_code) != PasswordStatus.VALID:
             logger.debug(f"两步验证失败: {request.identifier}")
-            http_exceptions.raise_unauthorized("两步验证码错误")
+            http_exceptions.raise_unauthorized(E.AUTH_TWO_FA_INVALID, "两步验证码错误")
 
     return user
 
@@ -92,10 +93,10 @@ async def login_oauth(
         client_id = config.qq_client_id
         client_secret = config.qq_client_secret
     else:
-        http_exceptions.raise_bad_request(f"不支持的 OAuth 提供者: {provider.value}")
+        http_exceptions.raise_bad_request(E.AUTH_PROVIDER_UNSUPPORTED, f"不支持的 OAuth 提供者: {provider.value}")
 
     if not client_id or not client_secret:
-        http_exceptions.raise_bad_request(f"{provider.value} OAuth 未配置")
+        http_exceptions.raise_bad_request(E.AUTH_OAUTH_NOT_CONFIGURED, f"{provider.value} OAuth 未配置")
 
     # 根据 provider 创建对应的 OAuth 客户端
     if provider == AuthProviderType.GITHUB:
@@ -123,7 +124,7 @@ async def login_oauth(
         nickname = user_info_resp.user_data.nickname
         email = None
     else:
-        http_exceptions.raise_bad_request(f"不支持的 OAuth 提供者: {provider.value}")
+        http_exceptions.raise_bad_request(E.AUTH_PROVIDER_UNSUPPORTED, f"不支持的 OAuth 提供者: {provider.value}")
 
     # 按 provider 查找已绑定的用户
     if provider == AuthProviderType.GITHUB:
@@ -131,11 +132,11 @@ async def login_oauth(
     elif provider == AuthProviderType.QQ:
         user: User | None = await User.get(session, cond(User.qq_id == openid), load=rel(User.group))
     else:
-        http_exceptions.raise_bad_request(f"不支持的 OAuth 提供者: {provider.value}")
+        http_exceptions.raise_bad_request(E.AUTH_PROVIDER_UNSUPPORTED, f"不支持的 OAuth 提供者: {provider.value}")
 
     if user:
         if user.status != UserStatus.ACTIVE:
-            http_exceptions.raise_forbidden("账户已被禁用")
+            http_exceptions.raise_forbidden(E.AUTH_ACCOUNT_DISABLED, "账户已被禁用")
         return user
 
     # 未绑定 → 自动注册
@@ -213,21 +214,21 @@ async def login_passkey(
     identifier 为 challenge_token，credential 为 JSON 格式的 authenticator assertion response。
     """
     if not request.credential:
-        http_exceptions.raise_bad_request("WebAuthn assertion response 不能为空")
+        http_exceptions.raise_bad_request(E.AUTH_PASSKEY_ASSERTION_EMPTY, "WebAuthn assertion response 不能为空")
 
     if not request.identifier:
-        http_exceptions.raise_bad_request("challenge_token 不能为空")
+        http_exceptions.raise_bad_request(E.AUTH_PASSKEY_CREDENTIAL_MISSING, "challenge_token 不能为空")
 
     # 从 ChallengeStore 取出 challenge（一次性，防重放）
     challenge: bytes | None = await ChallengeStore.retrieve_and_delete(f"auth:{request.identifier}")
     if challenge is None:
-        http_exceptions.raise_unauthorized("登录会话已过期，请重新获取 options")
+        http_exceptions.raise_unauthorized(E.AUTH_PASSKEY_CHALLENGE_EXPIRED, "登录会话已过期，请重新获取 options")
 
     # 从 assertion JSON 中解析 credential_id（Discoverable Credentials 模式）
     credential_dict: dict[str, str] = orjson.loads(request.credential)
     credential_id_b64: str | None = credential_dict.get("id")
     if not credential_id_b64:
-        http_exceptions.raise_bad_request("缺少凭证 ID")
+        http_exceptions.raise_bad_request(E.AUTH_PASSKEY_CREDENTIAL_MISSING, "缺少凭证 ID")
 
     # 查找 UserAuthn 记录
     authn: UserAuthn | None = await UserAuthn.get(
@@ -235,7 +236,7 @@ async def login_passkey(
         UserAuthn.credential_id == credential_id_b64,
     )
     if not authn:
-        http_exceptions.raise_unauthorized("Passkey 凭证未注册")
+        http_exceptions.raise_unauthorized(E.AUTH_PASSKEY_NOT_REGISTERED, "Passkey 凭证未注册")
 
     # 获取 RP 配置
     rp_id, _rp_name, origin = config.get_rp_config()
@@ -252,7 +253,7 @@ async def login_passkey(
         )
     except Exception as e:
         logger.warning(f"WebAuthn 验证失败: {e}")
-        http_exceptions.raise_unauthorized("Passkey 验证失败")
+        http_exceptions.raise_unauthorized(E.AUTH_PASSKEY_VERIFICATION_FAILED, "Passkey 验证失败")
 
     # 更新签名计数
     authn.sign_count = verification.new_sign_count
@@ -261,7 +262,7 @@ async def login_passkey(
     # 加载用户
     user: User = await User.get_exist_one(session, authn.user_id, load=rel(User.group))
     if user.status != UserStatus.ACTIVE:
-        http_exceptions.raise_forbidden("账户已被禁用")
+        http_exceptions.raise_forbidden(E.AUTH_ACCOUNT_DISABLED, "账户已被禁用")
 
     return user
 
@@ -280,20 +281,20 @@ async def login_magic_link(
     try:
         email = serializer.loads(request.identifier, salt="magic-link-salt", max_age=600)
     except SignatureExpired:
-        http_exceptions.raise_unauthorized("Magic Link 已过期")
+        http_exceptions.raise_unauthorized(E.AUTH_MAGIC_LINK_EXPIRED, "Magic Link 已过期")
     except BadSignature:
-        http_exceptions.raise_unauthorized("Magic Link 无效")
+        http_exceptions.raise_unauthorized(E.AUTH_MAGIC_LINK_INVALID, "Magic Link 无效")
 
     # 防重放：使用 token 哈希作为标识符
     token_hash = hashlib.sha256(request.identifier.encode()).hexdigest()
     is_first_use = await TokenStore.mark_used(f"magic_link:{token_hash}", ttl=600)
     if not is_first_use:
-        http_exceptions.raise_unauthorized("Magic Link 已被使用")
+        http_exceptions.raise_unauthorized(E.AUTH_MAGIC_LINK_USED, "Magic Link 已被使用")
 
     user: User | None = await User.get(session, User.email == email, load=rel(User.group))
     if user is None:
-        http_exceptions.raise_not_found("用户不存在")
+        http_exceptions.raise_not_found(E.USER_NOT_FOUND, "用户不存在")
     if user.status != UserStatus.ACTIVE:
-        http_exceptions.raise_forbidden("账户已被禁用")
+        http_exceptions.raise_forbidden(E.AUTH_ACCOUNT_DISABLED, "账户已被禁用")
 
     return user

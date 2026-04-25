@@ -2,7 +2,7 @@ from typing import Annotated
 from uuid import UUID, uuid4
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query
 from loguru import logger as l
 from sqlmodel_ext import rel
 
@@ -17,6 +17,7 @@ from sqlmodels.share import (
 from sqlmodels.file import Entry, EntryType
 from sqlmodel_ext import ListResponse
 from utils import http_exceptions
+from utils.http.error_codes import ErrorCode as E
 from utils.password.pwd import Password, PasswordStatus
 
 share_router = APIRouter(
@@ -51,7 +52,7 @@ async def router_share_get(
     # 2. 检查过期
     now = datetime.now()
     if share.expires and share.expires < now:
-        http_exceptions.raise_not_found(detail="分享已过期")
+        http_exceptions.raise_not_found(E.SHARE_EXPIRED, "分享已过期")
 
     # 3. 获取关联对象
     obj = await share.awaitable_attrs.entry
@@ -61,14 +62,14 @@ async def router_share_get(
     if obj and obj.is_banned:
         http_exceptions.raise_banned()
     if obj and obj.deleted_at:
-        http_exceptions.raise_not_found(detail="分享关联的文件已被删除")
+        http_exceptions.raise_not_found(E.SHARE_ENTRY_DELETED, "分享关联的文件已被删除")
 
     # 5. 检查密码
     if share.password:
         if not password:
-            http_exceptions.raise_precondition_required(detail="请输入提取码")
+            http_exceptions.raise_precondition_required(E.SHARE_PASSWORD_REQUIRED, "请输入提取码")
         if Password.verify(share.password, password) != PasswordStatus.VALID:
-            http_exceptions.raise_forbidden(detail="提取码错误")
+            http_exceptions.raise_forbidden(E.SHARE_PASSWORD_WRONG, "提取码错误")
 
     # 6. 加载子对象（目录分享）
     children_items: list[ShareObjectItem] = []
@@ -300,7 +301,7 @@ async def router_share_create(
         (Entry.id == request.file_id) & (Entry.deleted_at == None)
     )
     if not obj or obj.owner_id != user.id:
-        raise HTTPException(status_code=404, detail="对象不存在或无权限")
+        http_exceptions.raise_not_found(E.ENTRY_NOT_FOUND, "对象不存在或无权限")
 
     if obj.is_banned:
         http_exceptions.raise_banned()
@@ -426,7 +427,7 @@ async def router_share_delete(
     """
     share = await Share.get_exist_one(session, id)
     if share.user_id != user.id:
-        http_exceptions.raise_forbidden(detail="无权删除此分享")
+        http_exceptions.raise_forbidden(E.SHARE_FORBIDDEN, "无权删除此分享")
 
     user_id = user.id
     share_code = share.code
