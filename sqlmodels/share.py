@@ -151,7 +151,7 @@ class SharePublic(SQLModelBase):
     id: UUID
     """分享ID"""
 
-    code: Str64
+    code: UUID
     """分享码"""
 
     views: int

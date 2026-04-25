@@ -14,7 +14,7 @@ from loguru import logger as l
 from sqlmodel_ext import cond
 
 from middleware.dependencies import SessionDep
-from sqlmodels import Entry, PhysicalFile, Policy, User, WopiFileInfo
+from sqlmodels import Entry, EntryType, PhysicalFile, Policy, User, WopiFileInfo
 from utils.storage import create_storage_driver
 from utils import http_exceptions
 from utils.JWT.wopi_token import verify_wopi_token
@@ -69,7 +69,7 @@ async def check_file_info(
         supports_update=payload.can_write,
     )
 
-    return JSONResponse(content=info.to_wopi_dict())
+    return JSONResponse(content=info.model_dump(by_alias=True))
 
 
 @wopi_files_router.get(

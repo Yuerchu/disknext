@@ -7,9 +7,7 @@
 <h4 align="center">支持多家云存储的公私兼备的云服务系统后端</h4>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Python-3.13+-blue?logo=python" alt="Python">
-  <img src="https://img.shields.io/badge/FastAPI-0.122+-green?logo=fastapi" alt="FastAPI">
-  <img src="https://img.shields.io/badge/SQLModel-0.0.27+-orange" alt="SQLModel">
+  <img src="https://img.shields.io/badge/Python-3.14+-blue?logo=python" alt="Python">
   <img src="https://img.shields.io/badge/License-GPLv3-red" alt="License">
   <img src="https://img.shields.io/badge/Status-OMEGA-yellow" alt="Status">
 </p>
@@ -66,7 +64,7 @@
 
 | 技术 | 说明 |
 |------|------|
-| [Python 3.13+](https://www.python.org/) | 编程语言 |
+| [Python 3.14+](https://www.python.org/) | 编程语言 |
 | [FastAPI](https://fastapi.tiangolo.com/) | 高性能异步 Web 框架 |
 | [SQLModel](https://sqlmodel.tiangolo.com/) | 类型安全的 ORM（SQLAlchemy + Pydantic） |
 | [Redis](https://redis.io/) | 缓存与令牌存储（必需） |
@@ -162,7 +160,7 @@ Server/
 
 ### 环境要求
 
-- Python 3.13 或更高版本
+- Python 3.14 或更高版本
 - uv (推荐) 或 pip
 - PostgreSQL 14+（必需，仅支持 PG）
 - Redis 6+（必需，用于令牌存储、封禁黑名单、WebAuthn Challenge 等）
