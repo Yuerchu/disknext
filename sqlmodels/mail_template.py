@@ -1,8 +1,8 @@
 from enum import StrEnum
 
-from sqlmodel import UniqueConstraint
+from sqlmodel import Field
 
-from sqlmodel_ext import SQLModelBase, TableBaseMixin, Text100K
+from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Text1M
 
 
 class MailTemplateType(StrEnum):
@@ -19,11 +19,12 @@ class MailTemplateBase(SQLModelBase):
     type: MailTemplateType
     """模板类型"""
 
-    content: Text100K
+    content: Text1M
     """HTML 模板内容（Jinja2 变量）"""
 
 
-class MailTemplate(MailTemplateBase, TableBaseMixin):
+class MailTemplate(MailTemplateBase, UUIDTableBaseMixin):
     """邮件模板（独立存储长文本 HTML）"""
 
-    __table_args__ = (UniqueConstraint("type", name="uq_mail_template_type"),)
+    type: MailTemplateType = Field(unique=True)
+    """模板类型"""

@@ -10,7 +10,7 @@ from uuid import UUID
 
 from sqlmodel import Field, Relationship, UniqueConstraint
 
-from sqlmodel_ext import SQLModelBase, TableBaseMixin, Str255
+from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str255
 
 if TYPE_CHECKING:
     from .user import User
@@ -36,7 +36,7 @@ class WebDAVBase(SQLModelBase):
 
 # ==================== 数据库模型 ====================
 
-class WebDAV(WebDAVBase, TableBaseMixin):
+class WebDAV(WebDAVBase, UUIDTableBaseMixin):
     """WebDAV 账户模型"""
 
     __table_args__ = (UniqueConstraint("name", "user_id", name="uq_webdav_name_user"),)
@@ -96,7 +96,7 @@ class WebDAVUpdateRequest(SQLModelBase):
 class WebDAVAccountResponse(SQLModelBase):
     """WebDAV 账户响应"""
 
-    id: int
+    id: UUID
     """账户ID"""
 
     name: Str255

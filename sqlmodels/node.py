@@ -1,9 +1,9 @@
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from sqlmodel import Field, Relationship, Index
+from sqlmodel import Field, Relationship
 
-from sqlmodel_ext import SQLModelBase, TableBaseMixin, Str255
+from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str255, NonNegativeBigInt, HttpUrl
 
 if TYPE_CHECKING:
     from .download import Download
@@ -25,17 +25,13 @@ class NodeType(StrEnum):
     """从节点"""
 
 
-class Node(SQLModelBase, TableBaseMixin):
+class Node(SQLModelBase, UUIDTableBaseMixin):
     """节点模型"""
 
-    __table_args__ = (
-        Index("ix_node_status", "status"),
-    )
-
-    status: NodeStatus = Field(default=NodeStatus.ONLINE)
+    status: NodeStatus = Field(default=NodeStatus.ONLINE, index=True)
     """节点状态"""
 
-    name: Str255 = Field(unique=True)
+    name: str = Field(max_length=255, unique=True)
     """节点名称"""
 
     type: NodeType
@@ -53,11 +49,11 @@ class Node(SQLModelBase, TableBaseMixin):
     aria2_enabled: bool = False
     """是否启用Aria2"""
 
-    rank: int = 0
+    rank: NonNegativeBigInt = 0
     """节点排序权重"""
 
-    # Aria2 配置字段（原 Aria2Configuration 表）
-    aria2_rpc_url: Str255 | None = None
+    # Aria2 配置字段
+    aria2_rpc_url: HttpUrl | None = Field(default=None, max_length=255)
     """Aria2 RPC 地址"""
 
     aria2_rpc_secret: Str255 | None = None

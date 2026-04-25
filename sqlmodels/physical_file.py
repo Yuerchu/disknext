@@ -51,8 +51,10 @@ class PhysicalFile(PhysicalFileBase, UUIDTableBaseMixin):
 
     __table_args__ = (
         Index("ix_physical_file_policy_path", "policy_id", "storage_path"),
-        Index("ix_physical_file_checksum", "checksum_md5"),
     )
+
+    checksum_md5: Str32 | None = Field(default=None, index=True)
+    """MD5校验和（用于文件去重和完整性校验）"""
 
     policy_id: UUID = Field(
         foreign_key="policy.id",

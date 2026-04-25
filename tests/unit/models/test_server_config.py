@@ -425,6 +425,6 @@ class TestCaptchaOAuthTrigger:
                 qq_client_secret=faker.pystr(min_chars=30, max_chars=60),
             )
             assert config.id is not None
-            # 每个 insert 后需要 rollback/清理，避免 id=1 的唯一约束冲突
+            # 每个 insert 后需要 rollback/清理，避免测试数据相互影响
             await db_session.delete(config)
             await db_session.commit()

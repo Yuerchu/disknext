@@ -44,7 +44,7 @@ class ThemePresetBase(SQLModelBase):
 class ThemePreset(ThemePresetBase, UUIDTableBaseMixin):
     """主题预设表"""
 
-    name: Str100 = Field(unique=True)
+    name: str = Field(max_length=100, unique=True)
     """预设名称（唯一约束）"""
 
 

@@ -4,7 +4,7 @@ from uuid import UUID
 
 from sqlmodel import Field, Relationship
 
-from sqlmodel_ext import SQLModelBase, TableBaseMixin, NonNegativeBigInt, Str255
+from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, NonNegativeBigInt, Str255
 
 if TYPE_CHECKING:
     from .user import User
@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 class StoragePackResponse(SQLModelBase):
     """容量包响应 DTO"""
 
-    id: int
+    id: UUID
     """容量包ID"""
 
     name: str
@@ -36,7 +36,7 @@ class StoragePackResponse(SQLModelBase):
 
 # ==================== 数据库模型 ====================
 
-class StoragePack(SQLModelBase, TableBaseMixin):
+class StoragePack(SQLModelBase, UUIDTableBaseMixin):
     """容量包模型"""
 
     name: Str255

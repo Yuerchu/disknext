@@ -33,7 +33,6 @@ async def initialized_db(db_session: AsyncSession) -> AsyncSession:
 
     # 1. 创建 ServerConfig 单例
     server_config = ServerConfig(
-        id=1,
         site_name="DiskNext Test",
         site_url="http://localhost:8000",
         site_title="DiskNext",

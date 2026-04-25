@@ -29,12 +29,16 @@ async def _ensure_server_config() -> None:
     log.info('初始化服务器配置...')
 
     async for session in DatabaseManager.get_session():
-        existing = await ServerConfig.get(session, col(ServerConfig.id) == 1)
-        if existing is not None:
-            log.info(f"服务器配置已存在: id={existing.id}")
+        existing = await ServerConfig.get(session, fetch_mode='all')
+        if len(existing) == 1:
+            log.info("服务器配置已存在")
             return
+        if len(existing) > 1:
+            # [TODO] 这里理论上不应该发生，除非数据库被人为篡改了。可以考虑自动删除多余的记录，但为了安全起见，暂时选择抛出异常让管理员手动处理。
+            # 但也可以考虑后期的配置备份
+            raise RuntimeError(f"服务器配置异常：存在多个配置记录（{len(existing)} 条），请检查数据库")
 
-        config = ServerConfig(id=1)
+        config = ServerConfig()
         config = await config.save(session)
         log.info(f"默认服务器配置已创建: id={config.id}")
 
@@ -134,7 +138,7 @@ async def init_default_group() -> None:
                 await session.commit()
 
             # 更新 ServerConfig 的 default_group_id
-            config = await ServerConfig.get(session, col(ServerConfig.id) == 1)
+            config = await ServerConfig.get(session, fetch_mode='one')
             if config:
                 config.default_group_id = member_group_id
                 config = await config.save(session)
@@ -164,7 +168,7 @@ async def init_default_user() -> None:
 
     async for session in DatabaseManager.get_session():
         # 检查管理员用户是否存在（通过 ServerConfig.default_admin_id 判断）
-        config = await ServerConfig.get(session, col(ServerConfig.id) == 1)
+        config = await ServerConfig.get(session, fetch_mode='one')
         admin_user = None
         if config and config.default_admin_id:
             admin_user = await User.get(session, User.id == config.default_admin_id)
@@ -194,7 +198,7 @@ async def init_default_user() -> None:
             admin_user_id = admin_user.id
 
             # 记录默认管理员 ID 到 ServerConfig
-            config = await ServerConfig.get(session, col(ServerConfig.id) == 1)
+            config = await ServerConfig.get(session, fetch_mode='one')
             if config:
                 config.default_admin_id = admin_user_id
                 config = await config.save(session)

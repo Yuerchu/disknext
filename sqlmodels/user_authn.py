@@ -5,7 +5,7 @@ from uuid import UUID
 from sqlalchemy import Column, Text
 from sqlmodel import Field, Relationship
 
-from sqlmodel_ext import SQLModelBase, TableBaseMixin, Str32, Str100, Str255, Text5K
+from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str32, Str100, Str255
 
 if TYPE_CHECKING:
     from .user import User
@@ -26,11 +26,11 @@ class AuthnFinishRequest(SQLModelBase):
 class AuthnDetailResponse(SQLModelBase):
     """WebAuthn 凭证详情响应 DTO"""
 
-    id: int
+    id: UUID
     """凭证数据库 ID"""
 
     credential_id: Str255
-    """凭�� ID（Base64URL 编码）"""
+    """凭证 ID（Base64URL 编码）"""
 
     name: Str100 | None = None
     """用户自定义的凭证名称"""
@@ -57,10 +57,10 @@ class AuthnRenameRequest(SQLModelBase):
 
 # ==================== 数据库模型 ====================
 
-class UserAuthn(SQLModelBase, TableBaseMixin):
+class UserAuthn(SQLModelBase, UUIDTableBaseMixin):
     """用户 WebAuthn 凭证模型，与 User 为多对一关系"""
 
-    credential_id: Str255 = Field(unique=True, index=True)
+    credential_id: str = Field(max_length=255, unique=True, index=True)
     """凭证 ID，Base64URL 编码"""
 
     credential_public_key: str = Field(sa_column=Column(Text))

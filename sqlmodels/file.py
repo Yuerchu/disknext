@@ -11,7 +11,9 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel_ext import (
     SQLModelBase, 
     ListResponse,
+    Str500,
     TableViewRequest,
+    Text1M,
     UUIDTableBaseMixin, 
     NonNegativeBigInt, 
     PositiveBigInt, 
@@ -76,7 +78,7 @@ class EntryBase(SQLModelBase):
 class EntryFileFinalize(SQLModelBase):
     """文件上传完成后更新 Entry 的 DTO"""
 
-    size: int
+    size: NonNegativeBigInt
     """文件大小（字节）"""
 
     physical_file_id: UUID
@@ -89,7 +91,7 @@ class EntryMoveUpdate(SQLModelBase):
     parent_id: UUID
     """新的父目录UUID"""
 
-    name: str = Field(min_length=1, max_length=255)
+    name: Str255
     """新名称"""
 
 
@@ -99,7 +101,7 @@ class DirectoryCreateRequest(SQLModelBase):
     parent_id: UUID
     """父目录UUID"""
 
-    name: str = Field(min_length=1, max_length=255)
+    name: Str255
     """目录名称"""
 
     policy_id: UUID | None = None
@@ -281,7 +283,7 @@ class Entry(EntryBase, UUIDTableBaseMixin):
     )
     """封禁操作者UUID"""
 
-    ban_reason: str | None = Field(default=None, max_length=500)
+    ban_reason: Str500 | None = None
     """封禁原因"""
 
     # ==================== 软删除相关字段 ====================
@@ -1201,7 +1203,7 @@ class UploadSessionBase(SQLModelBase):
     chunk_size: PositiveBigInt
     """分片大小（字节）"""
 
-    total_chunks: int = Field(ge=1)
+    total_chunks: PositiveBigInt
     """总分片数"""
 
 
@@ -1214,7 +1216,7 @@ class UploadSession(UploadSessionBase, UUIDTableBaseMixin):
     """
 
     # 会话状态
-    uploaded_chunks: int = 0
+    uploaded_chunks: NonNegativeBigInt = 0
     """已上传分片数"""
 
     uploaded_size: NonNegativeBigInt = 0
@@ -1289,19 +1291,19 @@ class UploadSessionResponse(SQLModelBase):
     id: UUID
     """会话UUID"""
 
-    file_name: str
+    file_name: Str255
     """原始文件名"""
 
-    file_size: int
+    file_size: NonNegativeBigInt
     """文件总大小（字节）"""
 
-    chunk_size: int
+    chunk_size: NonNegativeBigInt
     """分片大小（字节）"""
 
-    total_chunks: int
+    total_chunks: PositiveBigInt
     """总分片数"""
 
-    uploaded_chunks: int
+    uploaded_chunks: NonNegativeBigInt
     """已上传分片数"""
 
     expires_at: datetime
@@ -1372,7 +1374,7 @@ class EntryPropertyResponse(SQLModelBase):
     id: UUID
     """对象UUID"""
 
-    name: Str255
+    name: str
     """对象名称"""
 
     type: EntryType
@@ -1457,7 +1459,7 @@ class FileBanRequest(SQLModelBase):
     ban: bool = True
     """是否封禁"""
 
-    reason: str | None = Field(default=None, max_length=500)
+    reason: Str500 | None = None
     """封禁原因"""
 
 
@@ -1528,10 +1530,10 @@ class TextContentResponse(ResponseBase):
 class PatchContentRequest(SQLModelBase):
     """增量保存请求"""
 
-    patch: str
+    patch: Text1M
     """unified diff 文本"""
 
-    base_hash: str
+    base_hash: Str64
     """原始内容的 SHA-256 hex（64字符）"""
 
 

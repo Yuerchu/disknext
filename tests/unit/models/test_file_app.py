@@ -114,7 +114,7 @@ class TestFileAppCRUD:
         sample_app.is_enabled = False
         sample_app = await sample_app.save(db_session)
 
-        found = await FileApp.get(db_session, FileApp.id == sample_app.id)
+        found = await FileApp.get(db_session, FileApp.id == sample_app.id, fetch_mode="one")
         assert found.name == "更新后的名称"
         assert found.is_enabled is False
 

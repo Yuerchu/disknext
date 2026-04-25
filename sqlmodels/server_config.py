@@ -1,13 +1,14 @@
 from enum import StrEnum
 from typing import Annotated, Self
 from uuid import UUID
+from urllib.parse import urlparse
 
-from pydantic import AfterValidator, EmailStr, HttpUrl, field_validator, model_validator
+from pydantic import AfterValidator, EmailStr, HttpUrl, model_validator
 from pydantic_extra_types.color import Color
 from sqlmodel import Field, col
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from sqlmodel_ext import SQLModelBase, TableBaseMixin, Str128, Str255, Str2048, Text5K, Text10K
+from sqlmodel_ext import SQLModelBase, Str256, Str512, UUIDTableBaseMixin, Str128, Str255, Str2048, Text5K, Text10K, Port
 
 from .auth_identity import AuthProviderType
 
@@ -171,16 +172,16 @@ class ServerConfigBase(SQLModelBase):
     footer_code: Text5K | None = None
     """自定义页脚 HTML/JS"""
 
-    tos_url: OptionalUrlStr | None = None
+    tos_url: HttpUrlStr | None = None
     """服务条款 URL"""
 
-    privacy_url: OptionalUrlStr | None = None
+    privacy_url: HttpUrlStr | None = None
     """隐私政策 URL"""
 
-    logo_light: OptionalUrlStr | None = None
+    logo_light: HttpUrlStr | None = None
     """亮色模式 Logo URL"""
 
-    logo_dark: OptionalUrlStr | None = None
+    logo_dark: HttpUrlStr | None = None
     """暗色模式 Logo URL"""
 
     # ==================== REGISTER ====================
@@ -222,19 +223,19 @@ class ServerConfigBase(SQLModelBase):
     is_github_enabled: bool = False
     """GitHub OAuth 开关"""
 
-    github_client_id: str = Field(default="", max_length=256)
+    github_client_id: Str256 | None = None
     """GitHub OAuth Client ID"""
 
-    github_client_secret: str = Field(default="", max_length=256)
+    github_client_secret: Str256 | None = None
     """GitHub OAuth Client Secret"""
 
     is_qq_enabled: bool = False
     """QQ OAuth 开关"""
 
-    qq_client_id: str = Field(default="", max_length=256)
+    qq_client_id: Str256 | None = None
     """QQ OAuth App ID"""
 
-    qq_client_secret: str = Field(default="", max_length=256)
+    qq_client_secret: Str256 | None = None
     """QQ OAuth App Key"""
 
     # ==================== LOGIN (captcha switches) ====================
@@ -266,16 +267,16 @@ class ServerConfigBase(SQLModelBase):
     captcha_len: int = Field(default=6, ge=4, le=10)
     """验证码字符数"""
 
-    captcha_recaptcha_key: str = Field(default="", max_length=256)
+    captcha_recaptcha_key: Str256 | None = None
     """reCAPTCHA Site Key"""
 
-    captcha_recaptcha_secret: str = Field(default="", max_length=256)
+    captcha_recaptcha_secret: Str256 | None = None
     """reCAPTCHA Secret Key"""
 
-    captcha_cloudflare_key: str = Field(default="", max_length=256)
+    captcha_cloudflare_key: Str256 | None = None
     """Cloudflare Turnstile Site Key"""
 
-    captcha_cloudflare_secret: str = Field(default="", max_length=256)
+    captcha_cloudflare_secret: Str256 | None = None
     """Cloudflare Turnstile Secret Key"""
 
     is_captcha_show_hollow_line: bool = False
@@ -320,7 +321,7 @@ class ServerConfigBase(SQLModelBase):
     """小尺寸头像边长（px）"""
 
     # ==================== MAIL ====================
-    mail_from_name: str = Field(default="DiskNext", max_length=128)
+    mail_from_name: Str128 = "DiskNext"
     """发件人名称"""
 
     mail_from_address: EmailStr = "no-reply@yxqi.cn"
@@ -329,13 +330,13 @@ class ServerConfigBase(SQLModelBase):
     smtp_host: str = Field(default="smtp.yxqi.cn", max_length=256)
     """SMTP 服务器"""
 
-    smtp_port: int = Field(default=25, ge=1, le=65535)
+    smtp_port: Port = 25
     """SMTP 端口"""
 
-    smtp_user: str = Field(default="no-reply@yxqi.cn", max_length=256)
+    smtp_user: Str256 = "no-reply@yxqi.cn"
     """SMTP 用户名"""
 
-    smtp_pass: str = Field(default="", max_length=512)
+    smtp_pass: Str512 | None = None
     """SMTP 密码"""
 
     smtp_reply_to: EmailStr = "feedback@yxqi.cn"
@@ -346,12 +347,12 @@ class ServerConfigBase(SQLModelBase):
 
     # ==================== MOBILE ====================
     sms_provider: str = Field(default="", max_length=64)
-    """短信服务商"""
+    """短信服务商 # TODO 枚举"""
 
-    sms_access_key: str = Field(default="", max_length=256)
+    sms_access_key: Str256 | None = None
     """短信 Access Key"""
 
-    sms_secret_key: str = Field(default="", max_length=256)
+    sms_secret_key: Str256 | None = None
     """短信 Secret Key"""
 
     # ==================== TIMEOUT ====================
@@ -448,7 +449,7 @@ class ServerConfigBase(SQLModelBase):
     """PWA 背景色"""
 
     # ==================== ARIA2 ====================
-    aria2_token: str = Field(default="", max_length=256)
+    aria2_token: Str256 | None = None
     """Aria2 RPC Token"""
 
     aria2_rpcurl: OptionalUrlStr = ""
@@ -515,8 +516,8 @@ class ServerConfigBase(SQLModelBase):
 
 # ==================== 数据库模型 ====================
 
-class ServerConfig(ServerConfigBase, TableBaseMixin):
-    """服务器全局配置（单例行，id=1）"""
+class ServerConfig(ServerConfigBase, UUIDTableBaseMixin):
+    """服务器全局配置"""
 
     # FK 约束在 table 子类中定义
     default_group_id: UUID | None = Field(default=None, foreign_key='group.id')
@@ -542,9 +543,7 @@ class ServerConfig(ServerConfigBase, TableBaseMixin):
             return cached
 
         # 2. 从数据库获取
-        instance = await cls.get(session, col(cls.id) == 1)
-        if instance is None:
-            raise RuntimeError("ServerConfig 未初始化，请先执行数据库迁移")
+        instance = await cls.get(session, fetch_mode='one')
 
         # 3. 写入缓存
         await ServerConfigCache.set(instance)
@@ -560,8 +559,6 @@ class ServerConfig(ServerConfigBase, TableBaseMixin):
         - ``rp_name``: 站点标题
         - ``origin``: 完整 origin（如 ``https://example.com``）
         """
-        from urllib.parse import urlparse
-
         site_url: str = self.site_url
         rp_name: str = self.site_title
 

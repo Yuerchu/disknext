@@ -5,7 +5,7 @@ from uuid import UUID
 
 from sqlmodel import Field, Relationship
 
-from sqlmodel_ext import SQLModelBase, TableBaseMixin
+from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str64, NonNegativeInt
 
 if TYPE_CHECKING:
     from .product import Product
@@ -40,7 +40,7 @@ class RedeemCreateRequest(SQLModelBase):
 class RedeemUseRequest(SQLModelBase):
     """使用兑换码请求 DTO"""
 
-    code: str = Field(min_length=1, max_length=64)
+    code: Str64
     """兑换码"""
 
 
@@ -53,7 +53,7 @@ class RedeemInfoResponse(SQLModelBase):
     product_name: str | None = None
     """关联商品名称"""
 
-    num: int
+    num: NonNegativeInt
     """可兑换数量"""
 
     is_used: bool
@@ -63,7 +63,7 @@ class RedeemInfoResponse(SQLModelBase):
 class RedeemAdminResponse(SQLModelBase):
     """兑换码管理响应 DTO（管理侧）"""
 
-    id: int
+    id: UUID
     """兑换码ID"""
 
     type: RedeemType
@@ -72,10 +72,10 @@ class RedeemAdminResponse(SQLModelBase):
     product_id: UUID | None = None
     """关联商品UUID"""
 
-    num: int
+    num: NonNegativeInt
     """可兑换数量"""
 
-    code: str
+    code: Str64
     """兑换码"""
 
     is_used: bool
@@ -90,7 +90,7 @@ class RedeemAdminResponse(SQLModelBase):
 
 # ==================== 数据库模型 ====================
 
-class Redeem(SQLModelBase, TableBaseMixin):
+class Redeem(SQLModelBase, UUIDTableBaseMixin):
     """兑换码模型"""
 
     type: RedeemType
@@ -99,10 +99,10 @@ class Redeem(SQLModelBase, TableBaseMixin):
     product_id: UUID | None = Field(default=None, foreign_key="product.id", ondelete="SET NULL")
     """关联商品UUID"""
 
-    num: int = 1
+    num: NonNegativeInt
     """可兑换数量/时长等"""
 
-    code: str = Field(unique=True, index=True)
+    code: str = Field(max_length=64, unique=True, index=True)
     """兑换码，唯一"""
 
     is_used: bool = False

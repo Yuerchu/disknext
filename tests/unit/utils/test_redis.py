@@ -197,7 +197,6 @@ class TestServerConfigCache:
         from sqlmodels.server_config import ServerConfig
 
         config = ServerConfig(
-            id=1,
             site_name="Test Site",
             site_url="http://localhost:8000",
             site_title="Test",
@@ -217,7 +216,6 @@ class TestServerConfigCache:
         from sqlmodels.server_config import ServerConfig
 
         config = ServerConfig(
-            id=1,
             site_name="Test",
             site_url="http://localhost",
             site_title="T",

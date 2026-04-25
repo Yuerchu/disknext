@@ -6,7 +6,7 @@ from uuid import UUID
 from sqlalchemy import Numeric
 from sqlmodel import Field, Relationship
 
-from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, NonNegativeBigInt, Str255
+from sqlmodel_ext import SQLModelBase, Str2048, UUIDTableBaseMixin, NonNegativeBigInt, Str255, NonNegativeInt, PositiveBigInt
 
 if TYPE_CHECKING:
     from .order import Order
@@ -72,14 +72,14 @@ class ProductCreateRequest(ProductBase):
     is_active: bool = True
     """是否上架"""
 
-    sort_order: int = Field(default=0, ge=0)
+    sort_order: NonNegativeInt
     """排序权重（越大越靠前）"""
 
     # storage_pack 专用
-    size: int | None = Field(default=None, ge=0)
+    size: NonNegativeInt | None = None
     """容量大小（字节），type=storage_pack 时必填"""
 
-    duration_days: int | None = Field(default=None, ge=1)
+    duration_days: NonNegativeInt | None = None
     """有效天数，type=storage_pack/group_time 时必填"""
 
     # group_time 专用
@@ -87,7 +87,7 @@ class ProductCreateRequest(ProductBase):
     """目标用户组UUID，type=group_time 时必填"""
 
     # score 专用
-    score_amount: int | None = Field(default=None, ge=1)
+    score_amount: PositiveBigInt | None = None
     """积分数量，type=score 时必填"""
 
 
@@ -97,7 +97,7 @@ class ProductUpdateRequest(SQLModelBase):
     name: Str255 | None = None
     """商品名称"""
 
-    description: str | None = None
+    description: Str2048 | None = None
     """商品描述"""
 
     price: Decimal | None = Field(default=None, ge=0, decimal_places=2)
@@ -106,19 +106,19 @@ class ProductUpdateRequest(SQLModelBase):
     is_active: bool | None = None
     """是否上架"""
 
-    sort_order: int | None = Field(default=None, ge=0)
+    sort_order: NonNegativeInt | None = None
     """排序权重"""
 
-    size: int | None = Field(default=None, ge=0)
+    size: NonNegativeInt | None = None
     """容量大小（字节）"""
 
-    duration_days: int | None = Field(default=None, ge=1)
+    duration_days: NonNegativeInt | None = None
     """有效天数"""
 
     group_id: UUID | None = None
     """目标用户组UUID"""
 
-    score_amount: int | None = Field(default=None, ge=1)
+    score_amount: PositiveBigInt | None = None
     """积分数量"""
 
 
@@ -164,14 +164,14 @@ class Product(ProductBase, UUIDTableBaseMixin):
     is_active: bool = True
     """是否上架"""
 
-    sort_order: int = 0
+    sort_order: NonNegativeInt
     """排序权重（越大越靠前）"""
 
     # storage_pack 专用
     size: NonNegativeBigInt | None = None
     """容量大小（字节），type=storage_pack 时必填"""
 
-    duration_days: int | None = None
+    duration_days: NonNegativeInt | None = None
     """有效天数，type=storage_pack/group_time 时必填"""
 
     # group_time 专用
@@ -179,7 +179,7 @@ class Product(ProductBase, UUIDTableBaseMixin):
     """目标用户组UUID，type=group_time 时必填"""
 
     # score 专用
-    score_amount: int | None = None
+    score_amount: PositiveBigInt | None = None
     """积分数量，type=score 时必填"""
 
     # 关系

@@ -17,6 +17,7 @@ async def test_user_curd(db_session: AsyncSession):
 
     test_user = User(
         email='test_user@example.com',
+        nickname='测试用户',
         group_id=created_group.id,
         password_hash="$argon2id$v=19$m=65536,t=3,p=4$stub_hash_for_test",
     )

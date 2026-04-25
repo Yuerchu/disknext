@@ -59,7 +59,7 @@ def _get_session():  # type: ignore[no-untyped-def]
 
 # ==================== 异步辅助函数 ====================
 
-async def _get_webdav_account(webdav_id: int) -> WebDAV | None:
+async def _get_webdav_account(webdav_id: UUID) -> WebDAV | None:
     """获取 WebDAV 账户"""
     async with _get_session() as session:
         return await WebDAV.get(session, WebDAV.id == webdav_id)

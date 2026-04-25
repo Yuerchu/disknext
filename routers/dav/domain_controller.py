@@ -24,7 +24,7 @@ async def _authenticate(
     email: str,
     account_name: str,
     password: str,
-) -> tuple[UUID, int] | None:
+) -> tuple[UUID, UUID] | None:
     """
     异步认证 WebDAV 用户。
 
@@ -60,7 +60,7 @@ async def _authenticate(
             return None
 
         user_id: UUID = user.id
-        webdav_id: int | None = account.id
+        webdav_id: UUID | None = account.id
         
         if not webdav_id:
             raise ValueError("WebDAV 账户 ID 不能为空")

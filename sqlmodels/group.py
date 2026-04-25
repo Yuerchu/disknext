@@ -25,6 +25,8 @@ class GroupBase(SQLModelBase):
 
 class GroupOptionsBase(SQLModelBase):
     """用户组基础选项字段"""
+    
+    # [TODO] 将废弃，换用 Scopes 模型实现更灵活的权限控制
 
     share_download: bool = False
     """是否允许分享下载"""
@@ -202,7 +204,7 @@ from .policy import GroupPolicyLink
 class Group(GroupBase, GroupAllOptionsBase, UUIDTableBaseMixin):
     """用户组模型"""
 
-    name: Str255 = Field(unique=True)
+    name: str = Field(max_length=255, unique=True)
     """用户组名"""
 
     max_storage: NonNegativeBigInt = 0

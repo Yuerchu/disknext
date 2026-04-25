@@ -23,9 +23,9 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from sqlmodel import Field, UniqueConstraint, Index, Relationship
+from sqlmodel import Field, UniqueConstraint, Relationship
 
-from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str255, Text2K
+from sqlmodel_ext import SQLModelBase, Str2048, UUIDTableBaseMixin, Str255, Text2K
 
 if TYPE_CHECKING:
     from .file import Entry
@@ -68,7 +68,7 @@ class EntryMetadataBase(SQLModelBase):
     name: Str255
     """元数据键名，格式：namespace:key（如 exif:width, stream:duration）"""
 
-    value: str
+    value: Str2048
     """元数据值（统一为字符串存储）"""
 
 
@@ -84,11 +84,11 @@ class EntryMetadata(EntryMetadataBase, UUIDTableBaseMixin):
 
     __table_args__ = (
         UniqueConstraint("file_id", "name", name="uq_file_metadata_object_name"),
-        Index("ix_file_metadata_file_id", "file_id"),
     )
 
     file_id: UUID = Field(
         foreign_key="entry.id",
+        index=True,
         ondelete="CASCADE",
     )
     """关联的对象UUID"""

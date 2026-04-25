@@ -83,7 +83,6 @@ Server/
 ├── main.py              # 应用入口
 ├── models/              # 数据模型
 │   ├── base/            # 基类定义 (SQLModelBase)
-│   ├── mixin/           # Mixin 模块 (TableBaseMixin, UUIDTableBaseMixin)
 │   ├── user.py          # 用户模型
 │   ├── user_authn.py    # WebAuthn 凭证
 │   ├── group.py         # 用户组模型

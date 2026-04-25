@@ -5,7 +5,7 @@ from datetime import datetime
 
 from sqlmodel import Field, Relationship, CheckConstraint, Index
 
-from sqlmodel_ext import SQLModelBase, TableBaseMixin, Str255, Str2048, Text2K, Text10K
+from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str255, Str2048, Text2K, Text10K
 
 if TYPE_CHECKING:
     from .download import Download
@@ -36,7 +36,7 @@ class TaskType(StrEnum):
 class TaskSummaryBase(SQLModelBase):
     """任务摘要基础字段"""
 
-    id: int
+    id: UUID
     """任务ID"""
 
     type: TaskType
@@ -71,7 +71,7 @@ class TaskSummary(TaskSummaryBase):
 class TaskDetailResponse(SQLModelBase):
     """任务详情响应"""
 
-    id: int
+    id: UUID
     """任务ID"""
 
     status: TaskStatus
@@ -127,10 +127,10 @@ class TaskPropsBase(SQLModelBase):
     """关联的对象UUID"""
 
 
-class TaskProps(TaskPropsBase, TableBaseMixin):
+class TaskProps(TaskPropsBase, UUIDTableBaseMixin):
     """任务属性模型（与Task一对一关联）"""
 
-    task_id: int = Field(
+    task_id: UUID = Field(
         foreign_key="task.id",
         unique=True,
         ondelete="CASCADE"
@@ -142,16 +142,15 @@ class TaskProps(TaskPropsBase, TableBaseMixin):
     """关联的任务"""
 
 
-class Task(SQLModelBase, TableBaseMixin):
+class Task(SQLModelBase, UUIDTableBaseMixin):
     """任务模型"""
 
     __table_args__ = (
         CheckConstraint("progress BETWEEN 0 AND 100", name="ck_task_progress_range"),
-        Index("ix_task_status", "status"),
         Index("ix_task_user_status", "user_id", "status"),
     )
 
-    status: TaskStatus = Field(default=TaskStatus.QUEUED)
+    status: TaskStatus = Field(default=TaskStatus.QUEUED, index=True)
     """任务状态"""
 
     type: TaskType

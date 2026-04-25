@@ -15,7 +15,8 @@ class DatabaseManager:
 
     @classmethod
     async def get_session(cls) -> AsyncGenerator[AsyncSession]:
-        assert cls._async_session_factory is not None, "数据库引擎未初始化，请先调用 DatabaseManager.init()"
+        if cls._async_session_factory is None:
+            raise RuntimeError("数据库引擎未初始化，请先调用 DatabaseManager.init()")
         async with cls._async_session_factory() as session:
             yield session
 

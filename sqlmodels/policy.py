@@ -4,7 +4,7 @@ from uuid import UUID
 from enum import StrEnum
 from sqlmodel import Field, Relationship
 
-from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str64, Str255, Str2048
+from sqlmodel_ext import HttpUrl, SQLModelBase, Str128, Str512, UUIDTableBaseMixin, Str64, Str255, Str2048, PositiveBigInt, SafeHttpUrl, NonNegativeBigInt
 
 if TYPE_CHECKING:
     from .file import Entry
@@ -47,12 +47,12 @@ class PolicyBase(SQLModelBase):
     """服务器地址（本地策略为绝对路径）"""
 
     bucket_name: Str255 | None = None
-    """存储桶名称"""
+    """存储桶名称（仅 S3 策略使用）"""
 
     is_private: bool = True
     """是否为私有空间"""
 
-    base_url: Str255 | None = None
+    base_url: HttpUrl | None = None
     """访问文件的基础URL"""
 
     access_key: Str255 | None = None
@@ -61,8 +61,8 @@ class PolicyBase(SQLModelBase):
     secret_key: Str255 | None = None
     """Secret Key"""
 
-    max_size: int = Field(default=0, ge=0)
-    """允许上传的最大文件尺寸（字节）"""
+    max_size: PositiveBigInt = 1073741824
+    """允许上传的最大文件尺寸（默认1GB）"""
 
     auto_rename: bool = False
     """是否自动重命名"""
@@ -76,19 +76,19 @@ class PolicyBase(SQLModelBase):
     is_origin_link_enable: bool = False
     """是否开启源链接访问"""
 
-    token: str | None = None
+    token: Str255 | None = None
     """访问令牌"""
 
-    file_type: str | None = None
+    file_type: Str2048 | None = None
     """允许的文件类型"""
 
-    mimetype: str | None = Field(default=None, max_length=127)
+    mimetype: Str128 | None = None
     """MIME类型"""
 
-    od_redirect: Str255 | None = None
+    od_redirect: SafeHttpUrl | None = None
     """OneDrive重定向地址"""
 
-    chunk_size: int = 52428800
+    chunk_size: PositiveBigInt = 52428800
     """分片上传大小（字节），默认50MB"""
 
     s3_path_style: bool = False
@@ -126,8 +126,8 @@ class PolicySummary(SQLModelBase):
 class PolicyCreateRequest(PolicyBase):
     """创建存储策略请求 DTO"""
 
-    chunk_size: int = Field(default=52428800, ge=1)
-    """分片上传大小（字节），默认50MB（覆盖基类以添加 ge 约束）"""
+    chunk_size: PositiveBigInt = 52428800
+    """分片上传大小（字节），默认50MB"""
 
 
 class PolicyUpdateRequest(SQLModelBase):
@@ -154,7 +154,7 @@ class PolicyUpdateRequest(SQLModelBase):
     secret_key: Str255 | None = None
     """Secret Key"""
 
-    max_size: int | None = Field(default=None, ge=0)
+    max_size: PositiveBigInt | None = None
     """允许上传的最大文件尺寸（字节）"""
 
     auto_rename: bool | None = None
@@ -175,13 +175,13 @@ class PolicyUpdateRequest(SQLModelBase):
     file_type: Str2048 | None = None
     """允许的文件类型"""
 
-    mimetype: str | None = Field(default=None, max_length=127)
+    mimetype: Str128 | None = None
     """MIME类型"""
 
-    od_redirect: Str255 | None = None
+    od_redirect: SafeHttpUrl | None = None
     """OneDrive重定向地址"""
 
-    chunk_size: int | None = Field(default=None, ge=1)
+    chunk_size: NonNegativeBigInt
     """分片上传大小（字节）"""
 
     s3_path_style: bool | None = None
@@ -290,36 +290,36 @@ class PolicyDetailResponse(SQLModelBase):
 class PolicyTestPathRequest(SQLModelBase):
     """测试本地路径请求 DTO"""
 
-    path: str = Field(max_length=512)
+    path: Str512
     """要测试的本地路径"""
 
 
 class PolicyTestSlaveRequest(SQLModelBase):
     """测试从机通信请求 DTO"""
 
-    server: str = Field(max_length=255)
+    server: HttpUrl = Field(max_length=255)
     """从机服务器地址"""
 
-    secret: str
+    secret: Str255
     """从机通信密钥"""
 
 
 class PolicyTestS3Request(SQLModelBase):
     """测试 S3 连接请求 DTO"""
 
-    server: str = Field(max_length=255)
+    server: Str255
     """S3 端点地址"""
 
-    bucket_name: str = Field(max_length=255)
+    bucket_name: Str255
     """存储桶名称"""
 
-    access_key: str
+    access_key: Str255
     """Access Key"""
 
-    secret_key: str
+    secret_key: Str255
     """Secret Key"""
 
-    s3_region: str = Field(default='us-east-1', max_length=64)
+    s3_region: Str64 = "us-east-1"
     """S3 区域"""
 
     s3_path_style: bool = False
@@ -342,7 +342,7 @@ class PolicyTestS3Response(SQLModelBase):
 class Policy(PolicyBase, UUIDTableBaseMixin):
     """存储策略模型"""
 
-    name: Str255 = Field(unique=True)
+    name: str = Field(max_length=255, unique=True, index=True)
     """策略名称"""
 
     # 关系

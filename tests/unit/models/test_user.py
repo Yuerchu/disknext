@@ -42,14 +42,16 @@ async def test_user_unique_email(db_session: AsyncSession):
     # 创建第一个用户
     user1 = User(
         email="duplicate@example.com",
-        group_id=group.id
+        nickname="用户1",
+        group_id=group.id,
     )
     await user1.save(db_session)
 
     # 尝试创建同名用户
     user2 = User(
         email="duplicate@example.com",
-        group_id=group.id
+        nickname="用户2",
+        group_id=group.id,
     )
 
     with pytest.raises(IntegrityError):
@@ -103,7 +105,8 @@ async def test_user_group_relationship(db_session: AsyncSession):
     # 创建用户
     user = User(
         email="vipuser@example.com",
-        group_id=group.id
+        nickname="VIP用户",
+        group_id=group.id,
     )
     user = await user.save(db_session)
 
@@ -126,7 +129,8 @@ async def test_user_status_default(db_session: AsyncSession):
 
     user = User(
         email="defaultuser@example.com",
-        group_id=group.id
+        nickname="默认用户",
+        group_id=group.id,
     )
     user = await user.save(db_session)
 
@@ -141,7 +145,8 @@ async def test_user_storage_default(db_session: AsyncSession):
 
     user = User(
         email="storageuser@example.com",
-        group_id=group.id
+        nickname="存储用户",
+        group_id=group.id,
     )
     user = await user.save(db_session)
 
@@ -156,7 +161,8 @@ async def test_user_theme_preset(db_session: AsyncSession):
 
     user = User(
         email="user1@example.com",
-        group_id=group.id
+        nickname="主题用户",
+        group_id=group.id,
     )
     user = await user.save(db_session)
     assert user.theme_preset_id is None
@@ -187,8 +193,9 @@ async def test_user_phone_field(db_session: AsyncSession):
 
     user = User(
         email="phoneuser@example.com",
+        nickname="电话用户",
         phone="13800138000",
-        group_id=group.id
+        group_id=group.id,
     )
     user = await user.save(db_session)
 

@@ -13,7 +13,7 @@ from uuid import UUID
 from sqlalchemy import JSON
 from sqlmodel import Field, Relationship
 
-from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str100, Str255, Str500
+from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str100, Str255, Str500, NonNegativeBigInt
 
 if TYPE_CHECKING:
     from .user import User
@@ -77,7 +77,7 @@ class CustomPropertyDefinition(CustomPropertyDefinitionBase, UUIDTableBaseMixin)
     )
     """所有者用户UUID"""
 
-    sort_order: int = 0
+    sort_order: NonNegativeBigInt = 0
     """排序顺序"""
 
     # 关系
@@ -121,7 +121,7 @@ class CustomPropertyUpdateRequest(SQLModelBase):
     default_value: Str500 | None = None
     """默认值"""
 
-    sort_order: int | None = None
+    sort_order: NonNegativeBigInt | None = None
     """排序顺序"""
 
 

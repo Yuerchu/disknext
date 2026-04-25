@@ -119,7 +119,7 @@ async def create_account(
 async def update_account(
     session: SessionDep,
     user: Annotated[User, Depends(auth_required)],
-    account_id: int,
+    account_id: UUID,
     request: WebDAVUpdateRequest,
 ) -> WebDAVAccountResponse:
     """
@@ -171,7 +171,7 @@ async def update_account(
 async def delete_account(
     session: SessionDep,
     user: Annotated[User, Depends(auth_required)],
-    account_id: int,
+    account_id: UUID,
 ) -> None:
     """
     删除 WebDAV 账户

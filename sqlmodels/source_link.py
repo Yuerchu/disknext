@@ -2,20 +2,16 @@
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from sqlmodel import Field, Relationship, Index
+from sqlmodel import Field, Relationship
 
-from sqlmodel_ext import SQLModelBase, TableBaseMixin, Str255
+from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str255
 
 if TYPE_CHECKING:
     from .file import Entry
 
 
-class SourceLink(SQLModelBase, TableBaseMixin):
+class SourceLink(SQLModelBase, UUIDTableBaseMixin):
     """链接模型"""
-
-    __table_args__ = (
-        Index("ix_sourcelink_file_name", "file_id", "name"),
-    )
 
     name: Str255
     """链接名称"""

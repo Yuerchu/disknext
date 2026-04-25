@@ -398,7 +398,7 @@ class User(UserBase, UUIDTableBaseMixin):
     email: EmailStr = Field(max_length=50, unique=True, index=True)
     """邮箱"""
 
-    nickname: str = Field(default="", max_length=32)
+    nickname: str = Field(max_length=32)
     """昵称"""
 
     status: UserStatus = UserStatus.ACTIVE

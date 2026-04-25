@@ -28,7 +28,7 @@ dependencies = [
     "redis[hiredis]>=7.1.0",
     "sqlalchemy>=2.0.44",
     "sqlmodel>=0.0.27",
-    "sqlmodel-ext[postgresql]==0.3.0",
+    "sqlmodel-ext[postgresql]==0.3.2",
     "uvicorn>=0.38.0",
     "webauthn>=2.7.0",
     "whatthepatch>=1.0.6",

@@ -5,7 +5,7 @@ from uuid import UUID
 
 from sqlmodel import Field, Relationship
 
-from sqlmodel_ext import NonNegativeBigInt, SQLModelBase, UUIDTableBaseMixin, Str64, Str128, Str255
+from sqlmodel_ext import NonNegativeBigInt, SQLModelBase, UUIDTableBaseMixin, Str64, Str128, Str255, NonNegativeInt
 
 from .model_base import ResponseBase
 from .file import EntryType
@@ -31,7 +31,7 @@ class ShareBase(SQLModelBase):
     expires: datetime | None = None
     """过期时间（NULL为永不过期）"""
 
-    remain_downloads: int | None = None
+    remain_downloads: NonNegativeInt | None = None
     """剩余下载次数（NULL为不限制）"""
 
     preview_enabled: bool = True

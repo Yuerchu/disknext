@@ -63,7 +63,7 @@ class WebDAVAuthCache:
         account_name: str,
         password: str,
         user_id: UUID,
-        webdav_id: int,
+        webdav_id: UUID,
     ) -> None:
         """
         写入认证结果到缓存。

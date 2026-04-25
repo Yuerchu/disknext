@@ -1,4 +1,5 @@
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
@@ -459,7 +460,7 @@ async def router_user_settings_authns(
 async def router_user_settings_rename_authn(
     session: SessionDep,
     user: Annotated[sqlmodels.user.User, Depends(auth_required)],
-    authn_id: int,
+    authn_id: UUID,
     request: AuthnRenameRequest,
 ) -> AuthnDetailResponse:
     """

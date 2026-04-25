@@ -4,7 +4,7 @@ from uuid import UUID
 
 from sqlmodel import Field, Relationship, UniqueConstraint
 
-from sqlmodel_ext import SQLModelBase, TableBaseMixin, Str255
+from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str255
 
 if TYPE_CHECKING:
     from .user import User
@@ -18,7 +18,7 @@ class TagType(StrEnum):
     """自动标签"""
 
 
-class Tag(SQLModelBase, TableBaseMixin):
+class Tag(SQLModelBase, UUIDTableBaseMixin):
     """标签模型"""
 
     __table_args__ = (UniqueConstraint("name", "user_id", name="uq_tag_name_user"),)

@@ -4,7 +4,7 @@ from uuid import UUID
 
 from sqlmodel import Field, Relationship
 
-from sqlmodel_ext import SQLModelBase, TableBaseMixin, Str255
+from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Str2048
 
 if TYPE_CHECKING:
     from .share import Share
@@ -16,13 +16,13 @@ class ReportReason(StrEnum):
     pass
 
 
-class Report(SQLModelBase, TableBaseMixin):
+class Report(SQLModelBase, UUIDTableBaseMixin):
     """举报模型"""
 
     reason: int = 0
     """举报原因 [TODO] 待定义枚举"""
 
-    description: Str255 | None = None
+    description: Str2048 | None = None
     """补充描述"""
     
     # 外键

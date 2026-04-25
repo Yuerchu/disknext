@@ -404,7 +404,7 @@ async def test_update_account_not_found(
 ):
     """测试更新不存在的账户返回 404"""
     response = await async_client.patch(
-        f"{API_PREFIX}/accounts/99999",
+        f"{API_PREFIX}/accounts/{uuid4()}",
         headers=auth_headers,
         json={"readonly": True},
     )
@@ -475,7 +475,7 @@ async def test_delete_account_not_found(
 ):
     """测试删除不存在的账户返回 404"""
     response = await async_client.delete(
-        f"{API_PREFIX}/accounts/99999",
+        f"{API_PREFIX}/accounts/{uuid4()}",
         headers=auth_headers,
     )
     assert response.status_code == 404

@@ -491,7 +491,7 @@ requires-dist = [
     { name = "setuptools", marker = "extra == 'build'", specifier = ">=75.0.0" },
     { name = "sqlalchemy", specifier = ">=2.0.44" },
     { name = "sqlmodel", specifier = ">=0.0.27" },
-    { name = "sqlmodel-ext", extras = ["postgresql"], specifier = "==0.3.0" },
+    { name = "sqlmodel-ext", extras = ["postgresql"], specifier = "==0.3.2" },
     { name = "uvicorn", specifier = ">=0.38.0" },
     { name = "webauthn", specifier = ">=2.7.0" },
     { name = "whatthepatch", specifier = ">=1.0.6" },
@@ -1496,16 +1496,16 @@ wheels = [
 
 [[package]]
 name = "sqlmodel-ext"
-version = "0.3.0"
+version = "0.3.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
     { name = "sqlalchemy" },
     { name = "sqlmodel" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c7/da/83d2c6f502a6c607a011dbb4063cea99d81e6a777b09454753ef6b07654e/sqlmodel_ext-0.3.0.tar.gz", hash = "sha256:b1f2a00110e0355609b48f011bcf3f67256e6e59c4cd0412aadf55288a3bb756", size = 244533, upload-time = "2026-04-10T07:09:41.179Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d1/1b/5a0681eb926d957a171da9052d3d0c98545342988bf03a00482497cd4d5b/sqlmodel_ext-0.3.2.tar.gz", hash = "sha256:ff5a482d0a3c0cb4d76be66870c54529ce95cabda1bfd01f36e3dd1d1278cec7", size = 315781, upload-time = "2026-04-24T07:02:40.08Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/95/59/2504883feb3e26c0311e8fa12179fae550b5fb778507af25ff9e76cc9145/sqlmodel_ext-0.3.0-py3-none-any.whl", hash = "sha256:9e5b292c08eb767a27d413391b898cda0b4bc56c91822b4a826efb490b2f59c5", size = 131073, upload-time = "2026-04-10T07:09:39.336Z" },
+    { url = "https://files.pythonhosted.org/packages/eb/ce/b38a634dd98ae4c51bee2f52abeb13e018f4b54c8c1ba92c9c815ee9479e/sqlmodel_ext-0.3.2-py3-none-any.whl", hash = "sha256:c67aeb3f33b8f96c8db770f343c8bdcd3ff41fd995f916d8bf98c6dab4ac3219", size = 133236, upload-time = "2026-04-24T07:02:37.938Z" },
 ]
 
 [package.optional-dependencies]

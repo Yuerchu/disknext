@@ -20,7 +20,7 @@ async def test_object_create_folder(db_session: AsyncSession):
     group = Group(name="测试组")
     group = await group.save(db_session)
 
-    user = User(email="testuser", group_id=group.id)
+    user = User(email="testuser", nickname="测试用户", group_id=group.id)
     user = await user.save(db_session)
 
     policy = Policy(
@@ -54,7 +54,7 @@ async def test_object_create_file(db_session: AsyncSession):
     group = Group(name="测试组")
     group = await group.save(db_session)
 
-    user = User(email="testuser", group_id=group.id)
+    user = User(email="testuser", nickname="测试用户", group_id=group.id)
     user = await user.save(db_session)
 
     policy = Policy(
@@ -99,7 +99,7 @@ async def test_object_is_file_property(db_session: AsyncSession):
     group = Group(name="测试组")
     group = await group.save(db_session)
 
-    user = User(email="testuser", group_id=group.id)
+    user = User(email="testuser", nickname="测试用户", group_id=group.id)
     user = await user.save(db_session)
 
     policy = Policy(name="本地策略", type=PolicyType.LOCAL, server="/tmp/test")
@@ -126,7 +126,7 @@ async def test_object_is_folder_property(db_session: AsyncSession):
     group = Group(name="测试组")
     group = await group.save(db_session)
 
-    user = User(email="testuser", group_id=group.id)
+    user = User(email="testuser", nickname="测试用户", group_id=group.id)
     user = await user.save(db_session)
 
     policy = Policy(name="本地策略", type=PolicyType.LOCAL, server="/tmp/test")
@@ -152,7 +152,7 @@ async def test_object_get_root(db_session: AsyncSession):
     group = Group(name="测试组")
     group = await group.save(db_session)
 
-    user = User(email="rootuser", group_id=group.id)
+    user = User(email="rootuser", nickname="Root", group_id=group.id)
     user = await user.save(db_session)
 
     policy = Policy(name="本地策略", type=PolicyType.LOCAL, server="/tmp/test")
@@ -184,7 +184,7 @@ async def test_object_get_by_path_root(db_session: AsyncSession):
     group = Group(name="测试组")
     group = await group.save(db_session)
 
-    user = User(email="pathuser", group_id=group.id)
+    user = User(email="pathuser", nickname="Path", group_id=group.id)
     user = await user.save(db_session)
 
     policy = Policy(name="本地策略", type=PolicyType.LOCAL, server="/tmp/test")
@@ -215,7 +215,7 @@ async def test_object_get_by_path_nested(db_session: AsyncSession):
     group = Group(name="测试组")
     group = await group.save(db_session)
 
-    user = User(email="nesteduser", group_id=group.id)
+    user = User(email="nesteduser", nickname="Nested", group_id=group.id)
     user = await user.save(db_session)
 
     policy = Policy(name="本地策略", type=PolicyType.LOCAL, server="/tmp/test")
@@ -278,7 +278,7 @@ async def test_object_get_by_path_not_found(db_session: AsyncSession):
     group = Group(name="测试组")
     group = await group.save(db_session)
 
-    user = User(email="notfounduser", group_id=group.id)
+    user = User(email="notfounduser", nickname="NotFound", group_id=group.id)
     user = await user.save(db_session)
 
     policy = Policy(name="本地策略", type=PolicyType.LOCAL, server="/tmp/test")
@@ -312,7 +312,7 @@ async def test_object_get_children(db_session: AsyncSession):
     group = Group(name="测试组")
     group = await group.save(db_session)
 
-    user = User(email="childrenuser", group_id=group.id)
+    user = User(email="childrenuser", nickname="Children", group_id=group.id)
     user = await user.save(db_session)
 
     policy = Policy(name="本地策略", type=PolicyType.LOCAL, server="/tmp/test")
@@ -364,7 +364,7 @@ async def test_object_parent_child_relationship(db_session: AsyncSession):
     group = Group(name="测试组")
     group = await group.save(db_session)
 
-    user = User(email="reluser", group_id=group.id)
+    user = User(email="reluser", nickname="Rel", group_id=group.id)
     user = await user.save(db_session)
 
     policy = Policy(name="本地策略", type=PolicyType.LOCAL, server="/tmp/test")
@@ -409,7 +409,7 @@ async def test_object_unique_constraint(db_session: AsyncSession):
     group = Group(name="测试组")
     group = await group.save(db_session)
 
-    user = User(email="uniqueuser", group_id=group.id)
+    user = User(email="uniqueuser", nickname="Unique", group_id=group.id)
     user = await user.save(db_session)
 
     policy = Policy(name="本地策略", type=PolicyType.LOCAL, server="/tmp/test")
@@ -457,7 +457,7 @@ async def test_object_get_full_path(db_session: AsyncSession):
     group = Group(name="测试组")
     group = await group.save(db_session)
 
-    user = User(email="pathuser", group_id=group.id)
+    user = User(email="pathuser", nickname="Path", group_id=group.id)
     user = await user.save(db_session)
 
     policy = Policy(name="本地策略", type=PolicyType.LOCAL, server="/tmp/test")

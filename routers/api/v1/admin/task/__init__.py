@@ -72,7 +72,7 @@ async def router_admin_get_task_list(
 )
 async def router_admin_get_task(
     session: SessionDep,
-    task_id: int,
+    task_id: UUID,
 ) -> TaskDetailResponse:
     """
     获取任务详情。
@@ -104,7 +104,7 @@ async def router_admin_get_task(
 )
 async def router_admin_delete_task(
     session: SessionDep,
-    task_id: int,
+    task_id: UUID,
 ) -> None:
     """
     删除任务。
