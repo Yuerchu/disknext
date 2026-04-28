@@ -117,7 +117,7 @@ from sqlmodels.file import Entry, EntryType
 from sqlmodels.policy import Policy, PolicyType
 from sqlmodels.user import User, UserStatus
 import utils.conf.appmeta as appmeta
-from sqlmodels.scope import ADMIN_SCOPES
+from sqlmodels.scope import ADMIN_SCOPES, USER_DEFAULT_SCOPES, WEBDAV_SCOPES
 from utils.JWT import create_access_token
 from utils.password.pwd import Password
 
@@ -303,6 +303,7 @@ async def test_user(db_session: AsyncSession) -> dict[str, str | UUID]:
         score=100,
         group_id=group.id,
         password_hash=Password.hash(password),
+        scopes=[*USER_DEFAULT_SCOPES, *WEBDAV_SCOPES],
     )
     user = await user.save(db_session)
 

@@ -148,6 +148,9 @@ class UserResponse(ResponseBase):
     group: GroupResponse
     """用户所属用户组"""
 
+    scopes: list[str] = []
+    """用户权限列表"""
+
     tags: list[str | None]
     """用户标签列表"""
 

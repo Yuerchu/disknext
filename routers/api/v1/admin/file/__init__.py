@@ -7,6 +7,7 @@ from loguru import logger as l
 from sqlmodel import update as sql_update
 from sqlmodel_ext import rel, cond
 
+from middleware.auth import auth_required
 from middleware.dependencies import SessionDep, TableViewRequestDep
 from middleware.scope import require_scope
 from sqlmodels import (
@@ -125,12 +126,13 @@ async def router_admin_preview_file(
     summary='封禁/解禁文件',
     description='Ban the file, user can\'t open, copy, move, download or share this file if administrator ban.',
     status_code=204,
+    dependencies=[Depends(require_scope("admin.files:write:all"))],
 )
 async def router_admin_ban_file(
     session: SessionDep,
     file_id: UUID,
     request: FileBanRequest,
-    user: Annotated[User, Depends(require_scope("admin.files:write:all"))],
+    user: Annotated[User, Depends(auth_required)],
 ) -> None:
     """
     封禁或解禁文件/文件夹。封禁后用户无法访问该文件。

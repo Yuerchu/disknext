@@ -6,6 +6,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel_ext import cond, rel
 
 from middleware.auth import auth_required
+from middleware.scope import require_scope
 from middleware.dependencies import SessionDep
 from sqlmodels import (
     DirectoryCreateRequest,
@@ -59,6 +60,7 @@ async def _get_directory_response(
 @directory_router.get(
     path="/",
     summary="获取根目录内容",
+    dependencies=[Depends(require_scope("files:read:own"))],
 )
 async def router_directory_root(
         session: SessionDep,
@@ -82,6 +84,7 @@ async def router_directory_root(
 @directory_router.get(
     path="/{path:path}",
     summary="获取目录内容",
+    dependencies=[Depends(require_scope("files:read:own"))],
 )
 async def router_directory_get(
         session: SessionDep,
@@ -117,6 +120,7 @@ async def router_directory_get(
     path="/",
     summary="创建目录",
     status_code=204,
+    dependencies=[Depends(require_scope("files:create:own"))],
 )
 async def router_directory_create(
         session: SessionDep,

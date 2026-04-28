@@ -7,6 +7,7 @@ from loguru import logger as l
 from sqlmodel_ext import rel
 
 from middleware.auth import auth_required
+from middleware.scope import require_scope
 from middleware.dependencies import SessionDep, TableViewRequestDep
 from sqlmodels import ResponseBase
 from sqlmodels.user import AvatarType, User
@@ -277,6 +278,7 @@ def router_share_search_public(keywords: str, type: str = 'all') -> ResponseBase
     path='/',
     summary='创建新分享',
     description='Create a new share endpoint.',
+    dependencies=[Depends(require_scope("shares:create:own"))],
 )
 async def router_share_create(
     session: SessionDep,
@@ -322,6 +324,7 @@ async def router_share_create(
     path='/',
     summary='列出我的分享',
     description='Get a list of shares.',
+    dependencies=[Depends(require_scope("shares:read:own"))],
 )
 async def router_share_list(
     session: SessionDep,
@@ -372,7 +375,7 @@ async def router_share_list(
     path='/{id}/save',
     summary='转存他人分享',
     description='Save another user\'s share by ID.',
-    dependencies=[Depends(auth_required)]
+    dependencies=[Depends(require_scope("shares:create:own"))]
 )
 def router_share_save(id: str) -> ResponseBase:
     """
@@ -390,7 +393,7 @@ def router_share_save(id: str) -> ResponseBase:
     path='/{id}',
     summary='更新分享信息',
     description='Update share information by ID.',
-    dependencies=[Depends(auth_required)]
+    dependencies=[Depends(require_scope("shares:write:own"))]
 )
 def router_share_update(id: str) -> ResponseBase:
     """
@@ -409,6 +412,7 @@ def router_share_update(id: str) -> ResponseBase:
     summary='删除分享',
     description='Delete a share by ID.',
     status_code=204,
+    dependencies=[Depends(require_scope("shares:delete:own"))],
 )
 async def router_share_delete(
     session: SessionDep,

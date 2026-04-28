@@ -22,6 +22,7 @@ from sqlmodel_ext import cond, rel
 from whatthepatch.exceptions import HunkApplyException
 
 from middleware.auth import auth_required, verify_download_token
+from middleware.scope import require_scope
 from middleware.dependencies import SessionDep, ServerConfigDep
 from sqlmodels import (
     CreateFileRequest,
@@ -86,6 +87,7 @@ _upload_router = APIRouter(prefix="/upload")
     path='/',
     summary='创建上传会话',
     description='创建文件上传会话，返回会话ID用于后续分片上传。',
+    dependencies=[Depends(require_scope("files:create:own"))],
 )
 async def create_upload_session(
     session: SessionDep,
@@ -199,6 +201,7 @@ async def create_upload_session(
     path='/{session_id}/{chunk_index}',
     summary='上传文件分片',
     description='上传指定分片，分片索引从0开始。',
+    dependencies=[Depends(require_scope("files:create:own"))],
 )
 async def upload_chunk(
     session: SessionDep,
@@ -335,6 +338,7 @@ async def upload_chunk(
     summary='删除上传会话',
     description='取消上传并删除会话及已上传的临时文件。',
     status_code=204,
+    dependencies=[Depends(require_scope("files:delete:own"))],
 )
 async def delete_upload_session(
     session: SessionDep,
@@ -373,6 +377,7 @@ async def delete_upload_session(
     summary='清除所有上传会话',
     description='清除当前用户的所有上传会话。',
     status_code=204,
+    dependencies=[Depends(require_scope("files:delete:own"))],
 )
 async def clear_upload_sessions(
     session: SessionDep,
@@ -429,6 +434,7 @@ _download_router = APIRouter(prefix="/download")
     path='/{file_id}',
     summary='创建下载令牌',
     description='为指定文件创建下载令牌（JWT），有效期1小时。',
+    dependencies=[Depends(require_scope("files:download:own"))],
 )
 async def create_download_token_endpoint(
     session: SessionDep,
@@ -531,6 +537,7 @@ router.include_router(viewers_router)
     summary='创建空白文件',
     description='在指定目录下创建空白文件。',
     status_code=204,
+    dependencies=[Depends(require_scope("files:create:own"))],
 )
 async def create_empty_file(
     session: SessionDep,
@@ -612,6 +619,7 @@ async def create_empty_file(
     path='/{file_id}/wopi_session',
     summary='创建 WOPI 会话',
     description='为 WOPI 类型的查看器创建编辑会话，返回编辑器 URL 和访问令牌。',
+    dependencies=[Depends(require_scope("files:read:own"))],
 )
 async def create_wopi_session(
     session: SessionDep,
@@ -841,7 +849,7 @@ async def file_source_redirect(
     path='/{id}',
     summary='更新文件',
     description='更新文件内容。',
-    dependencies=[Depends(auth_required)]
+    dependencies=[Depends(require_scope("files:write:own"))]
 )
 async def file_update(id: str) -> ResponseBase:
     """更新文件内容"""
@@ -852,6 +860,7 @@ async def file_update(id: str) -> ResponseBase:
     path='/content/{file_id}',
     summary='获取文本文件内容',
     description='获取文本文件的 UTF-8 内容和 SHA-256 哈希值。',
+    dependencies=[Depends(require_scope("files:read:own"))],
 )
 async def file_content(
     session: SessionDep,
@@ -915,6 +924,7 @@ async def file_content(
     path='/content/{file_id}',
     summary='增量保存文本文件',
     description='使用 unified diff 增量更新文本文件内容。',
+    dependencies=[Depends(require_scope("files:write:own"))],
 )
 async def patch_file_content(
     session: SessionDep,
@@ -1025,7 +1035,7 @@ async def patch_file_content(
     path='/thumb/{id}',
     summary='获取文件缩略图',
     description='获取文件缩略图。',
-    dependencies=[Depends(auth_required)]
+    dependencies=[Depends(require_scope("files:read:own"))]
 )
 async def file_thumb(id: str) -> ResponseBase:
     """获取文件缩略图"""
@@ -1036,6 +1046,7 @@ async def file_thumb(id: str) -> ResponseBase:
     path='/source/{file_id}',
     summary='创建/获取文件外链',
     description='为指定文件创建或获取已有的外链地址。',
+    dependencies=[Depends(require_scope("files:download:own"))],
 )
 async def file_source(
     session: SessionDep,
@@ -1097,7 +1108,7 @@ async def file_source(
     path='/archive',
     summary='打包要下载的文件',
     description='将多个文件打包下载。',
-    dependencies=[Depends(auth_required)]
+    dependencies=[Depends(require_scope("files:download:own"))]
 )
 async def file_archive() -> ResponseBase:
     """打包文件"""
@@ -1108,7 +1119,7 @@ async def file_archive() -> ResponseBase:
     path='/compress',
     summary='创建文件压缩任务',
     description='创建文件压缩任务。',
-    dependencies=[Depends(auth_required)]
+    dependencies=[Depends(require_scope("files:write:own"))]
 )
 async def file_compress() -> ResponseBase:
     """创建压缩任务"""
@@ -1119,7 +1130,7 @@ async def file_compress() -> ResponseBase:
     path='/decompress',
     summary='创建文件解压任务',
     description='创建文件解压任务。',
-    dependencies=[Depends(auth_required)]
+    dependencies=[Depends(require_scope("files:write:own"))]
 )
 async def file_decompress() -> ResponseBase:
     """创建解压任务"""
@@ -1130,7 +1141,7 @@ async def file_decompress() -> ResponseBase:
     path='/relocate',
     summary='创建文件转移任务',
     description='创建文件转移任务。',
-    dependencies=[Depends(auth_required)]
+    dependencies=[Depends(require_scope("files:write:own"))]
 )
 async def file_relocate() -> ResponseBase:
     """创建转移任务"""
@@ -1141,7 +1152,7 @@ async def file_relocate() -> ResponseBase:
     path='/search',
     summary='搜索文件',
     description='按关键字搜索文件。',
-    dependencies=[Depends(auth_required)]
+    dependencies=[Depends(require_scope("files:read:own"))]
 )
 async def file_search(
     search_type: str = Query(...),

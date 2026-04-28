@@ -242,10 +242,20 @@ USER_DEFAULT_SCOPES: list[ScopeValueEnum] = [
 """注册会员默认权限"""
 
 WEBDAV_SCOPES: list[ScopeValueEnum] = [
+    ScopeValueEnum("webdav:create:own"),
     ScopeValueEnum("webdav:read:own"),
     ScopeValueEnum("webdav:write:own"),
+    ScopeValueEnum("webdav:delete:own"),
 ]
 """WebDAV 权限（按需追加到用户组 default_scopes）"""
+
+ARIA2_SCOPES: list[ScopeValueEnum] = [
+    ScopeValueEnum("aria2:create:own"),
+    ScopeValueEnum("aria2:read:own"),
+    ScopeValueEnum("aria2:write:own"),
+    ScopeValueEnum("aria2:delete:own"),
+]
+"""离线下载权限（按需追加到用户组 default_scopes）"""
 
 ADMIN_SCOPES: list[ScopeValueEnum] = [
     ScopeValueEnum("files:*"),

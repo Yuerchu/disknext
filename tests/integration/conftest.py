@@ -18,7 +18,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from main import app
 from sqlmodels import Group, GroupClaims, Entry, EntryType, Policy, PolicyType, ServerConfig, User
 from sqlmodels.policy import GroupPolicyLink
-from sqlmodels.scope import ADMIN_SCOPES
+from sqlmodels.scope import ADMIN_SCOPES, USER_DEFAULT_SCOPES, WEBDAV_SCOPES
 from sqlmodels.user import AvatarType, UserStatus
 from utils import Password
 from utils.JWT import create_access_token
@@ -117,6 +117,7 @@ async def initialized_db(db_session: AsyncSession) -> AsyncSession:
         group_id=default_group.id,
         avatar=AvatarType.DEFAULT,
         password_hash=Password.hash("testpass123"),
+        scopes=[*USER_DEFAULT_SCOPES, *WEBDAV_SCOPES],
     )
     db_session.add(test_user)
 

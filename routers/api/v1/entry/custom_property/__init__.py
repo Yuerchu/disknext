@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends
 from loguru import logger as l
 
 from middleware.auth import auth_required
+from middleware.scope import require_scope
 from middleware.dependencies import SessionDep
 from sqlmodels import (
     CustomPropertyDefinition,
@@ -35,6 +36,7 @@ router = APIRouter(
     path='',
     summary='获取自定义属性定义列表',
     description='获取当前用户的所有自定义属性定义，按 sort_order 排序。',
+    dependencies=[Depends(require_scope("files:read:own"))],
 )
 async def router_list_custom_properties(
     session: SessionDep,
@@ -72,6 +74,7 @@ async def router_list_custom_properties(
     summary='创建自定义属性定义',
     description='创建一个新的自定义属性模板。',
     status_code=204,
+    dependencies=[Depends(require_scope("files:create:own"))],
 )
 async def router_create_custom_property(
     session: SessionDep,
@@ -114,6 +117,7 @@ async def router_create_custom_property(
     summary='更新自定义属性定义',
     description='更新自定义属性模板的名称、图标、选项等。',
     status_code=204,
+    dependencies=[Depends(require_scope("files:write:own"))],
 )
 async def router_update_custom_property(
     session: SessionDep,
@@ -145,6 +149,7 @@ async def router_update_custom_property(
     summary='删除自定义属性定义',
     description='删除自定义属性模板。注意：不会自动清理已使用该属性的元数据条目。',
     status_code=204,
+    dependencies=[Depends(require_scope("files:delete:own"))],
 )
 async def router_delete_custom_property(
     session: SessionDep,

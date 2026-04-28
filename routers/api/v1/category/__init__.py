@@ -9,6 +9,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 
 from middleware.auth import auth_required
+from middleware.scope import require_scope
 from middleware.dependencies import SessionDep, ServerConfigDep, TableViewRequestDep
 from sqlmodels import (
     FileCategory,
@@ -31,6 +32,7 @@ category_router = APIRouter(
 @category_router.get(
     path="/{category}",
     summary="按分类获取文件列表",
+    dependencies=[Depends(require_scope("files:read:own"))],
 )
 async def router_category_list(
     session: SessionDep,

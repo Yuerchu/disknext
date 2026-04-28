@@ -6,6 +6,7 @@ from loguru import logger as l
 from sqlmodel_ext import cond
 
 from middleware.auth import auth_required
+from middleware.scope import require_scope
 from middleware.dependencies import SessionDep
 from sqlmodels import (
     Entry, EntryType,
@@ -26,12 +27,6 @@ webdav_router = APIRouter(
 )
 
 
-def _check_webdav_enabled(user: User) -> None:
-    """检查用户组是否启用了 WebDAV 功能"""
-    if not user.group.web_dav_enabled:
-        http_exceptions.raise_forbidden(E.WEBDAV_DISABLED, "WebDAV 功能未启用")
-
-
 def _to_response(account: WebDAV) -> WebDAVAccountResponse:
     """将 WebDAV 数据库模型转换为响应 DTO"""
     return WebDAVAccountResponse.model_validate(account, from_attributes=True)
@@ -40,6 +35,7 @@ def _to_response(account: WebDAV) -> WebDAVAccountResponse:
 @webdav_router.get(
     path='/accounts',
     summary='获取账号列表',
+    dependencies=[Depends(require_scope("webdav:read:own"))],
 )
 async def list_accounts(
     session: SessionDep,
@@ -50,7 +46,6 @@ async def list_accounts(
 
     认证：JWT Bearer Token
     """
-    _check_webdav_enabled(user)
     user_id: UUID = user.id
 
     accounts: list[WebDAV] = await WebDAV.get(
@@ -65,6 +60,7 @@ async def list_accounts(
     path='/accounts',
     summary='创建账号',
     status_code=201,
+    dependencies=[Depends(require_scope("webdav:create:own"))],
 )
 async def create_account(
     session: SessionDep,
@@ -77,11 +73,10 @@ async def create_account(
     认证：JWT Bearer Token
 
     错误处理：
-    - 403: WebDAV 功能未启用
+    - 403: 缺少 webdav:create:own 权限
     - 400: 根目录路径不存在或不是目录
     - 409: 账户名已存在
     """
-    _check_webdav_enabled(user)
     user_id: UUID = user.id
 
     # 验证账户名唯一
@@ -116,6 +111,7 @@ async def create_account(
 @webdav_router.patch(
     path='/accounts/{account_id}',
     summary='更新账号',
+    dependencies=[Depends(require_scope("webdav:write:own"))],
 )
 async def update_account(
     session: SessionDep,
@@ -129,11 +125,10 @@ async def update_account(
     认证：JWT Bearer Token
 
     错误处理：
-    - 403: WebDAV 功能未启用
+    - 403: 缺少 webdav:write:own 权限
     - 404: 账户不存在
     - 400: 根目录路径不存在或不是目录
     """
-    _check_webdav_enabled(user)
     user_id: UUID = user.id
 
     account = await WebDAV.get(
@@ -168,6 +163,7 @@ async def update_account(
     path='/accounts/{account_id}',
     summary='删除账号',
     status_code=204,
+    dependencies=[Depends(require_scope("webdav:delete:own"))],
 )
 async def delete_account(
     session: SessionDep,
@@ -180,10 +176,9 @@ async def delete_account(
     认证：JWT Bearer Token
 
     错误处理：
-    - 403: WebDAV 功能未启用
+    - 403: 缺少 webdav:delete:own 权限
     - 404: 账户不存在
     """
-    _check_webdav_enabled(user)
     user_id: UUID = user.id
 
     account = await WebDAV.get(

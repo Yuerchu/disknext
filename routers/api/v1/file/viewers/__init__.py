@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlmodel_ext import cond, rel
 
 from middleware.auth import auth_required
+from middleware.scope import require_scope
 from middleware.dependencies import SessionDep
 from sqlmodels import (
     FileApp,
@@ -27,6 +28,7 @@ viewers_router = APIRouter(prefix="/viewers", tags=["file", "viewers"])
     path='',
     summary='查询可用文件查看器',
     description='根据文件扩展名查询可用的查看器应用列表。',
+    dependencies=[Depends(require_scope("files:read:own"))],
 )
 async def get_viewers(
     session: SessionDep,

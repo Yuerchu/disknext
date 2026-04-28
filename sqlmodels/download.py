@@ -1,5 +1,5 @@
 from enum import StrEnum
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from sqlmodel import Field, Relationship, UniqueConstraint
@@ -111,7 +111,7 @@ class Download(DownloadBase, UUIDTableBaseMixin):
     """目标存储路径"""
 
     # Aria2 信息字段
-    info_hash: Annotated[str | None, Field(max_length=40)] = None
+    info_hash: str | None = Field(default=None, max_length=40)
     """InfoHash（BT种子）"""
 
     piece_length: NonNegativeBigInt

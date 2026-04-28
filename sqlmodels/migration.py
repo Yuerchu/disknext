@@ -160,6 +160,7 @@ async def init_default_user() -> None:
     from .group import Group
     from .file import Entry, EntryType
     from .policy import Policy
+    from .scope import ADMIN_SCOPES
     from .server_config import ServerConfig
     from .database_connection import DatabaseManager
     from utils.password.pwd import Password
@@ -193,6 +194,7 @@ async def init_default_user() -> None:
                 nickname="admin",
                 group_id=admin_group.id,
                 password_hash=Password.hash(admin_password),
+                scopes=ADMIN_SCOPES,
             )
             admin_user = await admin_user.save(session)
             admin_user_id = admin_user.id

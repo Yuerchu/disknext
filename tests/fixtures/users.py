@@ -8,7 +8,7 @@ from uuid import UUID
 
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from sqlmodels.scope import ADMIN_SCOPES
+from sqlmodels.scope import ADMIN_SCOPES, USER_DEFAULT_SCOPES
 from sqlmodels.user import AvatarType, User, UserStatus
 from utils.password.pwd import Password
 
@@ -58,6 +58,7 @@ class UserFactory:
             timezone=kwargs.get("timezone", 8),
             previous_group_id=kwargs.get("previous_group_id"),
             password_hash=Password.hash(password),
+            scopes=kwargs.get("scopes", USER_DEFAULT_SCOPES),
         )
 
         user = await user.save(session)
@@ -136,6 +137,7 @@ class UserFactory:
             group_id=group_id,
             avatar=AvatarType.DEFAULT,
             password_hash=Password.hash("banned_password"),
+            scopes=USER_DEFAULT_SCOPES,
         )
 
         banned_user = await banned_user.save(session)
@@ -174,6 +176,7 @@ class UserFactory:
             group_id=group_id,
             avatar=AvatarType.DEFAULT,
             password_hash=Password.hash("password123"),
+            scopes=USER_DEFAULT_SCOPES,
         )
 
         user = await user.save(session)

@@ -13,6 +13,7 @@ from loguru import logger as l
 from sqlmodel import col
 
 from middleware.auth import auth_required
+from middleware.scope import require_scope
 from middleware.dependencies import SessionDep
 from sqlmodels import (
     CreateFileRequest,
@@ -59,6 +60,7 @@ entry_router.include_router(custom_property_router)
     summary='创建空白文件',
     description='在指定目录下创建空白文件。',
     status_code=204,
+    dependencies=[Depends(require_scope("files:create:own"))],
 )
 async def router_object_create(
     session: SessionDep,
@@ -147,6 +149,7 @@ async def router_object_create(
     summary='删除对象',
     description='删除一个或多个对象（文件或目录），文件会移动到用户回收站。',
     status_code=204,
+    dependencies=[Depends(require_scope("files:delete:own"))],
 )
 async def router_object_delete(
     session: SessionDep,
@@ -195,6 +198,7 @@ async def router_object_delete(
     summary='移动对象',
     description='移动一个或多个对象到目标目录',
     status_code=204,
+    dependencies=[Depends(require_scope("files:write:own"))],
 )
 async def router_object_move(
     session: SessionDep,
@@ -283,6 +287,7 @@ async def router_object_move(
     summary='复制对象',
     description='复制一个或多个对象到目标目录。文件复制仅增加物理文件引用计数，不复制物理文件。',
     status_code=204,
+    dependencies=[Depends(require_scope("files:create:own"))],
 )
 async def router_object_copy(
     session: SessionDep,
@@ -396,6 +401,7 @@ async def router_object_copy(
     summary='更新对象',
     description='更新对象属性（如重命名）。',
     status_code=204,
+    dependencies=[Depends(require_scope("files:write:own"))],
 )
 async def router_object_update(
     session: SessionDep,
@@ -475,6 +481,7 @@ async def router_object_update(
     path='/{file_id}',
     summary='获取对象基本属性',
     description='获取对象的基本属性信息（名称、类型、大小、创建/修改时间等）。',
+    dependencies=[Depends(require_scope("files:read:own"))],
 )
 async def router_object_property(
     session: SessionDep,
@@ -515,6 +522,7 @@ async def router_object_property(
     path='/{file_id}/detail',
     summary='获取对象详细属性',
     description='获取对象的详细属性信息，包括元数据、分享统计、存储信息等。',
+    dependencies=[Depends(require_scope("files:read:own"))],
 )
 async def router_object_property_detail(
     session: SessionDep,
@@ -599,6 +607,7 @@ async def router_object_property_detail(
 @entry_router.patch(
     path='/{file_id}/policy',
     summary='切换对象存储策略',
+    dependencies=[Depends(require_scope("files:write:own"))],
 )
 async def router_object_switch_policy(
     session: SessionDep,
@@ -735,6 +744,7 @@ async def router_object_switch_policy(
     path='/{file_id}/metadata',
     summary='获取对象元数据',
     description='获取对象的元数据键值对，可按命名空间过滤。',
+    dependencies=[Depends(require_scope("files:read:own"))],
 )
 async def router_get_object_metadata(
     session: SessionDep,
@@ -790,6 +800,7 @@ async def router_get_object_metadata(
     summary='批量更新对象元数据',
     description='批量设置或删除对象的元数据条目。仅允许修改 custom: 命名空间。',
     status_code=204,
+    dependencies=[Depends(require_scope("files:write:own"))],
 )
 async def router_patch_object_metadata(
     session: SessionDep,

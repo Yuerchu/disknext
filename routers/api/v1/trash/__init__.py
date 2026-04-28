@@ -12,6 +12,7 @@ from loguru import logger as l
 from sqlmodel import col
 
 from middleware.auth import auth_required
+from middleware.scope import require_scope
 from middleware.dependencies import SessionDep
 from sqlmodels import Entry, User
 from sqlmodels.file import TrashDeleteRequest, TrashItemResponse, TrashRestoreRequest
@@ -26,6 +27,7 @@ trash_router = APIRouter(
     path='/',
     summary='列出回收站内容',
     description='获取当前用户回收站中的所有顶层对象。',
+    dependencies=[Depends(require_scope("files:read:own"))],
 )
 async def router_trash_list(
     session: SessionDep,
@@ -54,6 +56,7 @@ async def router_trash_list(
     summary='恢复对象',
     description='从回收站恢复一个或多个对象到原位置。如果原位置不存在则恢复到根目录。',
     status_code=204,
+    dependencies=[Depends(require_scope("files:write:own"))],
 )
 async def router_trash_restore(
     session: SessionDep,
@@ -91,6 +94,7 @@ async def router_trash_restore(
     summary='永久删除对象',
     description='永久删除回收站中的指定对象（传入 ids），或清空整个回收站（is_empty_all=True）。',
     status_code=204,
+    dependencies=[Depends(require_scope("files:delete:own"))],
 )
 async def router_trash_delete(
     session: SessionDep,
