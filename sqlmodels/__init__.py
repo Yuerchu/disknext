@@ -20,7 +20,8 @@ from .token import (
 )
 from .user import (
     JWTPayload,
-    MagicLinkRequest,
+    SendCodeRequest,
+    ResetPasswordRequest,
     UnifiedAuthRequest,
     User,
     UserBase,
@@ -147,12 +148,20 @@ from .server_config import (
     CaptchaType, ViewMethod, PWADisplayMode,
     SiteConfigResponse, AuthMethodConfig,
 )
-from .mail_template import MailTemplate, MailTemplateType
+from .mail_template import MailTemplate, MailTemplateType, SmtpEncryption
 from .share import (
     Share, ShareBase, ShareCreateRequest, CreateShareResponse,
     ShareOwnerInfo, ShareObjectItem, SharePublic,
     ShareResponse, ShareDetailResponse,
     AdminShareListItem, AdminShareDetailResponse,
+)
+from .sms import (
+    SmsProvider, SmsProviderBase,
+    SmsException, SmsProviderException, SmsRateLimitException, SmsInternalException, SmsCodeInvalidException,
+    SmsCodeTypeEnum, SmsCodeReasonEnum, SendSmsCodeRequest,
+    SMSBaoProvider, SMSBaoProviderCreateRequest, SMSBaoProviderUpdateRequest, SMSBaoProviderInfoResponse,
+    TencentCloudSMSProvider, TencentCloudSMSProviderCreateRequest, TencentCloudSMSProviderUpdateRequest,
+    TencentCloudSMSProviderInfoResponse, TencentSMSRegionEnum,
 )
 from .source_link import SourceLink
 from .storage_pack import StoragePack, StoragePackResponse

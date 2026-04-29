@@ -1,15 +1,14 @@
 import json
-from typing import Annotated, Literal
-from uuid import UUID, uuid4
-import aiofiles.os
 from datetime import datetime
+from typing import Annotated
+from uuid import UUID, uuid4
 
+import aiofiles.os
 import jwt
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse, RedirectResponse
 from loguru import logger
 from sqlalchemy import func, select, and_, or_
-from itsdangerous import URLSafeTimedSerializer
 from sqlmodel_ext import rel
 from webauthn import (
     generate_authentication_options,
@@ -24,14 +23,17 @@ from middleware.auth import auth_required
 from middleware.dependencies import SessionDep, ServerConfigDep
 from sqlmodels.auth_identity import AuthProviderType
 from sqlmodels.group import GroupResponse
+from sqlmodels.mail_template import MailTemplateType
 from sqlmodels.user import AvatarType, User, UserStatus
 from sqlmodels.user_authn import UserAuthn
 from utils import JWT, Password, http_exceptions
 from utils.http.error_codes import ErrorCode as E
 from utils.conf import appmeta
+from utils.mail import MailService
 from utils.redis.challenge_store import ChallengeStore
+from utils.redis.verify_code_store import VerifyCodeStore
 
-from .deps import check_provider_enabled, login_email_password, login_oauth, login_passkey, login_magic_link
+from .deps import check_provider_enabled, login_email_password, login_oauth, login_passkey, login_phone_sms
 from .settings import user_settings_router
 
 user_router = APIRouter(
@@ -59,8 +61,8 @@ async def router_user_session(
     统一登录端点
 
     请求体：
-    - provider: 登录方式（email_password / github / qq / passkey / magic_link）
-    - identifier: 标识符（邮箱 / OAuth code / credential_id / magic link token）
+    - provider: 登录方式（email_password / github / qq / passkey）
+    - identifier: 标识符（邮箱 / OAuth code / credential_id）
     - credential: 凭证（密码 / WebAuthn assertion 等）
     - two_fa_code: 两步验证码（可选）
     - redirect_uri: OAuth 回调地址（可选）
@@ -84,10 +86,8 @@ async def router_user_session(
             user = await login_oauth(session, request, AuthProviderType.QQ, config)
         case AuthProviderType.PASSKEY:
             user = await login_passkey(session, request, config)
-        case AuthProviderType.MAGIC_LINK:
-            user = await login_magic_link(session, request)
         case AuthProviderType.PHONE_SMS:
-            http_exceptions.raise_not_implemented(message="短信登录暂未开放")
+            user = await login_phone_sms(session, request, config)
         case _:
             http_exceptions.raise_bad_request(E.AUTH_PROVIDER_UNSUPPORTED, f"不支持的登录方式: {request.provider}")
 
@@ -187,7 +187,15 @@ async def router_user_register(
     if existing_user:
         http_exceptions.raise_conflict(E.USER_EMAIL_EXISTS, "该邮箱已被注册")
 
-    # 5. 获取默认用户组
+    # 5. 邮箱激活验证码校验
+    if config.is_require_active:
+        if not request.verify_code:
+            http_exceptions.raise_bad_request(E.MAIL_CODE_INVALID, "需要邮箱验证码")
+        valid = await VerifyCodeStore.verify_and_delete("register", request.identifier, request.verify_code)
+        if not valid:
+            http_exceptions.raise_bad_request(E.MAIL_CODE_INVALID, "验证码错误或已过期")
+
+    # 6. 获取默认用户组
     if not config.default_group_id:
         logger.error("默认用户组未配置")
         http_exceptions.raise_internal_error()
@@ -226,63 +234,151 @@ async def router_user_register(
 
 
 @user_router.post(
-    path='/magic_link',
-    summary='发送 Magic Link 邮件',
-    description='生成 Magic Link token 并发送到指定邮箱。',
+    path='/code',
+    summary='发送验证码',
+    description='发送 6 位数字验证码到指定邮箱或手机号，用于注册激活或密码重置。',
     status_code=204,
 )
-async def router_user_magic_link(
+async def router_user_send_code(
     session: SessionDep,
     config: ServerConfigDep,
-    request: sqlmodels.MagicLinkRequest,
+    request: sqlmodels.SendCodeRequest,
 ) -> None:
     """
-    发送 Magic Link 邮件
+    发送验证码（邮件或短信）
 
     流程：
-    1. 验证邮箱对应的 AuthIdentity 存在
-    2. 生成签名 token
-    3. 发送邮件（包含带 token 的链接）
+    1. 根据 channel 验证参数
+    2. 根据 reason 校验邮箱/手机号状态
+    3. 限流检查 + 生成验证码
+    4. 发送邮件或短信
 
     错误处理：
-    - 400: Magic Link 未启用
-    - 404: 邮箱未注册
+    - 400: 参数缺失
+    - 409: 注册时邮箱/手机号已存在
+    - 404: 重置时邮箱未注册
+    - 429: 发送过于频繁
+    - 501: 未配置短信提供商
     """
-    # 检查 magic_link 是否启用
-    if not config.is_auth_magic_link_enabled:
-        http_exceptions.raise_bad_request(E.AUTH_MAGIC_LINK_DISABLED, "Magic Link 登录未启用")
+    if request.channel == 'email':
+        if not request.email:
+            http_exceptions.raise_bad_request(E.MAIL_CODE_INVALID, "邮箱地址不能为空")
+        await _send_email_code(session, config, request.email, request.reason)
+    else:
+        if not request.phone:
+            http_exceptions.raise_bad_request(E.SMS_CODE_INVALID, "手机号不能为空")
+        await _send_sms_code(session, config, str(request.phone), request.reason)
 
-    # 验证邮箱存在
-    user = await User.get(session, User.email == request.email)
-    if not user:
-        http_exceptions.raise_not_found(E.USER_EMAIL_NOT_REGISTERED, "该邮箱未注册")
 
-    # 生成签名 token
-    serializer = URLSafeTimedSerializer(appmeta.secret_key)
-    token = serializer.dumps(request.email, salt="magic-link-salt")
+async def _send_email_code(
+    session: SessionDep,
+    config: 'sqlmodels.ServerConfig',
+    email: str,
+    reason: str,
+) -> None:
+    """发送邮件验证码"""
+    if reason == 'register':
+        existing = await sqlmodels.User.get(session, sqlmodels.User.email == email)
+        if existing:
+            http_exceptions.raise_conflict(E.USER_EMAIL_EXISTS, "该邮箱已被注册")
+        template_type = MailTemplateType.ACTIVATION
+        subject = "验证您的邮箱"
+    else:
+        existing = await sqlmodels.User.get(session, sqlmodels.User.email == email)
+        if not existing:
+            http_exceptions.raise_not_found(E.USER_EMAIL_NOT_REGISTERED, "该邮箱未注册")
+        template_type = MailTemplateType.RESET_PASSWORD
+        subject = "重置密码"
 
-    # 获取站点 URL
-    site_url = config.site_url
+    code = await VerifyCodeStore.generate_and_store(
+        reason, email, ttl_minutes=config.mail_code_ttl_minutes,
+    )
 
-    # TODO: 发送邮件（包含 {site_url}/auth/magic-link?token={token}）
-    logger.info(f"Magic Link token 已为 {request.email} 生成 (邮件发送待实现)")
+    await MailService.send_template(
+        config, session, email, template_type, subject,
+        variables={
+            "site_url": config.site_url,
+            "logo_light": config.logo_light,
+            "logo_dark": config.logo_dark,
+            "site_name": config.site_name,
+            "verify_code": code,
+            "valid_minutes": str(config.mail_code_ttl_minutes),
+            "current_year": str(datetime.now().year),
+        },
+    )
+
+
+async def _send_sms_code(
+    session: SessionDep,
+    config: 'sqlmodels.ServerConfig',
+    phone: str,
+    reason: str,
+) -> None:
+    """发送短信验证码"""
+    from sqlmodels.sms import SmsProvider, SmsCodeReasonEnum, SmsRateLimitException
+
+    # 获取所有启用的 SMS 提供商
+    providers: list[SmsProvider] = await SmsProvider.get(
+        session, SmsProvider.enabled == True, fetch_mode="all",
+    )
+    if not providers:
+        http_exceptions.raise_not_implemented(E.SMS_NO_PROVIDER, "未配置短信提供商")
+
+    # 映射 reason
+    sms_reason = SmsCodeReasonEnum(reason) if reason in SmsCodeReasonEnum.__members__ else SmsCodeReasonEnum.login
+    code_ttl = config.sms_code_ttl_minutes * 60
+    rate_limit_ttl = config.sms_code_rate_limit_seconds
+
+    # 冗余机制：依次尝试所有提供商
+    last_error: Exception | None = None
+    for provider in providers:
+        try:
+            await provider.send_verification_code(
+                phone, sms_reason, code_ttl, rate_limit_ttl,
+            )
+            return
+        except SmsRateLimitException:
+            http_exceptions.raise_too_many_requests(E.SMS_RATE_LIMITED, "发送过于频繁，请稍后再试")
+        except Exception as exc:
+            logger.warning(f"短信提供商 {provider.name} 发送失败: {exc}")
+            last_error = exc
+
+    logger.error(f"所有短信提供商发送失败: {last_error}")
+    http_exceptions.raise_internal_error(E.SMS_PROVIDER_ERROR, "短信发送失败")
 
 
 @user_router.post(
-    path='/code',
-    summary='发送验证码邮件',
-    description='Send a verification code email.',
+    path='/reset_password',
+    summary='通过验证码重置密码',
+    description='验证邮箱验证码并重置密码。',
+    status_code=204,
 )
-def router_user_email_code(
-    reason: Literal['register', 'reset'] = 'register',
-) -> sqlmodels.ResponseBase:
+async def router_user_reset_password(
+    session: SessionDep,
+    request: sqlmodels.ResetPasswordRequest,
+) -> None:
     """
-    Send a verification code email.
+    重置密码
 
-    Returns:
-        dict: A dictionary containing information about the password reset email.
+    流程：
+    1. 验证码校验（原子校验+删除）
+    2. 查找用户
+    3. 更新密码哈希
+
+    错误处理：
+    - 400: 验证码错误或已过期
+    - 404: 邮箱未注册
     """
-    http_exceptions.raise_not_implemented()
+    valid = await VerifyCodeStore.verify_and_delete("reset", request.email, request.code)
+    if not valid:
+        http_exceptions.raise_bad_request(E.MAIL_CODE_INVALID, "验证码错误或已过期")
+
+    user: User | None = await User.get(session, User.email == request.email)
+    if not user:
+        http_exceptions.raise_not_found(E.USER_EMAIL_NOT_REGISTERED, "该邮箱未注册")
+
+    user.password_hash = Password.hash(request.new_password)
+    _ = await user.save(session)
 
 @user_router.get(
     path='/profile/{id}',

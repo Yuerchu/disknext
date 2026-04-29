@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING, Literal, TypeVar
 from uuid import UUID, uuid4
 
 from pydantic import EmailStr
@@ -70,13 +70,16 @@ class UnifiedAuthRequest(SQLModelBase):
     """登录方式"""
 
     identifier: str = Field(min_length=1, max_length=255)
-    """标识符（邮箱 / OAuth code / Magic Link token）"""
+    """标识符（邮箱 / OAuth code）"""
 
     credential: str | None = Field(default=None, max_length=255)
     """凭证（密码，provider=email_password 时必填）"""
 
     two_fa_code: str | None = Field(default=None, min_length=6, max_length=6)
     """两步验证代码"""
+
+    verify_code: str | None = Field(default=None, min_length=6, max_length=6)
+    """邮箱验证码（注册激活时使用）"""
 
     redirect_uri: SafeHttpUrl | None = None
     """OAuth 回调地址"""
@@ -281,14 +284,36 @@ class UserTwoFactorResponse(SQLModelBase):
     """两步验证密钥"""
 
 
-class MagicLinkRequest(SQLModelBase):
-    """Magic Link 请求 DTO"""
+class SendCodeRequest(SQLModelBase):
+    """发送验证码请求 DTO（邮件或短信）"""
 
-    email: EmailStr = Field(max_length=64)
-    """接收 Magic Link 的邮箱"""
+    email: EmailStr | None = Field(default=None, max_length=64)
+    """接收验证码的邮箱（channel=email 时必填）"""
+
+    phone: PhoneNumber | None = None
+    """接收验证码的手机号（channel=sms 时必填，E.164 格式）"""
+
+    reason: Literal['register', 'reset']
+    """用途：register=注册激活, reset=密码重置"""
+
+    channel: Literal['email', 'sms'] = 'email'
+    """发送渠道"""
 
     captcha: Str255 | None = None
     """验证码"""
+
+
+class ResetPasswordRequest(SQLModelBase):
+    """重置密码请求 DTO"""
+
+    email: EmailStr = Field(max_length=64)
+    """邮箱"""
+
+    code: str = Field(min_length=6, max_length=6)
+    """验证码"""
+
+    new_password: str = Field(min_length=1, max_length=255)
+    """新密码"""
 
 
 class UserFilterParams(SQLModelBase):

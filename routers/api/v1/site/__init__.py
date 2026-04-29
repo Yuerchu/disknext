@@ -80,6 +80,5 @@ async def router_site_config(config: ServerConfigDep) -> SiteConfigResponse:
         AuthMethodConfig(provider=AuthProviderType.GITHUB, is_enabled=config.is_github_enabled),
         AuthMethodConfig(provider=AuthProviderType.QQ, is_enabled=config.is_qq_enabled),
         AuthMethodConfig(provider=AuthProviderType.PASSKEY, is_enabled=config.is_auth_passkey_enabled),
-        AuthMethodConfig(provider=AuthProviderType.MAGIC_LINK, is_enabled=config.is_auth_magic_link_enabled),
     ]
     return response

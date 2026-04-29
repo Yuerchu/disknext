@@ -22,6 +22,7 @@ from .policy import admin_policy_router
 from .share import admin_share_router
 from .task import admin_task_router
 from .user import admin_user_router
+from .sms import admin_sms_router
 from .theme import admin_theme_router
 
 # 管理员根目录 /api/admin
@@ -37,6 +38,7 @@ admin_router.include_router(admin_file_app_router)
 admin_router.include_router(admin_policy_router)
 admin_router.include_router(admin_share_router)
 admin_router.include_router(admin_task_router)
+admin_router.include_router(admin_sms_router)
 admin_router.include_router(admin_theme_router)
 
 # 离线下载 /api/admin/aria2

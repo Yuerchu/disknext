@@ -5,6 +5,16 @@ from sqlmodel import Field
 from sqlmodel_ext import SQLModelBase, UUIDTableBaseMixin, Text1M
 
 
+class SmtpEncryption(StrEnum):
+    """SMTP 加密方式"""
+    NONE = "none"
+    """不加密（端口 25）"""
+    TLS = "tls"
+    """直接 TLS（端口 465）"""
+    STARTTLS = "starttls"
+    """STARTTLS 升级（端口 587）"""
+
+
 class MailTemplateType(StrEnum):
     """邮件模板类型"""
     ACTIVATION = "activation"

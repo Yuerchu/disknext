@@ -28,8 +28,6 @@ class AuthProviderType(StrEnum):
     PASSKEY = "passkey"
     """Passkey/WebAuthn"""
 
-    MAGIC_LINK = "magic_link"
-    """邮箱 Magic Link"""
 
 
 class ChangePasswordRequest(SQLModelBase):

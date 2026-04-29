@@ -75,17 +75,39 @@ class ErrorCode(StrEnum):
     AUTH_PASSKEY_REGISTER_EXPIRED = "auth.passkey_register_session_expired"
     """注册会话已过期"""
 
-    AUTH_MAGIC_LINK_DISABLED = "auth.magic_link_disabled"
-    """Magic Link 登录未启用"""
+    # ==================== mail ====================
 
-    AUTH_MAGIC_LINK_EXPIRED = "auth.magic_link_expired"
-    """Magic Link 已过期"""
+    MAIL_SMTP_ERROR = "mail.smtp_error"
+    """SMTP 发送失败"""
 
-    AUTH_MAGIC_LINK_INVALID = "auth.magic_link_invalid"
-    """Magic Link 无效"""
+    MAIL_TEMPLATE_NOT_FOUND = "mail.template_not_found"
+    """邮件模板不存在"""
 
-    AUTH_MAGIC_LINK_USED = "auth.magic_link_used"
-    """Magic Link 已被使用"""
+    MAIL_RATE_LIMITED = "mail.rate_limited"
+    """验证码发送过于频繁"""
+
+    MAIL_CODE_INVALID = "mail.code_invalid"
+    """验证码错误或已过期"""
+
+    # ==================== sms ====================
+
+    SMS_PROVIDER_ERROR = "sms.provider_error"
+    """短信提供商发送失败"""
+
+    SMS_RATE_LIMITED = "sms.rate_limited"
+    """短信发送过于频繁"""
+
+    SMS_CODE_INVALID = "sms.code_invalid"
+    """短信验证码错误或已过期"""
+
+    SMS_NO_PROVIDER = "sms.no_provider_configured"
+    """未配置短信提供商"""
+
+    SMS_PROVIDER_NOT_FOUND = "sms.provider_not_found"
+    """短信提供商不存在"""
+
+    SMS_PROVIDER_NAME_EXISTS = "sms.provider_name_exists"
+    """短信提供商名称已存在"""
 
     # ==================== user ====================
 

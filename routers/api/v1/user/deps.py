@@ -1,13 +1,10 @@
 """
 用户认证流程辅助函数
 
-提供各种登录方式（邮箱密码、OAuth、Passkey、Magic Link）的实现逻辑。
+提供各种登录方式（邮箱密码、OAuth、Passkey、手机号短信）的实现逻辑。
 """
-import hashlib
-
 import orjson
 from loguru import logger
-from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel_ext import rel, cond
 from webauthn import verify_authentication_response
@@ -21,10 +18,8 @@ from sqlmodels.user import AvatarType, User, UserStatus
 from sqlmodels.user_authn import UserAuthn
 from utils import Password, http_exceptions
 from utils.http.error_codes import ErrorCode as E
-from utils.conf import appmeta
 from utils.password.pwd import PasswordStatus
 from utils.redis.challenge_store import ChallengeStore
-from utils.redis.token_store import TokenStore
 
 
 def check_provider_enabled(config: ServerConfig, provider: AuthProviderType) -> None:
@@ -35,7 +30,6 @@ def check_provider_enabled(config: ServerConfig, provider: AuthProviderType) -> 
         AuthProviderType.EMAIL_PASSWORD: config.is_auth_email_password_enabled,
         AuthProviderType.PHONE_SMS: config.is_auth_phone_sms_enabled,
         AuthProviderType.PASSKEY: config.is_auth_passkey_enabled,
-        AuthProviderType.MAGIC_LINK: config.is_auth_magic_link_enabled,
     }
     is_enabled = provider_map.get(provider, False)
     if not is_enabled:
@@ -267,34 +261,80 @@ async def login_passkey(
     return user
 
 
-async def login_magic_link(
+async def login_phone_sms(
         session: AsyncSession,
         request: sqlmodels.UnifiedAuthRequest,
+        config: ServerConfig,
 ) -> User:
     """
-    Magic Link 登录
+    手机号 + 短信验证码登录
 
-    identifier 为签名 token，由 itsdangerous 生成。
+    identifier 为手机号（E.164 格式），credential 为 6 位验证码。
+    如果手机号未注册则自动注册。
     """
-    serializer = URLSafeTimedSerializer(appmeta.secret_key)
+    from sqlmodels.sms import SmsProvider, SmsCodeReasonEnum, SmsRateLimitException, SmsCodeInvalidException
 
+    if not request.credential:
+        http_exceptions.raise_bad_request(E.SMS_CODE_INVALID, "验证码不能为空")
+
+    phone = request.identifier
+    code_ttl = config.sms_code_ttl_minutes * 60
+
+    # 验证短信验证码
     try:
-        email = serializer.loads(request.identifier, salt="magic-link-salt", max_age=600)
-    except SignatureExpired:
-        http_exceptions.raise_unauthorized(E.AUTH_MAGIC_LINK_EXPIRED, "Magic Link 已过期")
-    except BadSignature:
-        http_exceptions.raise_unauthorized(E.AUTH_MAGIC_LINK_INVALID, "Magic Link 无效")
+        await SmsProvider.verify_and_enforce(
+            phone, request.credential, SmsCodeReasonEnum.login, code_ttl,
+        )
+    except SmsRateLimitException as e:
+        http_exceptions.raise_too_many_requests(E.SMS_RATE_LIMITED, str(e))
+    except SmsCodeInvalidException:
+        http_exceptions.raise_unauthorized(E.SMS_CODE_INVALID, "验证码无效")
 
-    # 防重放：使用 token 哈希作为标识符
-    token_hash = hashlib.sha256(request.identifier.encode()).hexdigest()
-    is_first_use = await TokenStore.mark_used(f"magic_link:{token_hash}", ttl=600)
-    if not is_first_use:
-        http_exceptions.raise_unauthorized(E.AUTH_MAGIC_LINK_USED, "Magic Link 已被使用")
+    # 查找用户
+    user: User | None = await User.get(session, cond(User.phone == phone), load=rel(User.group))
 
-    user: User | None = await User.get(session, User.email == email, load=rel(User.group))
-    if user is None:
-        http_exceptions.raise_not_found(E.USER_NOT_FOUND, "用户不存在")
-    if user.status != UserStatus.ACTIVE:
-        http_exceptions.raise_forbidden(E.AUTH_ACCOUNT_DISABLED, "账户已被禁用")
+    if user:
+        if user.status != UserStatus.ACTIVE:
+            http_exceptions.raise_forbidden(E.AUTH_ACCOUNT_DISABLED, "账户已被禁用")
+        return user
 
+    # 未找到 → 自动注册
+    user = await _auto_register_phone_user(session, config, phone)
+    return user
+
+
+async def _auto_register_phone_user(
+        session: AsyncSession,
+        config: ServerConfig,
+        phone: str,
+) -> User:
+    """手机号自动注册用户"""
+    if not config.default_group_id:
+        logger.error("默认用户组未配置")
+        http_exceptions.raise_internal_error()
+
+    default_group = await Group.get_exist_one(session, config.default_group_id)
+
+    new_user = User(
+        phone=phone,
+        nickname=phone,
+        avatar=AvatarType.DEFAULT,
+        group_id=config.default_group_id,
+        scopes=default_group.default_scopes,
+    )
+    new_user = await new_user.save(session)
+
+    # 创建用户根目录
+    default_policy = await sqlmodels.Policy.get(session, sqlmodels.Policy.name == "本地存储")
+    if default_policy:
+        _ = await sqlmodels.Entry(
+            name="/",
+            type=sqlmodels.EntryType.FOLDER,
+            owner_id=new_user.id,
+            parent_id=None,
+            policy_id=default_policy.id,
+        ).save(session)
+
+    user: User = await User.get_exist_one(session, new_user.id, load=rel(User.group))
+    logger.info(f"手机号自动注册用户: phone={phone}")
     return user

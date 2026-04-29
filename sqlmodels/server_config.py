@@ -11,6 +11,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel_ext import SQLModelBase, Str256, Str512, UUIDTableBaseMixin, Str128, Str255, Str2048, Text5K, Text10K, Port
 
 from .auth_identity import AuthProviderType
+from .mail_template import SmtpEncryption
 
 # ==================== 枚举类型 ====================
 
@@ -204,9 +205,6 @@ class ServerConfigBase(SQLModelBase):
     is_auth_passkey_enabled: bool = False
     """Passkey/WebAuthn 登录"""
 
-    is_auth_magic_link_enabled: bool = False
-    """Magic Link 登录"""
-
     is_auth_password_required: bool = True
     """注册时是否必须设置密码"""
 
@@ -339,21 +337,24 @@ class ServerConfigBase(SQLModelBase):
     smtp_pass: Str512 | None = None
     """SMTP 密码"""
 
+    smtp_encryption: SmtpEncryption = SmtpEncryption.NONE
+    """SMTP 加密方式（none/tls/starttls）"""
+
     smtp_reply_to: EmailStr = "feedback@yxqi.cn"
     """回复地址"""
 
     mail_keepalive: int = Field(default=30, ge=0, le=3600)
     """SMTP 连接保活时间（秒）"""
 
-    # ==================== MOBILE ====================
-    sms_provider: str = Field(default="", max_length=64)
-    """短信服务商 # TODO 枚举"""
+    mail_code_ttl_minutes: int = Field(default=10, ge=1, le=60)
+    """邮箱验证码有效期（分钟）"""
 
-    sms_access_key: Str256 | None = None
-    """短信 Access Key"""
+    # ==================== SMS ====================
+    sms_code_ttl_minutes: int = Field(default=5, ge=1, le=30)
+    """短信验证码有效期（分钟）"""
 
-    sms_secret_key: Str256 | None = None
-    """短信 Secret Key"""
+    sms_code_rate_limit_seconds: int = Field(default=60, ge=30, le=300)
+    """短信验证码发送间隔（秒）"""
 
     # ==================== TIMEOUT ====================
     timeout_archive: int = Field(default=60, ge=1, le=86400)

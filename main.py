@@ -7,6 +7,8 @@ from loguru import logger as l
 from routers import router
 from routers.dav import dav_app
 from routers.dav.provider import EventLoopRef
+from utils.aiohttp_session import AioHttpClientSessionClassVarMixin
+from utils.mail import MailService
 from utils.redis import RedisManager
 from utils.storage import S3StorageDriver
 from sqlmodels.database_connection import DatabaseManager
@@ -30,8 +32,11 @@ lifespan.add_startup(_init_db)
 lifespan.add_startup(migration)
 lifespan.add_startup(RedisManager.connect)
 lifespan.add_startup(S3StorageDriver.initialize_session)
+lifespan.add_startup(AioHttpClientSessionClassVarMixin.initialize_http_session)
 
 # 添加关闭项
+lifespan.add_shutdown(AioHttpClientSessionClassVarMixin.close_http_session)
+lifespan.add_shutdown(MailService.shutdown)
 lifespan.add_shutdown(S3StorageDriver.close_session)
 lifespan.add_shutdown(DatabaseManager.close)
 lifespan.add_shutdown(RedisManager.disconnect)
